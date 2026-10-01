@@ -45,7 +45,10 @@ export class Session {
   }
 
   async load(cart = defaultCart, seed = 1) {
-    const r = await this.call('loadMedia', { platform: 'wasmcart', path: cart, deterministicSeed: seed });
+    // 16 ms frames: the engine keeps time in whole milliseconds, and the
+    // native reference runs with fixedtime 16, so both see the same msec.
+    const stepMs = Number(process.env.OA_STEP_MS || 16);
+    const r = await this.call('loadMedia', { platform: 'wasmcart', path: cart, deterministicSeed: seed, deterministicStepMs: stepMs });
     if (!r.capabilities?.hasDeterministic) throw new RomdevError('cart did not load as a deterministic replay');
     // the cart boots on its first frame
     await this.step(1);

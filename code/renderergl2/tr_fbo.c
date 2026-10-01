@@ -178,7 +178,10 @@ void FBO_CreateBuffer(FBO_t *fbo, int format, int index, int multisample)
 	}
 
 	if (multisample && glRefConfig.framebufferMultisample)
+	{
 		qglNamedRenderbufferStorageMultisampleEXT(*pRenderBuffer, multisample, format, fbo->width, fbo->height);
+		fbo->multisample = multisample;
+	}
 	else
 		qglNamedRenderbufferStorageEXT(*pRenderBuffer, format, fbo->width, fbo->height);
 
@@ -625,6 +628,16 @@ void FBO_FastBlit(const FBO_t *src, ivec4_t srcBox, FBO_t *dst, ivec4_t dstBox, 
 	if (!glRefConfig.framebufferBlit)
 	{
 		FBO_Blit(src, srcBox, NULL, dst, dstBox, NULL, NULL, 0);
+		return;
+	}
+
+	// OpenGL ES 3.0 (and WebGL2) cannot blit INTO a multisampled framebuffer;
+	// the blit fails with GL_INVALID_OPERATION and the destination keeps its
+	// old contents. Draw the color across as a textured quad instead.
+	if (qglesMajorVersion && dst && dst->multisample && (buffers & GL_COLOR_BUFFER_BIT) &&
+		src && src->colorImage[0])
+	{
+		FBO_Blit((FBO_t *)src, srcBox, NULL, dst, dstBox, NULL, NULL, 0);
 		return;
 	}
 

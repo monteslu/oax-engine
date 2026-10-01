@@ -354,12 +354,7 @@ static void WC_BuildCommandLine( char *out, int size ) {
 		" +set net_enabled 0"
 		" +set s_useOpenAL 0"
 		" +set in_joystick 1 +set in_joystickUseAnalog 1"
-		" +set com_introplayed 1"
-		// renderergl2's ES path has no HDR/tonemap pass, and its normal-mapped
-		// lighting divides by N.L to undo the lightmap's baked angle, which
-		// blows OA's maps out to white without one. Until the GLES 3.0
-		// renderer handles this, use the plain lightmap path.
-		" +set r_normalMapping 0 +set r_specularMapping 0",
+		" +set com_introplayed 1",
 		wc_width, wc_height );
 }
 

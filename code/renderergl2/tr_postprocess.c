@@ -90,6 +90,9 @@ void RB_ToneMap(FBO_t *hdrFbo, ivec4_t hdrBox, FBO_t *ldrFbo, ivec4_t ldrBox, in
 	else
 		GL_BindToTMU(tr.fixedLevelsImage, TB_LEVELSMAP);
 
+	GLSL_BindProgram(&tr.tonemapShader);
+	GLSL_SetUniformFloat(&tr.tonemapShader, UNIFORM_GAMMA, R_GammaInShader() ? r_gamma->value : 1.0f);
+
 	FBO_Blit(hdrFbo, hdrBox, NULL, ldrFbo, ldrBox, &tr.tonemapShader, color, 0);
 }
 

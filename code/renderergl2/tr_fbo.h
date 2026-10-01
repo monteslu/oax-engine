@@ -50,6 +50,8 @@ typedef struct FBO_s
 
 	int             width;
 	int             height;
+
+	int             multisample;    // samples in its renderbuffers, 0 = none
 } FBO_t;
 
 void FBO_AttachImage(FBO_t *fbo, image_t *image, GLenum attachment, GLuint cubemapside);

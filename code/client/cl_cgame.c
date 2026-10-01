@@ -402,6 +402,29 @@ static int	FloatAsInt( float f ) {
 
 /*
 ====================
+CL_RenderScene
+
+Applies cl_overrideView to the main world view before rendering.
+====================
+*/
+static void CL_RenderScene( const refdef_t *fd ) {
+	float	v[6];
+	refdef_t	ref;
+
+	if ( !cl_overrideView->string[0] || ( fd->rdflags & RDF_NOWORLDMODEL ) ||
+		sscanf( cl_overrideView->string, "%f %f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5] ) != 6 ) {
+		re.RenderScene( fd );
+		return;
+	}
+
+	ref = *fd;
+	VectorCopy( v, ref.vieworg );
+	AnglesToAxis( v + 3, ref.viewaxis );
+	re.RenderScene( &ref );
+}
+
+/*
+====================
 CL_CgameSystemCalls
 
 The cgame module is making a system call
@@ -563,7 +586,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		re.AddAdditiveLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
 		return 0;
 	case CG_R_RENDERSCENE:
-		re.RenderScene( VMA(1) );
+		CL_RenderScene( VMA(1) );
 		return 0;
 	case CG_R_SETCOLOR:
 		re.SetColor( VMA(1) );

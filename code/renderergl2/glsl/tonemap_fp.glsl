@@ -6,6 +6,7 @@ uniform vec4      u_Color;
 
 uniform vec2      u_AutoExposureMinMax;
 uniform vec3      u_ToneMinAvgMaxLinear;
+uniform float     u_Gamma;
 
 varying vec2      var_TexCoords;
 varying float     var_InvWhite;
@@ -45,6 +46,9 @@ void main()
 	color.b = FilmicTonemap(color.b);
 
 	color.rgb = clamp(color.rgb * var_InvWhite, 0.0, 1.0);
+
+	// r_gamma, applied here when the display has no hardware gamma ramp
+	color.rgb = pow(color.rgb, vec3(1.0 / u_Gamma));
 
 #if defined(USE_PBR)
 	color.rgb = sqrt(color.rgb);

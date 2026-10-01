@@ -1252,11 +1252,28 @@ Scale up the pixel values in a texture to increase the
 lighting range
 ================
 */
+/*
+================
+R_GammaInShader
+
+Without a hardware gamma ramp, r_gamma used to be baked into every texture
+at load (so changing it meant reloading them all). When the tonemap pass
+runs, it applies r_gamma to the final image instead.
+================
+*/
+qboolean R_GammaInShader( void )
+{
+	return !glConfig.deviceSupportsGamma && glRefConfig.framebufferObject && r_hdr->integer &&
+		( r_toneMap->integer || r_forceToneMap->integer );
+}
+
 void R_LightScaleTexture (byte *in, int inwidth, int inheight, qboolean only_gamma )
 {
+	qboolean bakeGamma = !glConfig.deviceSupportsGamma && !R_GammaInShader();
+
 	if ( only_gamma )
 	{
-		if ( !glConfig.deviceSupportsGamma )
+		if ( bakeGamma )
 		{
 			int		i, c;
 			byte	*p;
@@ -1281,7 +1298,7 @@ void R_LightScaleTexture (byte *in, int inwidth, int inheight, qboolean only_gam
 
 		c = inwidth*inheight;
 
-		if ( glConfig.deviceSupportsGamma )
+		if ( !bakeGamma )
 		{
 			for (i=0 ; i<c ; i++, p+=4)
 			{
@@ -1468,7 +1485,14 @@ void R_ConvertTextureFormat( const byte *in, int width, int height, GLenum forma
 	int x, y, rowPadding;
 	int unpackAlign = 4; // matches GL_UNPACK_ALIGNMENT default
 
-	if ( format == GL_RGB && type == GL_UNSIGNED_BYTE )
+	if ( format == GL_RGBA && type == GL_FLOAT )
+	{
+		float *f = (float *)out;
+
+		for ( y = 0; y < width * height * 4; y++ )
+			*f++ = *in++ / 255.0f;
+	}
+	else if ( format == GL_RGB && type == GL_UNSIGNED_BYTE )
 	{
 		rowPadding = ROW_PADDING( width, 3, unpackAlign );
 
@@ -2033,7 +2057,7 @@ static void RawImage_UploadTexture(GLuint texture, byte *data, int x, int y, int
 
 	if (qglesMajorVersion && rgba8 && (dataFormat != GL_RGBA || dataType != GL_UNSIGNED_BYTE))
 	{
-		formatBuffer = ri.Hunk_AllocateTempMemory(4 * width * height);
+		formatBuffer = ri.Hunk_AllocateTempMemory((dataType == GL_FLOAT ? 16 : 4) * width * height);
 	}
 
 	miplevel = 0;
@@ -2247,7 +2271,48 @@ image_t *R_CreateImage2( const char *name, byte *pic, int width, int height, GLe
 				dataFormat = GL_RGBA;
 				dataType = GL_UNSIGNED_SHORT_4_4_4_4;
 				break;
+			// OpenGL ES 3.0 sized formats: the render targets of the FBO pipeline
+			case GL_SRGB8_ALPHA8_EXT:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				dataFormat = GL_RGBA;
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case GL_RGBA16F_ARB:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				dataFormat = GL_RGBA;
+				dataType = GL_FLOAT;
+				break;
+			case GL_R32F:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				dataFormat = GL_RED;
+				dataType = GL_FLOAT;
+				break;
+			case GL_DEPTH_COMPONENT:
+			case GL_DEPTH_COMPONENT24_ARB:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				internalFormat = GL_DEPTH_COMPONENT24;
+				dataFormat = GL_DEPTH_COMPONENT;
+				dataType = GL_UNSIGNED_INT;
+				break;
+			case GL_DEPTH_COMPONENT16_ARB:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				dataFormat = GL_DEPTH_COMPONENT;
+				dataType = GL_UNSIGNED_SHORT;
+				break;
+			case GL_DEPTH_COMPONENT32_ARB:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				internalFormat = GL_DEPTH_COMPONENT32F;
+				dataFormat = GL_DEPTH_COMPONENT;
+				dataType = GL_FLOAT;
+				break;
 			default:
+			unsupported:
 				ri.Error( ERR_DROP, "Missing OpenGL ES support for image '%s' with internal format 0x%X\n", name, internalFormat );
 		}
 	}
@@ -2326,7 +2391,7 @@ image_t *R_CreateImage2( const char *name, byte *pic, int width, int height, GLe
 		case GL_DEPTH_COMPONENT32_ARB:
 			// Fix for sampling depth buffer on old nVidia cards.
 			// from http://www.idevgames.com/forums/thread-4141-post-34844.html#pid34844
-			if ( !QGL_VERSION_ATLEAST( 3, 0 ) ) {
+			if ( !qglesMajorVersion && !QGL_VERSION_ATLEAST( 3, 0 ) ) {
 				qglTextureParameterfEXT(image->texnum, textureTarget, GL_DEPTH_TEXTURE_MODE, GL_LUMINANCE);
 			}
 			qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

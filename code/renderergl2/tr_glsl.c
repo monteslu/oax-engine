@@ -147,6 +147,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_InvTexRes",           GLSL_VEC2 },
 	{ "u_AutoExposureMinMax",  GLSL_VEC2 },
 	{ "u_ToneMinAvgMaxLinear", GLSL_VEC3 },
+	{ "u_Gamma",               GLSL_FLOAT },
 
 	{ "u_PrimaryLightOrigin",  GLSL_VEC4  },
 	{ "u_PrimaryLightColor",   GLSL_VEC3  },
@@ -265,7 +266,14 @@ static void GLSL_GetShaderHeader( GLenum shaderType, const GLchar *extra, char *
 			Q_strcat(dest, size, extra);
 		}
 
-		if (qglesMajorVersion >= 2)
+		if (qglesMajorVersion >= 3)
+		{
+			// HDR lighting overflows half floats (mediump), and ES 3.0
+			// guarantees highp in fragment shaders.
+			Q_strcat(dest, size, "precision highp float;\n");
+			Q_strcat(dest, size, "precision highp sampler2DShadow;\n");
+		}
+		else if (qglesMajorVersion >= 2)
 		{
 			Q_strcat(dest, size, "precision mediump float;\n");
 			Q_strcat(dest, size, "precision mediump sampler2DShadow;\n");

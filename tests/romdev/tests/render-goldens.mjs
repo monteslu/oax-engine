@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Session } from '../lib/romdev.mjs';
 import { comparePng, readPng, distinctColors, halfSize, writePng } from '../lib/png.mjs';
-import { loadScene, placeAt, spawns } from '../lib/scenes.mjs';
+import { loadScene, placeCamera, spawns } from '../lib/scenes.mjs';
 
 export const name = 'render-goldens';
 
@@ -25,7 +25,7 @@ function candidates(map) {
 }
 
 async function shoot(s, cam, file) {
-  await placeAt(s, cam);
+  await placeCamera(s, cam);
   await s.screenshot(file);
   return readPng(file);
 }

@@ -696,6 +696,7 @@ typedef enum
 	UNIFORM_INVTEXRES,
 	UNIFORM_AUTOEXPOSUREMINMAX,
 	UNIFORM_TONEMINAVGMAXLINEAR,
+	UNIFORM_GAMMA,
 
 	UNIFORM_PRIMARYLIGHTORIGIN,
 	UNIFORM_PRIMARYLIGHTCOLOR,
@@ -1851,6 +1852,7 @@ extern	cvar_t	*r_debugSort;
 extern	cvar_t	*r_printShaders;
 
 extern cvar_t	*r_marksOnTriangleMeshes;
+extern cvar_t	*r_fixedShaderTime;
 
 extern cvar_t *r_vaoCache;
 
@@ -1992,6 +1994,7 @@ void    	R_Init( void );
 void		R_UpdateSubImage( image_t *image, byte *pic, int x, int y, int width, int height, GLenum picFormat );
 
 void		R_SetColorMappings( void );
+qboolean	R_GammaInShader( void );
 void		R_GammaCorrect( byte *buffer, int bufSize );
 
 void	R_ImageList_f( void );

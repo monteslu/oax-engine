@@ -401,6 +401,8 @@ void RE_BeginScene(const refdef_t *fd)
 	// derived info
 
 	tr.refdef.floatTime = tr.refdef.time * 0.001;
+	if ( r_fixedShaderTime->value >= 0 )
+		tr.refdef.floatTime = r_fixedShaderTime->value;
 
 	tr.refdef.numDrawSurfs = r_firstSceneDrawSurf;
 	tr.refdef.drawSurfs = backEndData->drawSurfs;

@@ -119,6 +119,7 @@ cvar_t	*cl_lanForcePackets;
 cvar_t	*cl_guidServerUniq;
 
 cvar_t	*cl_consoleKeys;
+cvar_t	*cl_overrideView;
 
 cvar_t	*cl_rate;
 
@@ -3662,6 +3663,11 @@ void CL_Init( void ) {
 
 	// ~ and `, as keys and characters
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
+
+	// "x y z pitch yaw roll": render the world from exactly this view,
+	// whatever the player is doing. For comparing renderers from the same
+	// camera; empty = off.
+	cl_overrideView = Cvar_Get( "cl_overrideView", "", CVAR_CHEAT | CVAR_TEMP );
 
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE );

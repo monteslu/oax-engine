@@ -12,6 +12,7 @@ export const CLEAN_VIEW = [
   'cg_drawFPS 0',
   'g_doWarmup 0',
   'con_notifytime 0',
+  'r_fixedShaderTime 100',
 ].join(';');
 
 export function mapPath(map, cart = defaultCart) {
@@ -30,8 +31,20 @@ export async function loadScene(s, map, { seed = 1, view = CLEAN_VIEW } = {}) {
 }
 
 // Put the player at a spawn point (feet on its origin) facing its angle.
-export async function placeAt(s, p, settle = 30) {
+export async function placeAt(s, p, settle = 60) {
   await s.command(`setviewpos ${p.x} ${p.y} ${p.z} ${p.yaw}`);
+  await s.step(settle);
+}
+
+// Point the camera at a spawn point: eye height above its origin, level,
+// facing its angle. cl_overrideView sets the rendered view directly, so the
+// camera is exact (no teleport slide, no physics) on every build.
+export const EYE_HEIGHT = 26;
+export function viewFor(p) {
+  return `${p.x} ${p.y} ${p.z + EYE_HEIGHT} 0 ${p.yaw} 0`;
+}
+export async function placeCamera(s, p, settle = 20) {
+  await s.command(`cl_overrideView "${viewFor(p)}"`);
   await s.step(settle);
 }
 

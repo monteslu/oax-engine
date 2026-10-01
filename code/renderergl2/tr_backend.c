@@ -657,6 +657,8 @@ void	RB_SetGL2D (void) {
 	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();
 	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001;
+	if ( r_fixedShaderTime->value >= 0 )
+		backEnd.refdef.floatTime = r_fixedShaderTime->value;
 }
 
 

@@ -159,6 +159,41 @@ void GLimp_InitExtraExtensions(void)
 			ri.Printf(PRINT_ALL, result[2], extension);
 		}
 
+		// OpenGL ES 3.0 has framebuffer objects, blits and multisampled
+		// renderbuffers in core, so the full FBO pipeline (HDR, tonemap,
+		// MSAA, post-processing) runs as it does on desktop GL 3.0.
+		if (qglesMajorVersion >= 3)
+		{
+			glRefConfig.framebufferObject = !!r_ext_framebuffer_object->integer;
+			glRefConfig.framebufferBlit = qtrue;
+			glRefConfig.framebufferMultisample = qtrue;
+
+			qglGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &glRefConfig.maxRenderbufferSize);
+			qglGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &glRefConfig.maxColorAttachments);
+
+			QGL_ARB_framebuffer_object_PROCS;
+
+			ri.Printf(PRINT_ALL, result[glRefConfig.framebufferObject], "OpenGL ES 3.0 framebuffer objects");
+
+			glRefConfig.vertexArrayObject = qtrue;
+			QGL_ARB_vertex_array_object_PROCS;
+			ri.Printf(PRINT_ALL, result[1], "OpenGL ES 3.0 vertex array objects");
+
+			// Float textures exist in ES 3.0, but rendering to them needs
+			// EXT_color_buffer_float (WebGL2: EXT_color_buffer_float too).
+			extension = "GL_EXT_color_buffer_float";
+			glRefConfig.textureFloat = qfalse;
+			if (SDL_GL_ExtensionSupported(extension) || SDL_GL_ExtensionSupported("EXT_color_buffer_float"))
+			{
+				glRefConfig.textureFloat = !!r_ext_texture_float->integer;
+				ri.Printf(PRINT_ALL, result[glRefConfig.textureFloat], extension);
+			}
+			else
+			{
+				ri.Printf(PRINT_ALL, result[2], extension);
+			}
+		}
+
 		goto done;
 	}
 
@@ -364,6 +399,16 @@ done:
 		}
 
 		sscanf(version_p, "%d.%d", &glRefConfig.glslMajorVersion, &glRefConfig.glslMinorVersion);
+
+		// Every OpenGL ES 3.x context supports GLSL ES 3.00. Some WebGL2
+		// shims report 1.00 here, which would drop every shader to the
+		// GLES2 dialect, so trust the context version instead.
+		if (qglesMajorVersion >= 3 && glRefConfig.glslMajorVersion < 3)
+		{
+			glRefConfig.glslMajorVersion = 3;
+			glRefConfig.glslMinorVersion = 0;
+			Q_strncpyz(version, "3.00 (implied by OpenGL ES 3.0)", sizeof(version));
+		}
 
 		ri.Printf(PRINT_ALL, "...using GLSL version %s\n", version);
 	}
