@@ -70,9 +70,12 @@ VM_Init
 ==============
 */
 void VM_Init( void ) {
-	Cvar_Get( "vm_cgame", "2", CVAR_ARCHIVE );	// !@# SHIP WITH SET TO 2
-	Cvar_Get( "vm_game", "2", CVAR_ARCHIVE );	// !@# SHIP WITH SET TO 2
-	Cvar_Get( "vm_ui", "2", CVAR_ARCHIVE );		// !@# SHIP WITH SET TO 2
+	// QVMs run on the interpreter by default on every build: a wasmcart
+	// can't generate code, and one execution path keeps native and wasm
+	// identical. The JIT (2) stays available as an opt-in.
+	Cvar_Get( "vm_cgame", "1", CVAR_ARCHIVE );
+	Cvar_Get( "vm_game", "1", CVAR_ARCHIVE );
+	Cvar_Get( "vm_ui", "1", CVAR_ARCHIVE );
 
 	Cmd_AddCommand ("vmprofile", VM_VmProfile_f );
 	Cmd_AddCommand ("vminfo", VM_VmInfo_f );

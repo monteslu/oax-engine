@@ -44,7 +44,7 @@ emcmake cmake -S . -B build-cart -DWASMCART=ON -DCMAKE_BUILD_TYPE=Release >/dev/
 cmake --build build-cart -j"$JOBS" >build-cart.log 2>&1 || { tail -30 build-cart.log; exit 2; }
 
 echo "== pack"
-node misc/wasmcart/pack-cart.mjs --wasm build-cart/Release/ioquake3.wasm --qvm "$OA_QVM_DIR" --out build-cart/cart | tail -1
+node misc/wasmcart/pack-cart.mjs --wasm build-cart/Release/ioquake3.wasm --qvm "$OA_QVM_DIR" --overlay tests/romdev/data --out build-cart/cart | tail -1
 
 echo "== romdev tests"
 node tests/romdev/run.mjs "$@"

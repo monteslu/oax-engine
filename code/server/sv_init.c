@@ -631,6 +631,13 @@ void SV_Init (void)
 
 	// serverinfo vars
 	Cvar_Get ("dmflags", "0", CVAR_SERVERINFO);
+
+	// Fixed-step movement by default: pmove runs in whole 8 ms steps
+	// whatever the client frame rate, which is what makes movement
+	// identical across builds and frame rates. The game registers these
+	// itself; creating them first sets the default without touching a QVM.
+	Cvar_Get ("pmove_fixed", "1", CVAR_SYSTEMINFO);
+	Cvar_Get ("pmove_msec", "8", CVAR_SYSTEMINFO);
 	Cvar_Get ("fraglimit", "20", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
 	sv_gametype = Cvar_Get ("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH );

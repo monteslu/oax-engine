@@ -3176,6 +3176,15 @@ void Com_Frame( void ) {
 
 	lastTime = com_frameTime;
 	com_frameTime = Com_EventLoop();
+#ifndef WASMCART
+	// fixedtime makes the frame clock virtual too, not just msec: key states
+	// (CL_KeyState) measure against com_frameTime, so a wall clock there
+	// would still make input timing differ run to run. (A cart's clock is
+	// the host's, which is already virtual.)
+	if ( com_fixedtime->integer > 0 ) {
+		com_frameTime = lastTime + com_fixedtime->integer;
+	}
+#endif
 	
 	msec = com_frameTime - lastTime;
 

@@ -849,8 +849,8 @@ void CL_AdjustTimeDelta( void ) {
 
 	cl.newSnapshots = qfalse;
 
-	// the delta never drifts when replaying a demo
-	if ( clc.demoplaying ) {
+	// the delta never drifts when replaying a demo, or during a test script
+	if ( clc.demoplaying || CL_PadScriptHoldsClock() ) {
 		return;
 	}
 

@@ -517,6 +517,15 @@ typedef struct {
 } in_gamepad_t;
 
 void IN_GamepadReset( void );
+
+//
+// cl_testscript.c
+//
+void CL_TestScriptInit( void );
+void CL_TestScriptShutdown( void );
+qboolean CL_PadScriptHoldsClock( void );
+qboolean CL_PadScriptFrame( int eventTime );
+void CL_TraceFrame( void );
 void IN_GamepadFrame( const in_gamepad_t *pad, int eventTime, float threshold, qboolean useAnalog );
 
 void CL_VerifyCode( void );

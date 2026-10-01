@@ -43,6 +43,7 @@ static struct {
 	int32_t weapon;
 	int32_t clRealtime;         // cls.realtime
 	int32_t svsTime;            // svs.time (-1 = no local server)
+	int32_t padStartTime;       // command time the last pad script started (-1 = none)
 	char    mapname[64];
 	char    command[256];       // written by a harness; executed at the next frame
 } dbg;
@@ -73,6 +74,7 @@ static wcDebugField_t dbgTable[] = {
 	FIELD( "conn_state", &dbg.connState, WC_DBG_I32, 1 ),
 	FIELD( "cl_realtime", &dbg.clRealtime, WC_DBG_I32, 1 ),
 	FIELD( "svs_time", &dbg.svsTime, WC_DBG_I32, 1 ),
+	FIELD( "pad_start_time", &dbg.padStartTime, WC_DBG_I32, 1 ),
 	FIELD( "frame_msec", &dbg.frameMsec, WC_DBG_I32, 1 ),
 	FIELD( "frame_count", &dbg.frameCount, WC_DBG_I32, 1 ),
 	FIELD( "mapname", dbg.mapname, WC_DBG_BYTES, sizeof( dbg.mapname ) ),
@@ -89,6 +91,7 @@ wcDebugField_t *wc_debug_state( void ) {
 
 const playerState_t *WC_Debug_ServerPlayerState( int *serverTime, int *activeEntities );
 int WC_Debug_ServerStaticTime( void );
+extern int cl_padScriptStartTime;
 
 void WC_Debug_Init( void ) {
 	memset( &dbg, 0, sizeof( dbg ) );
@@ -131,6 +134,7 @@ void WC_Debug_Frame( int frameMsec ) {
 	dbg.connState = clc.state;
 	dbg.clRealtime = cls.realtime;
 	dbg.svsTime = WC_Debug_ServerStaticTime();
+	dbg.padStartTime = cl_padScriptStartTime;
 
 	// the local server's copy is authoritative; fall back to the snapshot
 	ps = WC_Debug_ServerPlayerState( &dbg.serverTime, &dbg.serverEntities );

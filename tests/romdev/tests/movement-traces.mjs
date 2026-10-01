@@ -31,7 +31,7 @@ export async function run({ goldens, out, update }) {
   for (const c of CASES) {
     const s = new Session(`move-${c.script}`);
     try {
-      const t = await runScript(s, c.map, SCRIPTS[c.script], { spawn: c.spawn || 0 });
+      const t = await runScript(s, c.map, c.script, { spawn: c.spawn || 0 });
       const sum = summarize(t.rows);
       const label = `${c.map}/${c.script}`;
       fs.writeFileSync(path.join(out, `${c.map}_${c.script}.trace.json`), JSON.stringify(t, null, 0));

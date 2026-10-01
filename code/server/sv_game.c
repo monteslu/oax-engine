@@ -961,3 +961,33 @@ qboolean SV_GameCommand( void ) {
 	return VM_Call( gvm, GAME_CONSOLE_COMMAND );
 }
 
+
+/*
+===============
+SV_TestPlayerState
+
+Client 0's authoritative player state while a local game is running, for
+movement traces (client/cl_testscript.c). NULL otherwise.
+===============
+*/
+const playerState_t *SV_TestPlayerState( void ) {
+	if ( !com_sv_running || !com_sv_running->integer || sv.state != SS_GAME ||
+		!svs.clients || svs.clients[0].state != CS_ACTIVE ) {
+		return NULL;
+	}
+	return SV_GameClientNum( 0 );
+}
+
+/*
+===============
+SV_TestLevelTime
+
+The local server's level time, or -1 when no game is running.
+===============
+*/
+int SV_TestLevelTime( void ) {
+	if ( !com_sv_running || !com_sv_running->integer || sv.state != SS_GAME ) {
+		return -1;
+	}
+	return sv.time;
+}

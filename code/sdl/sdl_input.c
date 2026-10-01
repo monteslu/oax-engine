@@ -1028,7 +1028,9 @@ void IN_Frame( void )
 {
 	qboolean loading;
 
-	IN_JoyMove( );
+	// a pad script (cl_testscript.c) supplies the gamepad while it plays
+	if ( !CL_PadScriptFrame( Sys_Milliseconds( ) ) )
+		IN_JoyMove( );
 
 	// If not DISCONNECTED (main menu) or ACTIVE (in game), we're loading
 	loading = ( clc.state != CA_DISCONNECTED && clc.state != CA_ACTIVE );

@@ -218,11 +218,9 @@ void IN_Init( void *windowData ) {
 	IN_GamepadReset();
 }
 
+// Called by Com_Frame just before it drains the event queue, at the same
+// point in the frame as the SDL backend's IN_Frame.
 void IN_Frame( void ) {
-	// Input is sampled in WC_IN_Frame, once per host frame, before Com_Frame.
-}
-
-void WC_IN_Frame( void ) {
 	int time;
 
 	if ( !in_joystick ) {
@@ -232,7 +230,9 @@ void WC_IN_Frame( void ) {
 
 	IN_KeyboardFrame( time );
 	IN_PointerFrame( time );
-	if ( in_joystick->integer ) {
+
+	// a pad script (cl_testscript.c) supplies the gamepad while it plays
+	if ( !CL_PadScriptFrame( time ) && in_joystick->integer ) {
 		IN_PadFrame( time );
 	}
 }

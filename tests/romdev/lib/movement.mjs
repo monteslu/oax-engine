@@ -30,16 +30,19 @@ export const SCRIPTS = {
   ],
 };
 
-export async function runScript(s, map, script, { seed = 1, spawn = 0 } = {}) {
+// basic with the strafe reversed: the must-differ control for determinism
+SCRIPTS.basic_control = SCRIPTS.basic.map((st, k) => (k === 1 ? { ...st, pad: { axes: { ly: -1, lx: -1 } } } : st));
+
+export async function runScript(s, map, name, { seed = 1, spawn = 0 } = {}) {
+  const script = SCRIPTS[name];
   await loadScene(s, map, { seed });
   const p = spawns(map)[spawn];
   await placeAt(s, p);
   const before = await s.read('trace_count');
-  for (const step of script) {
-    await s.setPad(step.pad);
-    await s.step(step.frames);
-  }
-  await s.setPad({});
+  // played by the engine from tests/romdev/data/padscripts (packed into the
+  // cart), the same file the native build plays
+  await s.command(`padscript padscripts/${name}.pad`);
+  await s.step(script.reduce((n, st) => n + st.frames, 0) + 30);   // + up to 25 frames waiting for the start phase
   const after = await s.read('trace_count');
   const n = after - before;
   if (n <= 0) throw new Error('no trace rows recorded (is a player state present?)');
@@ -50,7 +53,7 @@ export async function runScript(s, map, script, { seed = 1, spawn = 0 } = {}) {
     const at = (i % TRACE_ROWS) * TRACE_COLS;
     rows.push(flat.slice(at, at + TRACE_COLS));
   }
-  return { start: p, rows };
+  return { start: p, padStart: await s.read('pad_start_time'), rows };
 }
 
 // Compare two traces row by row; returns the first row that differs.

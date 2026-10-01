@@ -45,9 +45,6 @@ uint8_t *WC_VFS_SaveRegion( void );
 // wc_snd.c
 void     WC_SND_Frame( void );              // hand mixed samples to the host ring
 
-// wc_input.c
-void     WC_IN_Frame( void );
-
 // wc_sys.c
 uint32_t WC_Random( void );                 // the cart's only entropy source
 

@@ -420,7 +420,6 @@ void wc_render( void ) {
 	}
 
 	WC_Debug_PollCommand();
-	WC_IN_Frame();
 	Com_Frame();
 	WC_SND_Frame();
 	WC_Debug_Frame( (int)wc_time.delta_ms );

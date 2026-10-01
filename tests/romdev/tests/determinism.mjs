@@ -4,7 +4,7 @@
 
 import path from 'node:path';
 import { Session } from '../lib/romdev.mjs';
-import { SCRIPTS, runScript, compareTraces } from '../lib/movement.mjs';
+import { runScript, compareTraces } from '../lib/movement.mjs';
 import { comparePng, readPng } from '../lib/png.mjs';
 
 export const name = 'determinism';
@@ -15,7 +15,7 @@ export async function run({ out }) {
   for (let i = 0; i < 2; i++) {
     const s = new Session(`det-${i}`);
     try {
-      const t = await runScript(s, 'oa_dm1', SCRIPTS.basic, { seed: 7 });
+      const t = await runScript(s, 'oa_dm1', 'basic', { seed: 7 });
       const shot = path.join(out, `determinism_${i}.png`);
       await s.screenshot(shot);
       runs.push({ trace: t.rows, shot });
@@ -32,8 +32,7 @@ export async function run({ out }) {
   // comparison above could not fail.
   const s = new Session('det-control');
   try {
-    const script = SCRIPTS.basic.map((st, k) => (k === 1 ? { ...st, pad: { axes: { ly: -1, lx: -1 } } } : st));
-    const t = await runScript(s, 'oa_dm1', script, { seed: 7 });
+    const t = await runScript(s, 'oa_dm1', 'basic_control', { seed: 7 });
     if (compareTraces(runs[0].trace, t.rows).equal) failures.push('control: a different script produced the same trace');
   } finally {
     await s.shutdown();

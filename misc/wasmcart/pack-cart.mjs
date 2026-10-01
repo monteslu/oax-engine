@@ -11,7 +11,8 @@
 // order: sorted by name, later ones overriding earlier ones. Paths are merged
 // case-insensitively, as pk3 lookups are, keeping the last writer's case.
 // QVMs from --qvm replace any in the pk3s (distro packages ship stubs).
-// Extra --pk3 files are extracted last, in the order given.
+// Extra --pk3 files are extracted last, in the order given. Each --overlay
+// directory is copied over the game directory after that (test data).
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -19,7 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 function parseArgs(argv) {
-  const out = { pk3: [] };
+  const out = { pk3: [], overlay: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -28,6 +29,7 @@ function parseArgs(argv) {
     else if (a === '--qvm') out.qvm = next();
     else if (a === '--out') out.out = next();
     else if (a === '--pk3') out.pk3.push(next());
+    else if (a === '--overlay') out.overlay.push(next());
     else if (a === '--name') out.name = next();
     else throw new Error(`unknown argument ${a}`);
   }
@@ -113,6 +115,14 @@ function main() {
   overlay(stage, gameDir, index);
   fs.rmSync(stage, { recursive: true, force: true });
   console.log(`qvm: ${qvms.join(' ')}`);
+
+  for (const dir of args.overlay) {
+    fs.rmSync(stage, { recursive: true, force: true });
+    fs.cpSync(path.resolve(dir), stage, { recursive: true });
+    const n = overlay(stage, gameDir, index);
+    fs.rmSync(stage, { recursive: true, force: true });
+    console.log(`${dir}: ${n} files (overlay)`);
+  }
 
   // The cart's asset index: every bundled path, relative to assets/.
   const assetsDir = path.join(out, 'assets');
