@@ -12,10 +12,14 @@ set(RENDERER_COMMON_SOURCES
     ${SOURCE_DIR}/renderercommon/puff.c
 )
 
-set(SDL_RENDERER_SOURCES
-    ${SOURCE_DIR}/sdl/sdl_gamma.c
-    ${SOURCE_DIR}/sdl/sdl_glimp.c
-)
+if(WASMCART)
+    set(SDL_RENDERER_SOURCES ${WASMCART_RENDERER_SOURCES})
+else()
+    set(SDL_RENDERER_SOURCES
+        ${SOURCE_DIR}/sdl/sdl_gamma.c
+        ${SOURCE_DIR}/sdl/sdl_glimp.c
+    )
+endif()
 
 set(DYNAMIC_RENDERER_SOURCES
     ${SOURCE_DIR}/renderercommon/tr_subs.c

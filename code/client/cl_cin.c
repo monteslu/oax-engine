@@ -1630,9 +1630,18 @@ void CL_PlayCinematic_f(void) {
 
 	CL_handle = CIN_PlayCinematic( arg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, bits );
 	if (CL_handle >= 0) {
-		do {
+		// Wait for the first frame (load codebook and sound). Playback is paced
+		// by elapsed time, so instead of spinning until the clock moves, move
+		// the cinematic's start back a millisecond per pass: the same frames
+		// decode as if time had passed, and a host-paced build, whose clock
+		// is constant within a frame, does not wait forever.
+		for (;;) {
 			SCR_RunCinematic();
-		} while (cinTable[currentHandle].buf == NULL && cinTable[currentHandle].status == FMV_PLAY);		// wait for first frame (load codebook and sound)
+			if (cinTable[currentHandle].buf != NULL || cinTable[currentHandle].status != FMV_PLAY)
+				break;
+			cinTable[currentHandle].startTime--;
+			cinTable[currentHandle].lastTime--;
+		}
 	}
 }
 

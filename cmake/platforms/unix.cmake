@@ -1,6 +1,6 @@
 # Unix specific settings (this includes macOS and emscripten)
 
-if(NOT UNIX)
+if(NOT UNIX OR WASMCART)
     return()
 endif()
 

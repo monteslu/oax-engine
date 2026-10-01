@@ -1,3 +1,4 @@
+include(platforms/wasmcart)
 include(platforms/emscripten)
 include(platforms/linux)
 include(platforms/macos)

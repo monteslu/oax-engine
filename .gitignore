@@ -41,3 +41,7 @@ profile
 *.opensdf
 *.suo
 /.vs
+build-*/
+*.log
+home-test/
+scratch-qvm/

@@ -1,0 +1,37 @@
+name: wasmcart
+on: [push, pull_request]
+
+# Builds the cart wasm on every push. The romdev gate (misc/ci/gate.sh) needs
+# OpenArena content, the OA QVMs and a GL-capable romdev server, so it runs on
+# a machine that has them; this job proves the cart still compiles and links
+# with no missing imports.
+
+jobs:
+  cart:
+    name: wasmcart cart
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 4.0.18
+    - name: Compile
+      run: |
+        emcmake cmake -S . -B build-cart -DWASMCART=ON -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-cart -j"$(nproc)"
+    - name: Check the import surface
+      run: |
+        node -e '
+          const fs = require("fs");
+          const m = new WebAssembly.Module(fs.readFileSync("build-cart/Release/ioquake3.wasm"));
+          const ex = WebAssembly.Module.exports(m).map((e) => e.name);
+          for (const need of ["wc_get_info", "wc_init", "wc_render", "wc_set_seed", "wc_debug_state"])
+            if (!ex.includes(need)) { console.error("missing export " + need); process.exit(1); }
+          const clock = WebAssembly.Module.imports(m).filter((i) => i.name === "clock_time_get");
+          if (clock.length) { console.error("cart imports the host clock; determinism needs wc_time only"); process.exit(1); }
+          console.log("exports ok, no host clock import");'
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: oa-cart-wasm
+        path: build-cart/Release/ioquake3.wasm

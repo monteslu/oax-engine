@@ -2,6 +2,17 @@ if(NOT BUILD_CLIENT)
     return()
 endif()
 
+if(WASMCART)
+    # No SDL library: only its headers, for the GL types and the two
+    # SDL_GL_* calls the renderer makes (answered by code/wasmcart).
+    set(INTERNAL_SDL_DIR ${SOURCE_DIR}/thirdparty/SDL2-${SDL_VERSION})
+    list(APPEND CLIENT_INCLUDE_DIRS ${INTERNAL_SDL_DIR}/include)
+    list(APPEND RENDERER_INCLUDE_DIRS ${INTERNAL_SDL_DIR}/include)
+    list(APPEND CLIENT_DEFINITIONS USE_INTERNAL_SDL_HEADERS)
+    list(APPEND RENDERER_DEFINITIONS USE_INTERNAL_SDL_HEADERS)
+    return()
+endif()
+
 if(EMSCRIPTEN)
     # Emscripten provides its own self contained SDL setup
     list(APPEND CLIENT_COMPILE_OPTIONS -sUSE_SDL=2)

@@ -1,6 +1,6 @@
 # Emscripten specific settings
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN OR WASMCART)
     return()
 endif()
 

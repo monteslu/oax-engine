@@ -12,6 +12,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_cgame.c
     ${SOURCE_DIR}/client/cl_cin.c
     ${SOURCE_DIR}/client/cl_console.c
+    ${SOURCE_DIR}/client/cl_gamepad.c
     ${SOURCE_DIR}/client/cl_input.c
     ${SOURCE_DIR}/client/cl_keys.c
     ${SOURCE_DIR}/client/cl_main.c
@@ -34,10 +35,16 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/snd_codec_opus.c
     ${SOURCE_DIR}/client/qal.c
     ${SOURCE_DIR}/client/snd_openal.c
-    ${SOURCE_DIR}/sdl/sdl_input.c
-    ${SOURCE_DIR}/sdl/sdl_snd.c
     ${CLIENT_PLATFORM_SOURCES}
 )
+
+if(WASMCART)
+    list(APPEND CLIENT_SOURCES ${WASMCART_CLIENT_SOURCES})
+else()
+    list(APPEND CLIENT_SOURCES
+        ${SOURCE_DIR}/sdl/sdl_input.c
+        ${SOURCE_DIR}/sdl/sdl_snd.c)
+endif()
 
 add_git_dependency(${SOURCE_DIR}/client/cl_console.c)
 

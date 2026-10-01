@@ -504,6 +504,20 @@ void CL_ReadPackets (void);
 void CL_WritePacket( void );
 void IN_CenterView (void);
 
+//
+// cl_gamepad.c
+//
+#define IN_GAMEPAD_BUTTONS	21	// SDL_GameControllerButton order: A B X Y back guide start ls rs lb rb up down left right misc1 paddle1-4 touchpad
+#define IN_GAMEPAD_AXES		6	// leftx lefty rightx righty lefttrigger righttrigger
+
+typedef struct {
+	qboolean	buttons[IN_GAMEPAD_BUTTONS];
+	int			axes[IN_GAMEPAD_AXES];	// sticks -32768..32767, triggers 0..32767
+} in_gamepad_t;
+
+void IN_GamepadReset( void );
+void IN_GamepadFrame( const in_gamepad_t *pad, int eventTime, float threshold, qboolean useAnalog );
+
 void CL_VerifyCode( void );
 
 float CL_KeyState (kbutton_t *key);

@@ -3144,6 +3144,13 @@ void Com_Frame( void ) {
 	else
 		minMsec = 1;
 
+#ifdef WASMCART
+	// A wasmcart host paces frames itself: it calls in once per frame with the
+	// time already advanced, so there is nothing to wait for. The wait loop
+	// also flushes the server's queued packet fragments, so do that once.
+	if(com_sv_running->integer)
+		SV_SendQueuedPackets();
+#else
 	do
 	{
 		if(com_sv_running->integer)
@@ -3163,6 +3170,7 @@ void Com_Frame( void ) {
 		else
 			NET_Sleep(timeVal - 1);
 	} while(Com_TimeVal(minMsec));
+#endif
 	
 	IN_Frame();
 

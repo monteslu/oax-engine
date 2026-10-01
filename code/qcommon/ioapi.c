@@ -18,6 +18,10 @@
 
 #include "ioapi.h"
 
+// All file access goes through the platform layer, so a pk3 can come from
+// wherever Sys_FOpen can reach (a disk, or a wasmcart cart's own storage).
+FILE *Sys_FOpen( const char *ospath, const char *mode );
+
 
 
 /* I've found an old Unix (a SunOS 4.1.3_U1) without all SEEK_* defined.... */
@@ -87,7 +91,7 @@ voidpf ZCALLBACK fopen_file_func (opaque, filename, mode)
         mode_fopen = "wb";
 
     if ((filename!=NULL) && (mode_fopen != NULL))
-        file = fopen(filename, mode_fopen);
+        file = Sys_FOpen(filename, mode_fopen);
     return file;
 }
 
