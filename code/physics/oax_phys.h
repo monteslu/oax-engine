@@ -328,4 +328,81 @@ typedef struct {
    i.e. m[r*4+c], column 3 is the translation (the IQM convention). */
 #define PHYS_SKEL_MAT_FLOATS 12
 
+/* ---- vehicles (phys_vehicle.c; token "physics_vehicle") ------------------ */
+
+/* A vehicle is a dynamic box chassis plus wheels (or thrusters) that are ray
+   casts, not bodies. Before every fixed tick of its world the engine casts
+   each wheel down the chassis up axis and applies the suspension spring and
+   damper and the tire forces (drive, brakes, grip in a friction circle); a
+   hover vehicle holds its hover height on its thruster rays and steers and
+   banks with torques. Gamecode sets the controls and reads the state. */
+
+#define PHYS_VEHICLE_WHEELED    0
+#define PHYS_VEHICLE_HOVER      1
+#define OAX_PHYS_MAX_WHEELS     8
+
+#define PHYS_VF_AUTOFLIP        0x0001  /* roll back upright after a second on its side or roof */
+
+typedef struct {
+	int     type;               /* PHYS_VEHICLE_* */
+	float   origin[3];
+	float   quat[4];
+	float   halfExtents[3];     /* chassis box, body space (x forward, y left, z up) */
+	float   mass;               /* kg */
+	float   centerOfMass[3];    /* body space; lower is steadier */
+	float   linearDamping;
+	float   angularDamping;
+	float   friction;           /* chassis shape */
+	float   restitution;
+	int     numWheels;          /* 0..OAX_PHYS_MAX_WHEELS */
+	float   wheels[OAX_PHYS_MAX_WHEELS][3]; /* suspension tops / thruster points, body space */
+	int     driveMask;          /* bit per wheel: driven by the engine */
+	int     steerMask;          /* bit per wheel: steers (x < 0 wheels steer opposite) */
+	float   wheelRadius;
+	float   restLength;         /* suspension rest length (top to wheel center); hover: hover height */
+	float   springHertz;        /* suspension frequency for one share of the mass per wheel */
+	float   dampingRatio;
+	float   engineForce;        /* total drive force at full throttle */
+	float   brakeForce;         /* total */
+	float   maxSpeed;           /* units/s forward */
+	float   maxReverse;         /* units/s backward */
+	float   maxSteer;           /* wheels: radians of lock; hover: turn rate, radians/s */
+	float   steerSpeedFactor;   /* lock at maxSpeed = maxSteer * (1 - factor) */
+	float   steerRate;          /* radians/s the wheels turn; 0 = at once */
+	float   grip;               /* friction circle radius per unit of wheel load */
+	float   lateralStiffness;   /* 0..1: share of the sideways slip one tick removes */
+	float   handbrakeGrip;      /* rear grip multiplier at full handbrake */
+	float   rollInfluence;      /* 0..1: tire forces act this far up toward the center of mass */
+	float   turnTorque;         /* hover: yaw response, 1/s */
+	float   bankAngle;          /* hover: radians of bank at full steer and speed */
+	unsigned categoryBits;      /* chassis shape; 0 = 1 */
+	unsigned maskBits;          /* 0 = all */
+	unsigned rayMask;           /* what the wheel rays see; 0 = all */
+	int     flags;              /* PHYS_VF_* */
+	int     userData;           /* the chassis body userData */
+} oaxPhysVehicleDef_t;
+
+typedef struct {
+	float   throttle;           /* -1..1 */
+	float   steer;              /* -1..1, positive turns left */
+	float   brake;              /* 0..1 */
+	float   handbrake;          /* 0..1, rear wheels */
+} oaxPhysVehicleInput_t;
+
+typedef struct {
+	int     body;               /* the chassis body handle */
+	float   origin[3];
+	float   quat[4];
+	float   velocity[3];
+	float   angularVelocity[3];
+	float   speed;              /* along the chassis forward axis, units/s */
+	float   steer;              /* current wheel lock, radians */
+	int     numWheels;
+	int     contacts;           /* bit per wheel or thruster on the ground */
+	float   suspension[OAX_PHYS_MAX_WHEELS]; /* top to wheel center now; hover: ground distance */
+	float   spin[OAX_PHYS_MAX_WHEELS];       /* wheel roll angle, radians */
+	float   distance;           /* path length travelled since creation, units */
+	int     ticks;              /* ticks simulated */
+} oaxPhysVehicleState_t;
+
 #endif

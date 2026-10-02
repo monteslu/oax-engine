@@ -579,10 +579,15 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	dheader_t		header;
 	int				length;
 	static unsigned	last_checksum;
+	static char		mapName[MAX_QPATH];
 
 	if ( !name || !name[0] ) {
 		Com_Error( ERR_DROP, "CM_LoadMap: NULL name" );
 	}
+	// callers pass va() buffers, and loaders below (CM_OAXTerrainLoad's
+	// debug values) call va() too: keep our own copy of the name
+	Q_strncpyz( mapName, name, sizeof( mapName ) );
+	name = mapName;
 
 #ifndef BSPC
 	cm_noAreas = Cvar_Get ("cm_noAreas", "0", CVAR_CHEAT);

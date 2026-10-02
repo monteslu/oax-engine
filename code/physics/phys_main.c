@@ -247,6 +247,7 @@ void Phys_WorldDestroy( physOwner_t owner, int world ) {
 	if ( !w ) {
 		return;
 	}
+	Phys_VehiclesWorldDestroyed( owner, world );
 	for ( i = 0; i < PHYS_MAX_BODIES; i++ ) {
 		if ( phys_bodies[owner][i].world == world ) {
 			Com_Memset( &phys_bodies[owner][i], 0, sizeof( physBody_t ) );
@@ -389,7 +390,9 @@ static void Phys_RunTicks( physOwner_t owner, physWorld_t *w, int count ) {
 		if ( w->workerCount > 1 ) {
 			Phys_TasksBeginStep();
 		}
+		Phys_VehiclesBeforeTick( owner, (int)( w - phys_worlds ) + 1, w, dt );
 		b3World_Step( w->id, dt, w->substeps );
+		Phys_VehiclesAfterTick( owner, (int)( w - phys_worlds ) + 1 );
 		w->lastStepMs = b3GetMilliseconds( t0 );
 		w->ticks++;
 		Phys_GatherEvents( owner, w );

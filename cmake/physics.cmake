@@ -47,6 +47,7 @@ set(PHYSICS_SOURCES
     ${SOURCE_DIR}/physics/phys_ragdoll.c
     ${SOURCE_DIR}/physics/phys_syscalls.c
     ${SOURCE_DIR}/physics/phys_tasks.c
+    ${SOURCE_DIR}/physics/phys_vehicle.c
 )
 set_source_files_properties(${PHYSICS_SOURCES} PROPERTIES
     COMPILE_OPTIONS "-ffp-contract=off;-std=gnu17"

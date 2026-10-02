@@ -203,11 +203,20 @@ qboolean CL_PadScriptFrame( int eventTime ) {
 			// boundaries of command time, so the phase changes the physics).
 			// The clock is realtime + delta (cl_timeNudge aside), clamped so it
 			// never runs backwards, so align that sum, not cl.serverTime.
+			// The first frame after the boundary, not just any 16 ms frame:
+			// the script then starts at the same phase of the server's 50 ms
+			// frames and of 16 ms physics ticks on every build (both divide
+			// 400), which server-simulated things (vehicles, movers) need.
+			// t < boundary + 16 and base <= t, so this never runs backwards.
 			int base = cls.realtime + cl.serverTimeDelta;
-			int adj = ( PADSCRIPT_ALIGN_MSEC - ( ( base % PADSCRIPT_ALIGN_MSEC ) + PADSCRIPT_ALIGN_MSEC ) % PADSCRIPT_ALIGN_MSEC ) % PADSCRIPT_ALIGN_MSEC;
+			int target = ( t / PADSCRIPT_PHASE_MSEC ) * PADSCRIPT_PHASE_MSEC + PADSCRIPT_ALIGN_MSEC;
+			int adj = target - base;
 
-			if ( base + adj < cl.serverTime ) {
-				adj += PADSCRIPT_ALIGN_MSEC * ( ( cl.serverTime - base - adj + PADSCRIPT_ALIGN_MSEC - 1 ) / PADSCRIPT_ALIGN_MSEC );
+			if ( adj < 0 || target < cl.serverTime ) {
+				adj = ( PADSCRIPT_ALIGN_MSEC - ( ( base % PADSCRIPT_ALIGN_MSEC ) + PADSCRIPT_ALIGN_MSEC ) % PADSCRIPT_ALIGN_MSEC ) % PADSCRIPT_ALIGN_MSEC;
+				if ( base + adj < cl.serverTime ) {
+					adj += PADSCRIPT_ALIGN_MSEC * ( ( cl.serverTime - base - adj + PADSCRIPT_ALIGN_MSEC - 1 ) / PADSCRIPT_ALIGN_MSEC );
+				}
 			}
 			cl.serverTimeDelta += adj;
 			cl.serverTime = cl.oldServerTime = base + adj;

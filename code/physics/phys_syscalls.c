@@ -326,6 +326,10 @@ qboolean Phys_Syscall( physOwner_t owner, intptr_t *args, intptr_t *ret ) {
 	physBody_t *b;
 	physJoint_t *j;
 
+	if ( args[0] >= PHYS_VEHICLE_CREATE && args[0] < PHYS_VEHICLE_CREATE + 10 ) {
+		*ret = 0;
+		return Phys_VehicleSyscall( owner, args, ret );	// 1260-1269, phys_vehicle.c
+	}
 	if ( args[0] < OAX_PHYS_BASE || args[0] >= OAX_PHYS_BASE + 50 ) {
 		return qfalse;
 	}

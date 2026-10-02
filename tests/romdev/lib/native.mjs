@@ -45,8 +45,9 @@ export function nativeHome(name) {
 }
 
 // Run `map` with cheats and fixedtime 16, then the given console lines, then
-// quit. Returns the home directory (outputs land in <home>/baseoa).
-export function runNative(name, map, lines, { timeoutMs = 300000, quit = true } = {}) {
+// quit. Returns the home directory (outputs land in <home>/baseoa). `set`:
+// cvars set on the command line before the map loads (latched server rules).
+export function runNative(name, map, lines, { timeoutMs = 300000, quit = true, set = {} } = {}) {
   const home = nativeHome(name);
   const cfg = ['fixedtime 16', ...lines, ...(quit ? ['quit'] : [])];
   fs.writeFileSync(path.join(home, 'baseoa', 'native_test.cfg'), cfg.join('\n') + '\n');
@@ -56,6 +57,7 @@ export function runNative(name, map, lines, { timeoutMs = 300000, quit = true } 
     '+set', 'r_mode', '-1', '+set', 'r_customwidth', '1280', '+set', 'r_customheight', '720', '+set', 'r_fullscreen', '0',
     '+set', 'vm_game', '1', '+set', 'vm_cgame', '1', '+set', 'vm_ui', '1', '+set', 'sv_pure', '0',
     '+set', 'bot_enable', '0', '+set', 'com_introplayed', '1', '+set', 'com_maxfps', '0',
+    ...Object.entries(set).flatMap(([k, v]) => ['+set', k, String(v)]),
     '+devmap', map, '+wait', '200', '+exec', 'native_test.cfg',
   ], { stdio: ['ignore', log, log], timeout: timeoutMs, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':9' } });
   return home;

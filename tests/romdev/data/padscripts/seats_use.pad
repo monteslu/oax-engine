@@ -1,0 +1,5 @@
+# seats_use: press X (+button2, use) for 3 frames
+# frames lx ly rx ry lt rt [buttons]
+2 0 0 0 0 0 0
+3 0 0 0 0 0 0 2
+4 0 0 0 0 0 0

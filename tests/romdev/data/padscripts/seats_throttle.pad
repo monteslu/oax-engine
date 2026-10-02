@@ -1,0 +1,5 @@
+# seats_throttle: left stick forward for 60 frames
+# frames lx ly rx ry lt rt [buttons]
+2 0 0 0 0 0 0
+60 0 -32767 0 0 0 0
+4 0 0 0 0 0 0

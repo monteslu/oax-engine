@@ -106,6 +106,12 @@ int			Phys_AddHeightField( physOwner_t owner, int world, const oaxPhysHeightFiel
 int			Phys_RagdollCreate( physOwner_t owner, int world, const oaxPhysRagdollDef_t *def,
 				const oaxPhysRagdollBone_t *bones, int numBones, int *outBodies );
 
+// vehicles and terrain (phys_vehicle.c, phase 8)
+void		Phys_VehiclesWorldDestroyed( physOwner_t owner, int world );
+void		Phys_VehiclesBeforeTick( physOwner_t owner, int world, physWorld_t *w, float dt );
+void		Phys_VehiclesAfterTick( physOwner_t owner, int world );
+qboolean	Phys_VehicleSyscall( physOwner_t owner, intptr_t *args, intptr_t *ret );
+
 // the syscall block, shared by the game and cgame dispatchers (phys_syscalls.c)
 qboolean	Phys_Syscall( physOwner_t owner, intptr_t *args, intptr_t *ret );
 

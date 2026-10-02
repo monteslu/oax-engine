@@ -59,4 +59,5 @@ void CL_PhysInit( void ) {
 	CL_OAXRegisterCgameHandler( Phys_CgameCalls );
 	CL_OAXRegisterCgameHandler( CL_PhysSkelCalls );
 	OAX_AddFeature( "physics" );
+	OAX_AddFeature( "physics_vehicle" );
 }

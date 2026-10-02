@@ -150,6 +150,12 @@ typedef enum {
 	PHYS_R_LERP_SKELETON = 1251,    // cgame: ( qhandle_t model, int frame, int oldframe, float backlerp, float *mats, int max ) -> joints
 	PHYS_R_ADD_SKELETAL_ENTITY = 1252, // cgame: ( const refEntity_t *re, const float *mats, int numJoints ): draw with these joint matrices
 	PHYS_R_MODEL_FRAMES = 1253,     // cgame: ( qhandle_t model ) -> frames
+	// 1260-1269 vehicles and terrain (phys_vehicle.c, token "physics_vehicle")
+	PHYS_VEHICLE_CREATE = 1260,     // ( int world, const oaxPhysVehicleDef_t *def ) -> vehicle, 0 on failure
+	PHYS_VEHICLE_DESTROY = 1261,    // ( int vehicle ): the chassis body goes too
+	PHYS_VEHICLE_SET_INPUT = 1262,  // ( int vehicle, const oaxPhysVehicleInput_t *in ): held until changed
+	PHYS_VEHICLE_GET_STATE = 1263,  // ( int vehicle, oaxPhysVehicleState_t *out ) -> 1 valid, 0
+	PHYS_WORLD_ADD_TERRAIN = 1264,  // ( int world, const oaxPhysShapeDef_t *material or 0, int *bodies, int max ) -> static bodies made
 	OAX_PHYS_END = 1300
 } oaxPhysImport_t;
 

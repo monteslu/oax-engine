@@ -1,0 +1,18 @@
+# hover_drive: from the spawn of oax_vehicle_test, strafe left to the hover
+# craft, get in with the use button, fly it over the terrain with turns
+# (it banks into them), brake, back up and get out
+# frames lx ly rx ry lt rt [buttons: 1 B brake, 2 X use]
+20 0 0 0 0 0 0
+40 -32767 0 0 0 0 0
+10 0 0 0 0 0 0
+3 0 0 0 0 0 0 2
+20 0 0 0 0 0 0
+120 0 -32767 0 0 0 0
+80 -30000 -32767 0 0 0 0
+80 30000 -32767 0 0 0 0
+60 0 -32767 0 0 0 0
+40 0 0 0 0 0 0 1
+50 0 32767 0 0 0 0
+20 0 0 0 0 0 0
+3 0 0 0 0 0 0 2
+30 0 0 0 0 0 0

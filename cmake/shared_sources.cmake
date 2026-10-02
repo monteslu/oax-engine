@@ -101,6 +101,7 @@ list(APPEND SERVER_SOURCES ${IDSCRIPT_SOURCES})
 # Box3D physics (code/box3d, code/physics): game and cgame worlds
 include(physics)
 list(APPEND SERVER_SOURCES ${PHYSICS_SOURCES})
+
 # Recast/Detour navmesh (code/thirdparty/recastnavigation), driven by sv_nav_oax.c
 include(recast)
 list(APPEND SERVER_SOURCES ${RECAST_SOURCES})

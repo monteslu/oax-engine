@@ -1,0 +1,15 @@
+# vehicle_drive_control: vehicle_drive turning left where it turns right
+# drive it over the terrain and the ramp, turn, slide, brake, back up, get out
+# frames lx ly rx ry lt rt [buttons: 0 A handbrake, 1 B brake, 2 X use]
+20 0 0 0 0 0 0
+3 0 0 0 0 0 0 2
+20 0 0 0 0 0 0
+150 0 -32767 0 0 0 0
+60 -26000 -32767 0 0 0 0
+60 -26000 -32767 0 0 0 0
+40 26000 -32767 0 0 0 0 0
+40 0 0 0 0 0 0 1
+60 0 32767 0 0 0 0
+20 0 0 0 0 0 0
+3 0 0 0 0 0 0 2
+30 0 0 0 0 0 0
