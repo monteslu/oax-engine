@@ -640,3 +640,11 @@ Significant contributions from
   * surrealchemist
 
 
+
+# Third-party code in the oax engine
+
+  * Box3D by Erin Catto (MIT license), the rigid body physics engine behind
+    the physics syscalls: `code/box3d` (pinned commit, license and what was
+    copied in `code/box3d/README.md`).
+  * musl libm functions for deterministic trig (MIT): `code/qcommon/detmath`.
+  * id Tech 4 (DOOM-3) code (GPLv3): see `docs/idtech4-attribution.md`.

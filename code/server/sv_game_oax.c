@@ -9,6 +9,7 @@ number it does not know to SV_GameSystemCallsOAX before it gives up.
 
 #include "server.h"
 #include "../qcommon/oax.h"
+#include "../physics/phys_public.h"
 
 #define MAX_OAX_GAME_HANDLERS 16
 
@@ -86,4 +87,8 @@ void SV_OAXInit( void ) {
 	// unified lighting: the game spawns ET_OAX_LIGHT entities for the lights
 	// it controls (no game syscalls; the cgame drives the renderer)
 	OAX_AddFeature( "ulight" );
+	// Box3D worlds for the game (code/physics, block 1200-1249)
+	Phys_Init();
+	SV_OAXRegisterGameHandler( Phys_GameCalls );
+	OAX_AddFeature( "physics" );
 }

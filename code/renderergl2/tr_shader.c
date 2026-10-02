@@ -2087,6 +2087,11 @@ static qboolean ParseShader( char **text )
 		{
 			continue;
 		}
+		// oax water: oaxWater / oaxWaterParm <name> <values> (tr_oax_water.c)
+		else if ( R_OAXParseWaterKeyword( token, text, &shader.oaxWater, shader.name ) )
+		{
+			continue;
+		}
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name );
@@ -3146,6 +3151,11 @@ static shader_t *FinishShader( void ) {
 		shader.sort = SS_ENVIRONMENT;
 	}
 
+	// oax water draws after the opaque scene and decals, before blends
+	if ( shader.oaxWater && !shader.sort ) {
+		shader.sort = SS_UNDERWATER;
+	}
+
 	//
 	// set polygon offset
 	//
@@ -3312,6 +3322,7 @@ static shader_t *FinishShader( void ) {
 
 	// determine which vertex attributes this shader needs
 	ComputeVertexAttribs();
+	R_OAXWaterFinishShader( &shader );
 
 	return GeneratePermanentShader();
 }

@@ -30,6 +30,12 @@ set(RENDERER_GL2_SOURCES
     ${SOURCE_DIR}/renderergl2/tr_oax.c
     ${SOURCE_DIR}/renderergl2/tr_image_program.c
     ${SOURCE_DIR}/renderergl2/tr_procedural.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_fx.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_particle.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_decal.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_trail.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_water.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_bloom.c
     ${SOURCE_DIR}/renderergl2/tr_postprocess.c
     ${SOURCE_DIR}/renderergl2/tr_scene.c
     ${SOURCE_DIR}/renderergl2/tr_shade.c
@@ -49,6 +55,8 @@ set(RENDERER_GL2_SOURCES
 # image programs must compute the same bytes on every host (tests compare
 # them with a JS port): no fused multiply-adds
 set_source_files_properties(${SOURCE_DIR}/renderergl2/tr_image_program.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+# projected decals are clipped on the CPU: the same polygons on every host
+set_source_files_properties(${SOURCE_DIR}/renderergl2/tr_oax_decal.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
 file(GLOB RENDERER_GL2_SHADER_SOURCES ${SOURCE_DIR}/renderergl2/glsl/*.glsl)
 

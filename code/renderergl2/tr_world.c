@@ -373,6 +373,9 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 	R_SetupEntityLighting( &tr.refdef, ent );
 	R_DlightBmodel( bmodel );
 
+	// oax projected decals on this model (and where it is, for new ones)
+	R_OAXAddBmodelDecals( bmodel - tr.world->bmodels, ent );
+
 	for ( i = 0 ; i < bmodel->numSurfaces ; i++ ) {
 		int surf = bmodel->firstSurface + i;
 

@@ -91,6 +91,10 @@ set(SERVER_SOURCES
 include(idscript)
 list(APPEND SERVER_SOURCES ${IDSCRIPT_SOURCES})
 
+# Box3D physics (code/box3d, code/physics): game and cgame worlds
+include(physics)
+list(APPEND SERVER_SOURCES ${PHYSICS_SOURCES})
+
 set(BOTLIB_SOURCES
     ${SOURCE_DIR}/botlib/be_aas_bspq3.c
     ${SOURCE_DIR}/botlib/be_aas_cluster.c

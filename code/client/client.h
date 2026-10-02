@@ -677,4 +677,6 @@ void CL_OAXRegisterCgameHandler( qboolean ( *h )( intptr_t *args, intptr_t *ret 
 // cl_cgame_ulight.c
 void CL_ULightInit( void );
 void CL_OAXRenderInit( void );
+void CL_PhysInit( void );
+void CL_OAXFxInit( void );
 void CL_OAXRendererFeatures( void );

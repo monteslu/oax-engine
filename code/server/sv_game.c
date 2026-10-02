@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "server.h"
 
 #include "../botlib/botlib.h"
+#include "../physics/phys_public.h"
 
 botlib_export_t	*botlib_export;
 
@@ -869,6 +870,7 @@ void SV_ShutdownGameProgs( void ) {
 	VM_Call( gvm, GAME_SHUTDOWN, qfalse );
 	VM_Free( gvm );
 	gvm = NULL;
+	Phys_FreeGameWorlds();	// oax: the game's physics worlds go with it
 }
 
 /*
@@ -895,6 +897,7 @@ static void SV_InitGameVM( qboolean restart ) {
 	// use the current msec count for a random seed
 	// init for this gamestate
 	SV_OAXGuiReset();	// oax: the game reloads its GUIs
+	Phys_FreeGameWorlds();	// oax: and rebuilds its physics worlds
 	VM_Call (gvm, GAME_INIT, sv.time, Com_Milliseconds(), restart);
 }
 

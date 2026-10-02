@@ -37,6 +37,9 @@ void R_OAXRegisterCvars( void ) {
 	r_oaxViewFog = ri.Cvar_Get( "r_oaxViewFog", "", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_oaxViewFog, "Test override for the oax view fog: \"r g b density start end\"." );
 	ri.Cmd_AddCommand( "imageprogram", R_OAXImageProgram_f );
+	R_OAXFxRegisterCvars();		// phase 6 effects (tr_oax_fx.c)
+	R_OAXBloomRegisterCvars();
+	R_OAXWaterReset();
 	R_OAXResetMapState();
 	R_OAXProcReset();
 }
@@ -84,7 +87,7 @@ The oax_features tokens this renderer implements.
 =================
 */
 const char *RE_OAXFeatures( void ) {
-	return "skyportal lightstyle proc viewfog";
+	return va( "skyportal lightstyle proc viewfog physics_skel %s", R_OAXFxFeatures() );
 }
 
 static int R_OAXPointArea( const vec3_t p ) {
@@ -215,6 +218,8 @@ void R_OAXInitGLSL( void ) {
 		GLSL_SetUniformInt( &tr.oaxProcShader[i], UNIFORM_LEVELSMAP, TB_LEVELSMAP );
 		GLSL_FinishGPUShader( &tr.oaxProcShader[i] );
 	}
+
+	R_OAXFxInitGLSL();
 }
 
 void R_OAXShutdownGLSL( void ) {
@@ -224,4 +229,5 @@ void R_OAXShutdownGLSL( void ) {
 	for ( i = 0; i < OAX_PROC_NUM_PROGRAMS; i++ ) {
 		GLSL_DeleteGPUShader( &tr.oaxProcShader[i] );
 	}
+	R_OAXFxShutdownGLSL();
 }

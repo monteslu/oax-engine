@@ -82,4 +82,6 @@ void CL_OAXInit( void ) {
 	CL_OAXGuiInit();
 	CL_ULightInit();
 	CL_OAXRenderInit();
+	CL_PhysInit();		// "physics": cosmetic Box3D worlds, ragdoll skeletons
+	CL_OAXFxInit();
 }

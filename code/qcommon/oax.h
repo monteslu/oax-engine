@@ -56,7 +56,7 @@ typedef enum {
 	// 1070-1079 unified lighting (phase 5)
 	G_OAX_ULIGHT_BASE = 1070,
 
-	G_OAX_END = 1100
+	G_OAX_END = 1300	// 1200-1299: physics (oaxPhysImport_t below)
 } gameImportOAX_t;
 
 // ---- cgame imports ---------------------------------------------------------
@@ -72,6 +72,12 @@ typedef enum {
 	CG_OAX_R_SETVIEWFOG = 1012,		// ( const float *rgb, float density, float start, float end ); density 0 = off.
 									// end > start: linear from start to end up to `density` (0..1);
 									// else exponential 1 - exp(-density * (dist - start)). Stays set.
+	// effects (phase 6; tokens "particles", "decals", "trails"; renderergl2 tr_oax_fx*.c)
+	CG_OAX_R_REGISTERFX = 1013,		// ( const char *particleDecl ) -> handle, 0 if there is no such decl
+	CG_OAX_R_ADDFX = 1014,			// ( const oaxFx_t *fx ) -> 1 while the system has particles alive or to come, 0 once done
+	CG_OAX_R_ADDDECAL = 1015,		// ( const oaxDecal_t *decal ) -> polygons projected, 0 if none (or decals are off)
+	CG_OAX_R_ADDTRAIL = 1016,		// ( const oaxTrail_t *trail, const float *points ): numPoints * (x y z ageMs)
+	CG_OAX_R_CLEARDECALS = 1017,	// ( void )
 
 	// 1020-1029 sound: zone reverb, occlusion
 	CG_OAX_S_BASE = 1020,
@@ -92,8 +98,51 @@ typedef enum {
 	CG_OAX_R_UPDATELIGHTDEF = 1050, // ( int lightOrdinal, const vec3_t origin, const vec3_t axis[3] or 0,
 	                                //   const vec3_t rgb, const float parms[12] or 0, int flags: 1 on )
 
-	CG_OAX_END = 1100
+	CG_OAX_END = 1300	// 1200-1299: physics (oaxPhysImport_t below)
 } cgameImportOAX_t;
+
+// ---- physics, game AND cgame (one block, same numbers, same meaning) -------
+// Box3D worlds (code/physics, structs in physics/oax_phys.h). Token
+// "physics"; the skeleton calls need "physics_skel" (cgame only).
+#define OAX_PHYS_BASE 1200
+typedef enum {
+	PHYS_WORLD_CREATE = 1200,       // ( const oaxPhysWorldDef_t *def ) -> world, 0 on failure
+	PHYS_WORLD_DESTROY = 1201,      // ( int world )
+	PHYS_WORLD_STEP = 1202,         // ( int world, int msec ) -> ticks run; msec < 0 runs exactly -msec ticks
+	PHYS_WORLD_ADD_BSP = 1203,      // ( int world, int contentsMask, int flags, const oaxPhysShapeDef_t *material or 0 ) -> static body
+	PHYS_WORLD_ADD_HEIGHTFIELD = 1204, // ( int world, const oaxPhysHeightField_t *hf, const float *heights, const oaxPhysShapeDef_t *material or 0 ) -> static body
+	PHYS_WORLD_SET_GRAVITY = 1205,  // ( int world, const vec3_t gravity )
+	PHYS_WORLD_STATS = 1206,        // ( int world, oaxPhysStats_t *out ) -> 1
+	PHYS_WORLD_HASH = 1207,         // ( int world ) -> hash of every body's state (handle order)
+	PHYS_WORLD_EXPLODE = 1208,      // ( int world, const vec3_t origin, float radius, float falloff, float impulsePerArea, int maskBits )
+	PHYS_WORLD_CONTACT_EVENTS = 1209, // ( int world, oaxPhysContact_t *out, int max ) -> count (events of the ticks since the last call)
+	PHYS_BODY_CREATE = 1210,        // ( int world, const oaxPhysBodyDef_t *def ) -> body
+	PHYS_BODY_DESTROY = 1211,       // ( int body )
+	PHYS_BODY_ADD_SHAPE = 1212,     // ( int body, const oaxPhysShapeDef_t *def, const float *points, int numPoints, const int *indices, int numIndices ) -> 1-based shape index, 0
+	PHYS_BODY_SET_TRANSFORM = 1213, // ( int body, const vec3_t origin, const float *quat ): teleport
+	PHYS_BODY_SET_VELOCITY = 1214,  // ( int body, const vec3_t velocity or 0, const vec3_t angularVelocity or 0 )
+	PHYS_BODY_APPLY = 1215,         // ( int body, int kind, const vec3_t vec, const vec3_t point or 0 ) kind PHYS_APPLY_*
+	PHYS_BODY_SET_TARGET = 1216,    // ( int body, const vec3_t origin, const float *quat, float seconds ): kinematic move
+	PHYS_BODY_SET_PARAM = 1217,     // ( int body, int param, float value ) param PHYS_BP_*
+	PHYS_BODY_GET_STATE = 1218,     // ( int body, oaxPhysBodyState_t *out ) -> 1 valid, 0
+	PHYS_BODY_GET_STATES = 1219,    // ( const int *bodies, int count, oaxPhysBodyState_t *out ) -> valid count
+	PHYS_BODY_FROM_BSP_MODEL = 1220, // ( int world, int inlineModel, int type, const oaxPhysShapeDef_t *material or 0 ) -> body of the brush model's hulls
+	PHYS_BODY_GET_MASS = 1221,      // ( int body ) -> float kg
+	PHYS_RAGDOLL_CREATE = 1222,     // ( int world, const oaxPhysRagdollDef_t *def, const oaxPhysRagdollBone_t *bones, int numBones, int *outBodies ) -> bodies made
+	PHYS_JOINT_CREATE = 1230,       // ( int world, const oaxPhysJointDef_t *def ) -> joint
+	PHYS_JOINT_DESTROY = 1231,      // ( int joint )
+	PHYS_JOINT_SET_PARAM = 1232,    // ( int joint, int param, float value ) param PHYS_JP_*
+	PHYS_JOINT_GET_PARAM = 1233,    // ( int joint, int param ) -> float
+	PHYS_RAYCAST = 1240,            // ( int world, const oaxPhysRay_t *ray, oaxPhysHit_t *out ) -> 1 hit, 0 miss (closest hit)
+	PHYS_RAYCAST_BATCH = 1241,      // ( int world, const oaxPhysRay_t *rays, int count, oaxPhysHit_t *out ) -> hits (raycast wheels)
+	PHYS_SHAPECAST = 1242,          // ( int world, const oaxPhysShapeDef_t *shape, const float *points, int numPoints, const oaxPhysRay_t *ray, const float *quat, oaxPhysHit_t *out ) -> 1 hit
+	PHYS_OVERLAP = 1243,            // ( int world, const oaxPhysShapeDef_t *shape, const float *points, int numPoints, const vec3_t origin, const float *quat, unsigned maskBits, int *bodies, int max ) -> count
+	PHYS_R_MODEL_SKELETON = 1250,   // cgame: ( qhandle_t model, oaxSkelJoint_t *out, int max ) -> joints, 0 if not skeletal
+	PHYS_R_LERP_SKELETON = 1251,    // cgame: ( qhandle_t model, int frame, int oldframe, float backlerp, float *mats, int max ) -> joints
+	PHYS_R_ADD_SKELETAL_ENTITY = 1252, // cgame: ( const refEntity_t *re, const float *mats, int numJoints ): draw with these joint matrices
+	PHYS_R_MODEL_FRAMES = 1253,     // cgame: ( qhandle_t model ) -> frames
+	OAX_PHYS_END = 1300
+} oaxPhysImport_t;
 
 // surfaceparm gui (tests/maps custinfoparms.txt): a face that shows the
 // GUI of its entity. Above every stock Q3 surface flag.

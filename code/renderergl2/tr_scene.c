@@ -29,6 +29,7 @@ int			r_firstSceneDlight;
 
 int			r_numentities;
 int			r_firstSceneEntity;
+int			r_numskelfloats;	// oax: backEndData->skelMats in use
 
 int			r_numpolys;
 int			r_firstScenePoly;
@@ -57,6 +58,9 @@ void R_InitNextFrame( void ) {
 	r_firstScenePoly = 0;
 
 	r_numpolyverts = 0;
+
+	r_numskelfloats = 0;
+	R_OAXFxInitNextFrame();
 }
 
 
@@ -70,6 +74,7 @@ void RE_ClearScene( void ) {
 	r_firstSceneDlight = r_numdlights;
 	r_firstSceneEntity = r_numentities;
 	r_firstScenePoly = r_numpolys;
+	R_OAXFxClearScene();
 }
 
 /*
@@ -225,6 +230,8 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
 	backEndData->entities[r_numentities].guiHandle = 0;
+	backEndData->entities[r_numentities].skelMats = NULL;
+	backEndData->entities[r_numentities].skelNumJoints = 0;
 
 	CrossProduct(ent->axis[0], ent->axis[1], cross);
 	backEndData->entities[r_numentities].mirrored = (DotProduct(ent->axis[2], cross) < 0.f);
@@ -437,6 +444,7 @@ void RE_BeginScene(const refdef_t *fd)
 	tr.sceneCount++;
 
 	R_OAXBeginScene();
+	R_OAXFxBeginScene();
 }
 
 
@@ -447,6 +455,7 @@ void RE_EndScene(void)
 	r_firstSceneEntity = r_numentities;
 	r_firstSceneDlight = r_numdlights;
 	r_firstScenePoly = r_numpolys;
+	R_OAXFxEndScene();
 }
 
 /*
@@ -593,4 +602,28 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.oaxSkyArea = -1;
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
+}
+
+/*
+=====================
+RE_OAXAddSkeletalEntity
+
+oax: an IQM entity drawn with joint matrices from the cgame (ragdolls,
+blended player skeletons) instead of its animation frames: numJoints
+row-major 3x4 matrices in model space (physics/oax_phys.h). The matrices
+are copied, so the caller's buffer may change right after.
+=====================
+*/
+void RE_OAXAddSkeletalEntity( const refEntity_t *ent, const float *mats, int numJoints ) {
+	int index = r_numentities;
+
+	RE_AddRefEntityToScene( ent );
+	if ( r_numentities == index || numJoints <= 0 || numJoints > IQM_MAX_JOINTS
+		|| r_numskelfloats + numJoints * 12 > MAX_SKEL_FLOATS ) {
+		return;
+	}
+	Com_Memcpy( backEndData->skelMats + r_numskelfloats, mats, numJoints * 12 * sizeof( float ) );
+	backEndData->entities[index].skelMats = backEndData->skelMats + r_numskelfloats;
+	backEndData->entities[index].skelNumJoints = numJoints;
+	r_numskelfloats += numJoints * 12;
 }

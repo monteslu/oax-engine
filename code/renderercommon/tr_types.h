@@ -128,6 +128,56 @@ typedef struct {
 	int			lightDefMask;		// unified lighting (phase 5)
 } refEntityExt_t;
 
+// oax effects (qcommon/oax.h CG_OAX_R_ADDFX .. CLEARDECALS). Plain ints and
+// floats so the cgame QVM can build them; append-only once shipped.
+
+// oaxFx_t.flags
+#define OAXFX_SHADERTIME	0x0001	// startTime/stopTime are on the shader clock (r_fixedShaderTime
+									// freezes the system); otherwise the refdef clock (cg.time)
+
+// one particle system instance (a particle decl, particles/*.prt), added
+// to the scene every frame it should draw. Particle positions are a pure
+// function of these fields, the particle index and the time.
+typedef struct {
+	int			handle;				// CG_OAX_R_REGISTERFX
+	int			startTime;			// ms
+	int			stopTime;			// ms, 0 = never: particles born after it are not drawn
+	int			seed;				// any int; same seed, same particles
+	int			flags;				// OAXFX_*
+	float		origin[3];
+	float		axis[3][3];			// the decl's x y z; axis[2] is "up" for directions
+	float		rgba[4];			// tint, multiplies the stage colours (0 0 0 0 = white)
+	float		scale;				// distance and size scale, 0 = 1
+} oaxFx_t;
+
+// oaxDecal_t.flags
+#define OAXDECAL_ALPHAFADE	0x0001	// fade alpha (blended decals); otherwise fade rgb (mark-style blends)
+
+// a projected decal: the box origin +- halfSize along axis[0..2], projected
+// along -axis[0] onto the world and brush-model surfaces inside it
+typedef struct {
+	int			shader;				// qhandle_t
+	float		origin[3];
+	float		axis[3][3];			// axis[0] points out of the surface; axis[1], axis[2] are texture s, t
+	float		halfSize[3];
+	float		rgba[4];
+	int			startTime;			// ms (refdef clock)
+	int			lifeMs;				// 0 = until the cap pushes it out
+	int			fadeMs;				// fades out over the last fadeMs of its life
+	int			flags;				// OAXDECAL_*
+} oaxDecal_t;
+
+// a ribbon trail through points (x y z ageMs), newest first, facing the viewer
+typedef struct {
+	int			shader;				// qhandle_t
+	int			numPoints;
+	int			lifeMs;				// points older than this are dropped; width and colour run head to lifeMs
+	float		width[2];			// at age 0, at lifeMs
+	float		rgba[2][4];			// at age 0, at lifeMs
+	float		texLength;			// world units per texture repeat along the trail, 0 = once over the trail
+	int			flags;
+} oaxTrail_t;
+
 
 #define	MAX_RENDER_STRINGS			8
 #define	MAX_RENDER_STRING_LENGTH	32

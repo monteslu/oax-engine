@@ -14,6 +14,8 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_gui_oax.c
     ${SOURCE_DIR}/client/cl_cgame_ulight.c
     ${SOURCE_DIR}/client/cl_cgame_oax_render.c
+    ${SOURCE_DIR}/client/cl_cgame_phys.c
+    ${SOURCE_DIR}/client/cl_cgame_oax_fx.c
     ${SOURCE_DIR}/client/cl_cin.c
     ${SOURCE_DIR}/client/cl_console.c
     ${SOURCE_DIR}/client/cl_gamepad.c

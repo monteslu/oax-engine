@@ -112,9 +112,13 @@ function main() {
   fs.rmSync(stage, { recursive: true, force: true });
   fs.mkdirSync(path.join(stage, 'vm'), { recursive: true });
   for (const q of qvms) fs.copyFileSync(path.join(vmDir, q), path.join(stage, 'vm', q));
-  // script data the oax game module ships next to its QVMs (script/*.script)
-  const scriptDir = path.join(args.qvm, 'script');
-  if (fs.existsSync(scriptDir)) fs.cpSync(scriptDir, path.join(stage, 'script'), { recursive: true });
+  // data the oax game modules ship next to their QVMs: script/*.script (map
+  // scripting), models/players/* (the skeletal IQM player), particles/*.prt
+  // and scripts/*.shader (the cgame's effects)
+  for (const d of ['script', 'models', 'particles', 'scripts']) {
+    const dataDir = path.join(args.qvm, d);
+    if (fs.existsSync(dataDir)) fs.cpSync(dataDir, path.join(stage, d), { recursive: true });
+  }
   overlay(stage, gameDir, index);
   fs.rmSync(stage, { recursive: true, force: true });
   console.log(`qvm: ${qvms.join(' ')}`);

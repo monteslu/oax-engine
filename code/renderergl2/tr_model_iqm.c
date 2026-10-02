@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+static qboolean R_IQMEntitySkel( const trRefEntity_t *ent, const iqmData_t *data, float *poseMats );
+
 #define	LL(x) x=LittleLong(x)
 
 // 3x4 identity matrix
@@ -1137,6 +1139,10 @@ static int R_CullIQM( iqmData_t *data, trRefEntity_t *ent ) {
 	vec_t		*oldBounds, *newBounds;
 	int		i;
 
+	if ( ent->skelMats ) {
+		return CULL_CLIP;	// oax: a ragdoll can be anywhere the frame bounds are not
+	}
+
 	if (!data->bounds) {
 		tr.pc.c_box_cull_md3_clip++;
 		return CULL_CLIP;
@@ -1476,7 +1482,9 @@ void RB_IQMSurfaceAnim( surfaceType_t *surface ) {
 
 	if ( data->num_poses > 0 ) {
 		// compute interpolated joint matrices
-		ComputePoseMats( data, frame, oldframe, backlerp, poseMats );
+		if ( !R_IQMEntitySkel( backEnd.currentEntity, data, poseMats ) ) {
+			ComputePoseMats( data, frame, oldframe, backlerp, poseMats );
+		}
 
 		// compute vertex blend influence matricies
 		for( i = 0; i < surf->num_influences; i++ ) {
@@ -1692,7 +1700,9 @@ void RB_IQMSurfaceAnimVao(srfVaoIQModel_t * surface)
 		int i;
 
 		// compute interpolated joint matrices
-		ComputePoseMats( surface->iqmData, frame, oldframe, backlerp, jointMats );
+		if ( !R_IQMEntitySkel( backEnd.currentEntity, data, jointMats ) ) {
+			ComputePoseMats( surface->iqmData, frame, oldframe, backlerp, jointMats );
+		}
 
 		// convert row-major order 3x4 matrix to column-major order 4x4 matrix
 		for ( i = 0; i < data->num_poses; i++ ) {
@@ -1755,4 +1765,105 @@ int R_IQMLerpTag( orientation_t *tag, iqmData_t *data,
 	tag->origin[2] = jointMats[12 * joint + 11];
 
 	return qtrue;
+}
+
+/*
+==============================================================================
+
+oax: skeletons for the cgame (ragdolls); physics/oax_phys.h
+
+==============================================================================
+*/
+
+// the skinning matrices of an entity that carries its own joint matrices
+static qboolean R_IQMEntitySkel( const trRefEntity_t *ent, const iqmData_t *data, float *poseMats ) {
+	int i;
+
+	if ( !ent || !ent->skelMats || ent->skelNumJoints != data->num_joints ) {
+		return qfalse;
+	}
+	for ( i = 0; i < data->num_joints; i++ ) {
+		Matrix34Multiply( ent->skelMats + i * 12, data->invBindJoints + i * 12, poseMats + i * 12 );
+	}
+	return qtrue;
+}
+
+static iqmData_t *R_IQMDataForHandle( qhandle_t handle ) {
+	model_t *mod = R_GetModelByHandle( handle );
+
+	if ( !mod || mod->type != MOD_IQM || !mod->modelData ) {
+		return NULL;
+	}
+	return mod->modelData;
+}
+
+int RE_OAXModelSkeleton( qhandle_t handle, oaxSkelJoint_t *joints, int max ) {
+	iqmData_t *data = R_IQMDataForHandle( handle );
+	const char *name;
+	int i;
+
+	if ( !data || !data->num_joints ) {
+		return 0;
+	}
+	name = data->jointNames;
+	for ( i = 0; i < data->num_joints && joints && i < max; i++ ) {
+		const float *m = data->bindJoints + i * 12;
+		float t, s;
+		Q_strncpyz( joints[i].name, name, sizeof( joints[i].name ) );
+		joints[i].parent = data->jointParents[i];
+		joints[i].origin[0] = m[3];
+		joints[i].origin[1] = m[7];
+		joints[i].origin[2] = m[11];
+		// rotation part to a quaternion (bind joints carry no scale in practice)
+		t = m[0] + m[5] + m[10];
+		if ( t > 0.0f ) {
+			s = 0.5f / sqrtf( t + 1.0f );
+			joints[i].quat[3] = 0.25f / s;
+			joints[i].quat[0] = ( m[9] - m[6] ) * s;
+			joints[i].quat[1] = ( m[2] - m[8] ) * s;
+			joints[i].quat[2] = ( m[4] - m[1] ) * s;
+		} else if ( m[0] > m[5] && m[0] > m[10] ) {
+			s = 2.0f * sqrtf( 1.0f + m[0] - m[5] - m[10] );
+			joints[i].quat[3] = ( m[9] - m[6] ) / s;
+			joints[i].quat[0] = 0.25f * s;
+			joints[i].quat[1] = ( m[1] + m[4] ) / s;
+			joints[i].quat[2] = ( m[2] + m[8] ) / s;
+		} else if ( m[5] > m[10] ) {
+			s = 2.0f * sqrtf( 1.0f + m[5] - m[0] - m[10] );
+			joints[i].quat[3] = ( m[2] - m[8] ) / s;
+			joints[i].quat[0] = ( m[1] + m[4] ) / s;
+			joints[i].quat[1] = 0.25f * s;
+			joints[i].quat[2] = ( m[6] + m[9] ) / s;
+		} else {
+			s = 2.0f * sqrtf( 1.0f + m[10] - m[0] - m[5] );
+			joints[i].quat[3] = ( m[4] - m[1] ) / s;
+			joints[i].quat[0] = ( m[2] + m[8] ) / s;
+			joints[i].quat[1] = ( m[6] + m[9] ) / s;
+			joints[i].quat[2] = 0.25f * s;
+		}
+		name += strlen( name ) + 1;
+	}
+	return data->num_joints;
+}
+
+int RE_OAXLerpSkeleton( qhandle_t handle, int frame, int oldframe, float backlerp, float *mats, int max ) {
+	iqmData_t *data = R_IQMDataForHandle( handle );
+
+	if ( !data || !data->num_joints || max < data->num_joints ) {
+		return 0;
+	}
+	if ( data->num_frames ) {
+		frame = ( ( frame % data->num_frames ) + data->num_frames ) % data->num_frames;
+		oldframe = ( ( oldframe % data->num_frames ) + data->num_frames ) % data->num_frames;
+	} else {
+		frame = oldframe = 0;
+	}
+	ComputeJointMats( data, frame, oldframe, backlerp, mats );
+	return data->num_joints;
+}
+
+int RE_OAXModelFrames( qhandle_t handle ) {
+	iqmData_t *data = R_IQMDataForHandle( handle );
+
+	return data ? data->num_frames : 0;
 }

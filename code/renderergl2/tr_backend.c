@@ -379,6 +379,13 @@ void RB_BeginDrawingView (void) {
 		clearBits |= GL_COLOR_BUFFER_BIT;
 	}
 
+	// oax water reflections start from black too
+	if (backEnd.viewParms.oaxReflection)
+	{
+		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+		clearBits |= GL_COLOR_BUFFER_BIT;
+	}
+
 	qglClear( clearBits );
 
 	if ( ( backEnd.refdef.rdflags & RDF_HYPERSPACE ) )
@@ -914,6 +921,9 @@ const void	*RB_DrawSurfs( const void *data ) {
 	// oax procedural textures used by this frame, before the view's FBO is bound
 	if (!isShadowView && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL))
 		RB_OAXUpdateProcedurals(backEnd.refdef.floatTime);
+
+	// oax effects: no scene copy yet for this view
+	RB_OAXFxBeginView();
 
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView ();
@@ -1591,6 +1601,9 @@ const void *RB_PostProcess(const void *data)
 	// oax view fog, in scene light before tonemapping
 	if (backEnd.refdef.oaxViewFog[3] > 0.0f)
 		RB_OAXViewFog(srcFbo, dstBox);
+
+	// oax bloom, in scene light before tonemapping (r_oaxBloom)
+	RB_OAXBloom(srcFbo, dstBox);
 
 	if (r_ssao->integer)
 	{

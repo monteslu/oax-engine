@@ -105,6 +105,8 @@ typedef struct {
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
 	int			guiHandle;		// oax: client GUI for "map $gui" stages, 0 = none
+	const float	*skelMats;		// oax: IQM joint matrices from the cgame (ragdolls), NULL = frames
+	int			skelNumJoints;
 } trRefEntity_t;
 
 
@@ -508,6 +510,7 @@ typedef struct shader_s {
 	int			oaxInteraction;			// 0 unknown, -1 none, else interaction stage + 1
 	qboolean	oaxProcedural;			// a stage uses a procedural texture (tr_procedural.c)
 	qboolean	oaxSkyPortal;			// surfaceparm skyportal: sky a sky portal scene shows through
+	struct oaxWater_s *oaxWater;		// oaxWater keyword: water surface parameters (tr_oax_water.c), NULL none
 
 	struct	shader_s	*next;
 } shader_t;
@@ -799,6 +802,9 @@ typedef struct {
 
 	float       oaxViewFog[4];		// oax view fog: rgb, density (0 = off)
 	float       oaxViewFogRange[2];	// start, end
+
+	int			oaxFirstFx, oaxNumFx;			// oax particle systems of this scene (tr_oax_fx.c)
+	int			oaxFirstTrail, oaxNumTrails;	// oax trails of this scene (tr_oax_trail.c)
 } trRefdef_t;
 
 
@@ -870,6 +876,8 @@ typedef struct {
 	float       zNear;
 	stereoFrame_t	stereoFrame;
 	int			ulightView;			// unified lighting: view index + 1, 0 none
+	qboolean	oaxReflection;		// oax water: a planar reflection view (tr_oax_water.c)
+	qboolean	oaxHasReflection;	// oax water: this view's reflection was rendered first
 } viewParms_t;
 
 
@@ -897,6 +905,9 @@ typedef enum {
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
 	SF_VAO_MDVMESH,
 	SF_VAO_IQM,
+	SF_OAX_PARTICLES,		// oax effects (tr_oax_fx.h)
+	SF_OAX_DECAL,
+	SF_OAX_TRAIL,
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -1717,6 +1728,11 @@ typedef struct {
 	shaderProgram_t			oaxViewFogShader;
 	FBO_t					*oaxFogFbo;			// renderImage without depth, for the view fog pass
 	shaderProgram_t			oaxProcShader[OAX_PROC_NUM_PROGRAMS];
+
+	// oax effects (tr_oax_fx.c and friends)
+	shaderProgram_t			oaxParticleShader;
+	shaderProgram_t			oaxWaterShader;
+	shaderProgram_t			oaxBloomShader[4];
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -2538,6 +2554,9 @@ typedef enum {
 #define	MAX_POLYS		600
 #define	MAX_POLYVERTS	3000
 
+// oax: joint matrices for skeletal entities, per frame
+#define MAX_SKEL_FLOATS		( 128 * 64 * 12 )
+
 // all of the information needed by the back end must be
 // contained in a backEndData_t
 typedef struct {
@@ -2547,6 +2566,7 @@ typedef struct {
 	srfPoly_t	*polys;//[MAX_POLYS];
 	polyVert_t	*polyVerts;//[MAX_POLYVERTS];
 	pshadow_t pshadows[MAX_CALC_PSHADOWS];
+	float		skelMats[MAX_SKEL_FLOATS];	// oax: joint matrices of skeletal entities
 	renderCommandList_t	commands;
 } backEndData_t;
 
@@ -2615,6 +2635,11 @@ void R_OAXResetMapState( void );
 void RE_OAXSetLightStyle( int style, float r, float g, float b );
 void RE_OAXSetViewFog( const float *rgb, float density, float start, float end );
 const char *RE_OAXFeatures( void );
+// oax: skeletons for ragdolls (tr_model_iqm.c, tr_scene.c)
+int RE_OAXModelSkeleton( qhandle_t handle, oaxSkelJoint_t *joints, int max );
+int RE_OAXLerpSkeleton( qhandle_t handle, int frame, int oldframe, float backlerp, float *mats, int max );
+int RE_OAXModelFrames( qhandle_t handle );
+void RE_OAXAddSkeletalEntity( const refEntity_t *ent, const float *mats, int numJoints );
 void R_OAXBeginScene( void );
 qboolean R_OAXCullEntity( const trRefEntity_t *ent );
 void R_OAXInitGLSL( void );
@@ -2632,5 +2657,99 @@ image_t *R_OAXParseProcedural( char **text, const char *shaderName );
 void R_OAXProcMarkVisible( const shader_t *shader );
 void RB_OAXUpdateProcedurals( double shaderTime );
 void R_OAXProcReset( void );
+
+/*
+============================================================
+oax effects, phase 6 (tr_oax_fx.c, tr_oax_particle.c, tr_oax_decal.c,
+tr_oax_trail.c, tr_oax_water.c, tr_oax_bloom.c)
+============================================================
+*/
+#include "tr_oax_fx.h"
+
+extern cvar_t	*r_oaxParticles;
+extern cvar_t	*r_oaxSoftParticles;
+extern cvar_t	*r_oaxDecals;
+extern cvar_t	*r_oaxTrails;
+extern cvar_t	*r_oaxWater;
+extern cvar_t	*r_oaxBloom;
+
+void R_OAXFxRegisterCvars( void );
+void R_OAXBloomRegisterCvars( void );
+void R_OAXWaterReset( void );
+void R_OAXFxInit( void );			// after R_InitShaders
+void R_OAXFxInitGLSL( void );
+void R_OAXFxShutdownGLSL( void );
+void R_OAXFxWorldLoaded( void );
+void R_OAXFxInitNextFrame( void );
+void R_OAXFxPublishStats( void );
+const char *R_OAXFxFeatures( void );
+void R_OAXAddFxSurfaces( void );		// per view, from R_GenerateDrawSurfs
+void R_OAXFxClearScene( void );
+void R_OAXFxBeginScene( void );
+void R_OAXFxEndScene( void );
+oaxSceneFx_t *R_OAXSceneFx( int index );
+srfOaxParticles_t *R_OAXPrtSurf( int index );
+srfOaxParticles_t *R_OAXPrtNewSurf( oaxSceneFx_t *sfx );
+
+// scene copy: the opaque scene's colour and depth, for soft particles and water
+void RB_OAXFxBeginView( void );
+qboolean RB_OAXSceneCopy( void );
+image_t *RB_OAXSceneColor( void );
+image_t *RB_OAXSceneDepth( void );
+void RB_OAXSceneCopyInvalidate( void );
+void RB_OAXRestoreViewTarget( void );
+void RB_OAXFlushTess( void );
+void RB_CheckVao( vao_t *vao );		// tr_surface.c
+void R_PlaneForSurface( surfaceType_t *surfType, cplane_t *plane );	// tr_main.c
+
+// particles
+qhandle_t RE_OAXRegisterFx( const char *name );
+int RE_OAXAddFx( const oaxFx_t *fx );
+void R_OAXPrtLoadDecls( void );
+void R_OAXPrtInitVao( void );
+int R_OAXPrtSystemState( const oaxPrtDecl_t *decl, int timeMs, const oaxFx_t *fx );
+oaxPrtDecl_t *R_OAXGetPrtDecl( qhandle_t h );
+void R_OAXPrtBuildSurfaces( oaxSceneFx_t *sfx );
+void R_OAXAddParticleSurfaces( void );
+void RB_SurfaceOAXParticles( srfOaxParticles_t *surf );
+
+// decals
+int RE_OAXAddDecal( const oaxDecal_t *d );
+void RE_OAXClearDecals( void );
+void R_OAXDecalsWorldLoaded( void );
+void R_OAXAddWorldDecals( void );
+void R_OAXAddBmodelDecals( int bmodelIndex, const trRefEntity_t *ent );
+void RB_SurfaceOAXDecal( srfOaxDecal_t *surf );
+int R_OAXDecalsLive( void );
+
+// trails
+void RE_OAXAddTrail( const oaxTrail_t *t, const float *points );
+void R_OAXTrailsReset( void );
+void R_OAXTrailsInitNextFrame( void );
+void R_OAXTrailsClearScene( void );
+void R_OAXTrailsBeginScene( void );
+void R_OAXTrailsEndScene( void );
+void R_OAXAddTrailSurfaces( void );
+void RB_SurfaceOAXTrail( srfOaxTrail_t *surf );
+
+// water
+qboolean R_OAXParseWaterKeyword( const char *token, char **text, struct oaxWater_s **water, const char *shaderName );
+void R_OAXWaterFinishShader( shader_t *sh );
+void R_OAXWaterReflection( drawSurf_t *drawSurfs, int numDrawSurfs );
+qboolean RB_OAXWaterStageIterator( struct shaderCommands_s *input );
+
+// bloom
+void RB_OAXBloom( FBO_t *srcFbo, ivec4_t box );
+
+// stats published once a frame (R_OAXFxPublishStats)
+typedef struct {
+	int		fxAdded, fxDrawn, prtStagesDrawn, particlesDrawn;
+	int		decalsDrawn, decalPolysDrawn;
+	int		trailsAdded, trailsDrawn, trailPointsDrawn;
+	int		waterReflections, waterSurfsDrawn;
+	int		bloomPasses;
+	int		sceneCopies;
+} oaxFxStats_t;
+extern oaxFxStats_t oaxFxStats;
 
 #endif //TR_LOCAL_H

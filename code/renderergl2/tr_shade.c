@@ -1722,6 +1722,17 @@ void RB_StageIteratorGeneric( void )
 		qglEnable( GL_POLYGON_OFFSET_FILL );
 	}
 
+	// oax water surfaces draw with the water program (tr_oax_water.c)
+	if ( input->shader->oaxWater && !backEnd.depthFill && !( backEnd.viewParms.flags & ( VPF_SHADOWMAP | VPF_DEPTHSHADOW ) )
+		&& RB_OAXWaterStageIterator( input ) )
+	{
+		if ( input->shader->polygonOffset )
+		{
+			qglDisable( GL_POLYGON_OFFSET_FILL );
+		}
+		return;
+	}
+
 	// unified lighting passes (ambient, interaction, shadow depth)
 	if ( ulb.mode && RB_ULightStageIterator( input ) )
 	{

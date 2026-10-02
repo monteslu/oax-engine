@@ -1547,6 +1547,9 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		}
 	}
 
+	// oax water: the view mirrored in a water plane, rendered first
+	R_OAXWaterReflection( drawSurfs, numDrawSurfs );
+
 	R_AddDrawSurfCmd( drawSurfs, numDrawSurfs );
 }
 
@@ -1661,6 +1664,9 @@ void R_GenerateDrawSurfs( void ) {
 	R_AddWorldSurfaces ();
 
 	R_AddPolygonSurfaces();
+
+	// oax effects: particle systems, trails, world decals
+	R_OAXAddFxSurfaces();
 
 	// set the projection matrix with the minimum zfar
 	// now that we have the world bounded

@@ -34,8 +34,8 @@ export function nativeHome(name) {
   const game = path.join(home, 'baseoa');
   fs.rmSync(home, { recursive: true, force: true });
   fs.mkdirSync(game, { recursive: true });
-  // the QVMs, plus the script data the oax game module ships next to them
-  const parts = ['vm', 'script'].filter((d) => fs.existsSync(path.join(findQvms(), d)));
+  // the QVMs, plus the data the oax game modules ship next to them
+  const parts = ['vm', 'script', 'models', 'particles', 'scripts'].filter((d) => fs.existsSync(path.join(findQvms(), d)));
   execFileSync('zip', ['-q', '-r', path.join(game, 'zzz-oa-vm.pk3'), ...parts], { cwd: findQvms() });
   fs.cpSync(path.join(repoRoot, 'tests', 'romdev', 'data'), game, { recursive: true });
   // compiled test maps (tests/maps/build.mjs), as the cart packs them

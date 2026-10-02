@@ -1571,6 +1571,10 @@ void R_Init( void ) {
 
 	R_InitVaos();
 
+	// oax effects: built-in sprite images, particle index buffer, particle
+	// decls, decals (before the shaders, whose stages use the images)
+	R_OAXFxInit();
+
 	R_InitShaders();
 
 	R_InitSkins();
@@ -1734,6 +1738,15 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.OAXSetLightStyle = RE_OAXSetLightStyle;
 	re.OAXSetViewFog = RE_OAXSetViewFog;
 	re.OAXFeatures = RE_OAXFeatures;
+	re.OAXModelSkeleton = RE_OAXModelSkeleton;
+	re.OAXLerpSkeleton = RE_OAXLerpSkeleton;
+	re.OAXAddSkeletalEntity = RE_OAXAddSkeletalEntity;
+	re.OAXModelFrames = RE_OAXModelFrames;
+	re.OAXRegisterFx = RE_OAXRegisterFx;
+	re.OAXAddFx = RE_OAXAddFx;
+	re.OAXAddDecal = RE_OAXAddDecal;
+	re.OAXAddTrail = RE_OAXAddTrail;
+	re.OAXClearDecals = RE_OAXClearDecals;
 
 	return &re;
 }

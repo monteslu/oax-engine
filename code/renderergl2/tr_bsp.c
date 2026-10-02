@@ -2713,6 +2713,7 @@ void RE_LoadWorldMap( const char *name ) {
 	}
 
 	R_OAXResetMapState();
+	R_OAXFxWorldLoaded();
 
 	// set default map light scale
 	tr.sunShadowScale = 0.5f;

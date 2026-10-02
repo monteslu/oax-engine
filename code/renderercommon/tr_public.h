@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define __TR_PUBLIC_H
 
 #include "tr_types.h"
+#include "../physics/oax_phys.h"
 
 #define	REF_API_VERSION		8
 
@@ -118,6 +119,20 @@ typedef struct {
 	void	(*OAXSetLightStyle)( int style, float r, float g, float b );
 	void	(*OAXSetViewFog)( const float *rgb, float density, float start, float end );
 	const char *(*OAXFeatures)( void );	// oax_features tokens the renderer implements
+	// skeletal models for ragdolls (token "physics_skel", physics/oax_phys.h):
+	// joint names, parents and bind pose; model-space joint matrices of a
+	// frame lerp (12 floats each, row-major 3x4); an IQM entity drawn with
+	// the given joint matrices instead of its frames; the frame count
+	int		(*OAXModelSkeleton)( qhandle_t model, oaxSkelJoint_t *joints, int max );
+	int		(*OAXLerpSkeleton)( qhandle_t model, int frame, int oldframe, float backlerp, float *mats, int max );
+	void	(*OAXAddSkeletalEntity)( const refEntity_t *re, const float *mats, int numJoints );
+	int		(*OAXModelFrames)( qhandle_t model );
+	// oax effects (phase 6; NULL in renderers without them)
+	qhandle_t	(*OAXRegisterFx)( const char *name );
+	int		(*OAXAddFx)( const oaxFx_t *fx );
+	int		(*OAXAddDecal)( const oaxDecal_t *decal );
+	void	(*OAXAddTrail)( const oaxTrail_t *trail, const float *points );
+	void	(*OAXClearDecals)( void );
 } refexport_t;
 
 //

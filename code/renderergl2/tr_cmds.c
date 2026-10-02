@@ -562,6 +562,8 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	// unified lighting: per-frame counters as named debug values
 	R_ULightPublishStats( tr.frontEndMsec, backEnd.pc.msec );
+	// oax effects: particles drawn, decals live, ...
+	R_OAXFxPublishStats();
 
 	if ( frontEndMsec ) {
 		*frontEndMsec = tr.frontEndMsec;

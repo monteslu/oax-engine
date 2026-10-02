@@ -19,7 +19,9 @@ export function nativeShots(tag, map, shots, { qvmDir = findQvms(), setup = [], 
   const game = path.join(home, 'baseoa');
   fs.rmSync(home, { recursive: true, force: true });
   fs.mkdirSync(game, { recursive: true });
-  execFileSync('zip', ['-q', '-r', path.join(game, 'zzz-oa-vm.pk3'), 'vm'], { cwd: qvmDir });
+  // the QVMs, plus the data the oax game modules ship next to them
+  const parts = ['vm', 'script', 'models', 'particles', 'scripts'].filter((d) => fs.existsSync(path.join(qvmDir, d)));
+  execFileSync('zip', ['-q', '-r', path.join(game, 'zzz-oa-vm.pk3'), ...parts], { cwd: qvmDir });
   fs.cpSync(path.join(repoRoot, 'tests', 'romdev', 'data'), game, { recursive: true });
   const maps = path.join(repoRoot, 'tests', 'maps', 'out', 'baseoa');
   if (fs.existsSync(maps)) fs.cpSync(maps, game, { recursive: true });

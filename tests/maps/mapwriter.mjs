@@ -153,3 +153,22 @@ export class MapFile {
     return [this.world, ...this.entities].map(String).join('\n') + '\n';
   }
 }
+
+// A bezier patch (patchDef2): rows x cols control points [x, y, z, s, t],
+// both counts odd and >= 3. q3map2 makes it a curved surface; with a solid
+// shader it also collides (and the physics module tessellates it).
+export class Patch {
+  constructor(grid, texture = 'base_floor/clang_floor') {
+    const rows = grid.length, cols = grid[0].length;
+    if (rows < 3 || cols < 3 || !(rows & 1) || !(cols & 1) || grid.some((r) => r.length !== cols)) {
+      throw new Error('mapwriter: a patch needs an odd grid of at least 3 x 3');
+    }
+    this.grid = grid;
+    this.texture = texture;
+  }
+
+  toString() {
+    const rows = this.grid.map((row) => `( ${row.map((p) => `( ${p.map(fmt).join(' ')} )`).join(' ')} )`);
+    return `{\npatchDef2\n{\n${this.texture}\n( ${this.grid.length} ${this.grid[0].length} 0 0 0 )\n(\n${rows.join('\n')}\n)\n}\n}`;
+  }
+}

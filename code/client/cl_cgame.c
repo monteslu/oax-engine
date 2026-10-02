@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "client.h"
 #include "../qcommon/oax.h"
+#include "../physics/phys_public.h"
 
 #include "../botlib/botlib.h"
 
@@ -393,6 +394,7 @@ void CL_ShutdownCGame( void ) {
 	VM_Call( cgvm, CG_SHUTDOWN );
 	VM_Free( cgvm );
 	cgvm = NULL;
+	Phys_FreeCgameWorlds();	// oax: the cgame's physics worlds go with it
 }
 
 static int	FloatAsInt( float f ) {
@@ -807,6 +809,7 @@ void CL_InitCGame( void ) {
 	// use the lastExecutedServerCommand instead of the serverCommandSequence
 	// otherwise server commands sent just before a gamestate are dropped
 	CL_OAXGuiReset();	// oax: the cgame reloads its GUIs
+	Phys_FreeCgameWorlds();	// oax: and rebuilds its physics worlds
 	VM_Call( cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum );
 
 	// reset any CVAR_CHEAT cvars registered by cgame

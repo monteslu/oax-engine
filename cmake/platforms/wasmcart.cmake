@@ -31,6 +31,18 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 add_compile_definitions(WASMCART)
 
+# Box3D worker threads (code/physics/phys_tasks.c): wasi.thread-spawn plus a
+# shared, imported memory, as wasmcart SPEC.md "Threads" allows. -pthread
+# here only selects atomics, bulk memory, the shared memory and the
+# thread-safe libc; no Emscripten pthread is ever created (the cart spawns
+# its workers itself and they run only Box3D tasks).
+option(WASMCART_THREADS "Box3D worker threads in the cart" ON)
+if(WASMCART_THREADS)
+    add_compile_options(-pthread)
+    add_compile_definitions(WASMCART_THREADS)
+    list(APPEND CLIENT_LINK_OPTIONS -pthread)
+endif()
+
 # ERR_DROP unwinds Com_Frame with longjmp; wasm exception handling carries it
 list(APPEND CLIENT_COMPILE_OPTIONS -sSUPPORT_LONGJMP=wasm)
 list(APPEND RENDERER_COMPILE_OPTIONS -sSUPPORT_LONGJMP=wasm)
