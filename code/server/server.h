@@ -499,6 +499,10 @@ qboolean SV_GameSystemCallsOAX( intptr_t *args, intptr_t *ret );
 void SV_OAXInit( void );
 void SV_OAXScriptInit( void );
 
+// sv_nav_oax.c
+void SV_OAXNavInit( void );
+void SV_OAXNavMapLoaded( const char *mapname );
+
 // sv_gui_oax.c
 void SV_OAXGuiInit( void );
 void SV_OAXGuiReset( void );

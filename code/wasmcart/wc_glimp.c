@@ -44,6 +44,7 @@ QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;
+QGL_OAX_INSTANCING_PROCS;
 #undef GLE
 
 /*
@@ -60,7 +61,8 @@ Imports: one per GLE() entry in the lists an ES 3.0 context provides.
 	QGL_3_0_PROCS \
 	QGL_ARB_occlusion_query_PROCS \
 	QGL_ARB_framebuffer_object_PROCS \
-	QGL_ARB_vertex_array_object_PROCS
+	QGL_ARB_vertex_array_object_PROCS \
+	QGL_OAX_INSTANCING_PROCS
 
 #define GLE( ret, name, ... ) \
 	__attribute__((import_module("gl"), import_name("gl" #name))) extern ret wcgl_##name( __VA_ARGS__ );

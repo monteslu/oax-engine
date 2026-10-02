@@ -384,6 +384,12 @@ void GLimp_InitExtraExtensions(void)
 
 done:
 
+	// instancing (oax terrain foliage): core in OpenGL 3.3 and OpenGL ES 3.0
+	if (qglesMajorVersion >= 3 || QGL_VERSION_ATLEAST(3, 3))
+	{
+		QGL_OAX_INSTANCING_PROCS;
+	}
+
 	// Determine GLSL version
 	if (1)
 	{

@@ -48,6 +48,7 @@ QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;
+QGL_OAX_INSTANCING_PROCS;
 #undef GLE
 
 #define GL_INDEX_TYPE		GL_UNSIGNED_SHORT
@@ -878,6 +879,7 @@ typedef struct {
 	int			ulightView;			// unified lighting: view index + 1, 0 none
 	qboolean	oaxReflection;		// oax water: a planar reflection view (tr_oax_water.c)
 	qboolean	oaxHasReflection;	// oax water: this view's reflection was rendered first
+	int			oaxTerrainView;		// oax terrain: view slot + 1 (tr_terrain.c), 0 none
 } viewParms_t;
 
 
@@ -1680,6 +1682,7 @@ typedef struct {
 	vec3_t					sunLight;			// from the sky shader for this level
 	vec3_t					sunDirection;
 	vec3_t                  lastCascadeSunDirection;
+	int                     lastCascadeCluster;	// oax: view cluster the last cascade was drawn with
 	float                   lastCascadeSunMvp[16];
 
 	frontEndCounters_t		pc;
@@ -2751,5 +2754,13 @@ typedef struct {
 	int		sceneCopies;
 } oaxFxStats_t;
 extern oaxFxStats_t oaxFxStats;
+// tr_terrain.c: oax heightmap terrain and instanced foliage
+void R_OAXTerrainRegisterCvars( void );
+void R_OAXTerrainLoadWorld( const void *bsp, int bspLen );
+void R_OAXTerrainShutdown( void );
+void R_OAXTerrainAddView( void );
+void RB_OAXTerrainDepth( void );
+void RB_OAXTerrainColor( void );
+int GLSL_InitOAXShader(shaderProgram_t *program, const char *name, int attribs, const char *extra, const char *vp, const char *fp);
 
 #endif //TR_LOCAL_H

@@ -13,3 +13,26 @@ export const SIM_SCRIPTS = {
   // oax_warp: run down corridor A (or C) through the warp (or teleporter)
   wrun: [idle(10), fwd(220), idle(20)],
 };
+
+// oax_terrain movement (terrain-parity): runs, strafes and jumps over
+// heightmap terrain, into a slope too steep to climb, and off a cliff.
+const jump = (frames = 2, axes = { ly: -1 }) => ({ frames, pad: { axes, south: true } });
+SIM_SCRIPTS.terrain_run = [
+  idle(10), fwd(90),
+  { frames: 40, pad: { axes: { ly: -1, lx: 1, rx: 0.3 } } },
+  jump(), fwd(40), jump(), fwd(40), jump(2, { ly: -1, lx: -1 }), { frames: 40, pad: { axes: { ly: -1, lx: -1, rx: -0.3 } } },
+  { frames: 60, pad: { axes: { ly: -1, rx: -0.4 } } },
+  { frames: 40, pad: { axes: { ly: 1 } } },
+  idle(30),
+];
+SIM_SCRIPTS.terrain_bank = [
+  idle(10), fwd(110), jump(), fwd(40), jump(), fwd(30),
+  { frames: 60, pad: { axes: { ly: -1, lx: 1 } } },
+  { frames: 50, pad: { axes: { lx: -1 } } },
+  idle(40),
+];
+SIM_SCRIPTS.terrain_cliff = [
+  idle(10), fwd(60), jump(), fwd(80),
+  { frames: 40, pad: { axes: { ly: -1, rx: 1 } } },
+  fwd(60), idle(40),
+];

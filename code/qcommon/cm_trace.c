@@ -1293,6 +1293,7 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 			}
 		} else {
 			CM_PositionTest( &tw );
+			CM_OAXTerrainPositionTest( &tw );	// oax heightmap terrain (cm_terrain.c)
 		}
 	} else {
 		//
@@ -1337,6 +1338,7 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 			}
 		} else {
 			CM_TraceThroughTree( &tw, 0, 0, 1, tw.start, tw.end );
+			CM_OAXTerrainTrace( &tw );	// oax heightmap terrain (cm_terrain.c)
 		}
 	}
 

@@ -50,6 +50,7 @@ set(RENDERER_GL2_SOURCES
     ${SOURCE_DIR}/renderergl2/tr_ulight.c
     ${SOURCE_DIR}/renderergl2/tb_ulight.c
     ${SOURCE_DIR}/renderergl2/tb_ulight_stencil.c
+    ${SOURCE_DIR}/renderergl2/tr_terrain.c
 )
 
 # image programs must compute the same bytes on every host (tests compare
@@ -57,6 +58,8 @@ set(RENDERER_GL2_SOURCES
 set_source_files_properties(${SOURCE_DIR}/renderergl2/tr_image_program.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 # projected decals are clipped on the CPU: the same polygons on every host
 set_source_files_properties(${SOURCE_DIR}/renderergl2/tr_oax_decal.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+# the terrain sampler shared with collision: same float results everywhere
+set_source_files_properties(${SOURCE_DIR}/qcommon/oax_terrain.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
 file(GLOB RENDERER_GL2_SHADER_SOURCES ${SOURCE_DIR}/renderergl2/glsl/*.glsl)
 
@@ -93,7 +96,8 @@ list(APPEND RENDERER_GL2_BINARY_SOURCES
     ${RENDERER_LIBRARY_SOURCES})
 
 if(USE_RENDERER_DLOPEN)
-    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES})
+    # the terrain sampler; a statically linked renderer gets it from the engine
+    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES} ${SOURCE_DIR}/qcommon/oax_terrain.c)
 
     add_library(${RENDERER_GL2_BINARY} SHARED ${RENDERER_GL2_BINARY_SOURCES})
 

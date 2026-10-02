@@ -744,6 +744,8 @@ R_AddWorldSurfaces
 void R_AddWorldSurfaces (void) {
 	uint32_t planeBits, dlightBits, pshadowBits;
 
+	tr.viewParms.oaxTerrainView = 0;
+
 	if ( !r_drawworld->integer ) {
 		return;
 	}
@@ -817,4 +819,7 @@ void R_AddWorldSurfaces (void) {
 			ri.DebugSet( "r_surfs_world", va( "%i", added ) );
 		}
 	}
+
+	// oax heightmap terrain chunks for this view (tr_terrain.c)
+	R_OAXTerrainAddView();
 }

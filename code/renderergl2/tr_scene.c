@@ -528,9 +528,13 @@ void RE_RenderScene( const refdef_t *fd ) {
 		}
 
 		// only rerender last cascade if sun has changed position
-		if (r_forceSun->integer == 2 || !VectorCompare(tr.refdef.sunDir, tr.lastCascadeSunDirection))
+		// oax: also when the viewer's cluster changed: the cascade draws the
+		// world surfaces the last main view marked, and on the first frame of
+		// a map nothing is marked yet (it kept a cascade with holes forever)
+		if (r_forceSun->integer == 2 || !VectorCompare(tr.refdef.sunDir, tr.lastCascadeSunDirection) || tr.viewCluster != tr.lastCascadeCluster)
 		{
 			VectorCopy(tr.refdef.sunDir, tr.lastCascadeSunDirection);
+			tr.lastCascadeCluster = tr.viewCluster;
 			R_RenderSunShadowMaps(fd, 3);
 			Mat4Copy(tr.refdef.sunShadowMvp[3], tr.lastCascadeSunMvp);
 		}

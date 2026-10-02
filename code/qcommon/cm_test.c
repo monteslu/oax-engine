@@ -269,6 +269,10 @@ int CM_PointContents( const vec3_t p, clipHandle_t model ) {
 		}
 	}
 
+	if ( !model ) {
+		contents |= CM_OAXTerrainPointContents( p );	// oax heightmap terrain (cm_terrain.c)
+	}
+
 	return contents;
 }
 

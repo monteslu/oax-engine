@@ -942,6 +942,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 		backEnd.depthFill = qtrue;
 		qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		RB_OAXTerrainDepth();	// oax terrain + foliage depth, then occlusion queries (tr_terrain.c)
 		RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
 		qglColorMask(!backEnd.colorMask[0], !backEnd.colorMask[1], !backEnd.colorMask[2], !backEnd.colorMask[3]);
 		backEnd.depthFill = qfalse;
@@ -1167,6 +1168,8 @@ const void	*RB_DrawSurfs( const void *data ) {
 	}
 	else if (!isShadowView)
 	{
+		RB_OAXTerrainColor();	// oax terrain + foliage (tr_terrain.c)
+
 		if (backEnd.viewParms.ulightView)
 			RB_ULightDrawViewSurfs( cmd->drawSurfs, cmd->numDrawSurfs );	// unified lighting
 		else

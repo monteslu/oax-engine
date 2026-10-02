@@ -149,6 +149,16 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, GetQueryObjectiv, GLuint id, GLenum pname, GLint *params) \
 	GLE(void, GetQueryObjectuiv, GLuint id, GLenum pname, GLuint *params) \
 
+// instancing: OpenGL 3.3 / OpenGL ES 3.0 (oax terrain foliage, tr_terrain.c)
+#define QGL_OAX_INSTANCING_PROCS \
+	GLE(void, VertexAttribDivisor, GLuint index, GLuint divisor) \
+	GLE(void, DrawArraysInstanced, GLenum mode, GLint first, GLsizei count, GLsizei instancecount) \
+	GLE(void, DrawElementsInstanced, GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount) \
+
+#ifndef GL_ANY_SAMPLES_PASSED_CONSERVATIVE
+#define GL_ANY_SAMPLES_PASSED_CONSERVATIVE 0x8D6A
+#endif
+
 // OpenGL 1.5, was GL_ARB_vertex_buffer_object
 #define QGL_1_5_PROCS \
 	GLE(void, BindBuffer, GLenum target, GLuint buffer) \
@@ -328,6 +338,7 @@ QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;
+QGL_OAX_INSTANCING_PROCS;
 #undef GLE
 
 extern int qglMajorVersion, qglMinorVersion;

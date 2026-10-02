@@ -468,6 +468,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	FS_Restart( sv.checksumFeed );
 
 	CM_LoadMap( va("maps/%s.bsp", server), qfalse, &checksum );
+	SV_OAXNavMapLoaded( server );	// oax: navmesh for maps without AAS (sv_nav_oax.c)
 
 	// set serverinfo visible name
 	Cvar_Set( "mapname", server );

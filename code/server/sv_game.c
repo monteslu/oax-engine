@@ -898,7 +898,10 @@ static void SV_InitGameVM( qboolean restart ) {
 	// init for this gamestate
 	SV_OAXGuiReset();	// oax: the game reloads its GUIs
 	Phys_FreeGameWorlds();	// oax: and rebuilds its physics worlds
-	VM_Call (gvm, GAME_INIT, sv.time, Com_Milliseconds(), restart);
+	// oax: sv_gameSeed >= 0 fixes the game's random seed, so tests can replay
+	// a match (bots, spawn picks, spread) identically on every build
+	VM_Call (gvm, GAME_INIT, sv.time, Cvar_VariableIntegerValue( "sv_gameSeed" ) >= 0 ?
+		Cvar_VariableIntegerValue( "sv_gameSeed" ) : Com_Milliseconds(), restart);
 }
 
 

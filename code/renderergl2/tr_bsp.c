@@ -2707,6 +2707,7 @@ void RE_LoadWorldMap( const char *name ) {
 		void *v;
 	} buffer;
 	byte		*startMarker;
+	int			fileLen;
 
 	if ( tr.worldMapLoaded ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
@@ -2737,11 +2738,12 @@ void RE_LoadWorldMap( const char *name ) {
 
 	// reset last cascade sun direction so last shadow cascade is rerendered
 	VectorClear(tr.lastCascadeSunDirection);
+	tr.lastCascadeCluster = -2;
 
 	tr.worldMapLoaded = qtrue;
 
 	// load it
-    ri.FS_ReadFile( name, &buffer.v );
+    fileLen = ri.FS_ReadFile( name, &buffer.v );
 	if ( !buffer.b ) {
 		ri.Error (ERR_DROP, "RE_LoadWorldMap: %s not found", name);
 	}
@@ -3006,6 +3008,9 @@ void RE_LoadWorldMap( const char *name ) {
 
 	// unified lighting: light entities, interactions, shadow volumes
 	R_ULightLoadWorld( header );
+
+	// oax heightmap terrain and foliage (OAX_TERRAIN lump)
+	R_OAXTerrainLoadWorld( buffer.v, fileLen );
 
 	// make sure the VAO glState entry is safe
 	R_BindNullVao();

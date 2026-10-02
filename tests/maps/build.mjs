@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { addLump } from '../../misc/tools/bspx.mjs';
+import { bakeTerrain } from '../../misc/tools/oax-terrain.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..', '..');
@@ -99,6 +100,10 @@ export async function buildMap(name) {
   }
   const manifest = { oax: 1, map: name, ...(spec.manifest || {}) };
   addLump(path.join(mapsDir, `${name}.bsp`), 'OAX_MANIFEST', Buffer.from(JSON.stringify(manifest)));
+  // misc_oax_terrain entities -> OAX_TERRAIN (heightmaps are written by the source through `files`)
+  const terrains = bakeTerrain(path.join(mapsDir, `${name}.bsp`), String(spec.map), gameOut);
+  if (terrains) log.push(`OAX_TERRAIN: ${terrains} terrain(s)`);
+  for (const [lumpName, data] of Object.entries(spec.lumps || {})) addLump(path.join(mapsDir, `${name}.bsp`), lumpName, data);
   fs.writeFileSync(path.join(mapsDir, `${name}.buildlog`), log.join('\n'));
   for (const junk of ['.prt', '.srf', '.lin']) fs.rmSync(path.join(mapsDir, name + junk), { force: true });
   return path.join(mapsDir, `${name}.bsp`);

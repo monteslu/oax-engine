@@ -10,6 +10,9 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/cm_polylib.c
     ${SOURCE_DIR}/qcommon/cm_test.c
     ${SOURCE_DIR}/qcommon/cm_trace.c
+    ${SOURCE_DIR}/qcommon/cm_terrain.c
+    ${SOURCE_DIR}/qcommon/oax_terrain.c
+    ${SOURCE_DIR}/qcommon/cm_navgeom.c
     ${SOURCE_DIR}/qcommon/cmd.c
     ${SOURCE_DIR}/qcommon/common.c
     ${SOURCE_DIR}/qcommon/cvar.c
@@ -45,6 +48,9 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/cm_guisurf.c
     ${IDGUI_SOURCES}
 )
+
+# oax terrain collision: the same float results on every build
+set_source_files_properties(${SOURCE_DIR}/qcommon/cm_terrain.c ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/cm_navgeom.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
 # musl sources, kept unmodified (see qcommon/detmath/README.md)
 file(GLOB DETMATH_SOURCES ${SOURCE_DIR}/qcommon/detmath/*.c)
@@ -85,6 +91,7 @@ set(SERVER_SOURCES
     ${SOURCE_DIR}/server/sv_snapshot.c
     ${SOURCE_DIR}/server/sv_world.c
     ${SOURCE_DIR}/server/sv_script_oax.c
+    ${SOURCE_DIR}/server/sv_nav_oax.c
 )
 
 # id Tech 4 script VM (C++), driven by sv_script_oax.c
@@ -94,6 +101,9 @@ list(APPEND SERVER_SOURCES ${IDSCRIPT_SOURCES})
 # Box3D physics (code/box3d, code/physics): game and cgame worlds
 include(physics)
 list(APPEND SERVER_SOURCES ${PHYSICS_SOURCES})
+# Recast/Detour navmesh (code/thirdparty/recastnavigation), driven by sv_nav_oax.c
+include(recast)
+list(APPEND SERVER_SOURCES ${RECAST_SOURCES})
 
 set(BOTLIB_SOURCES
     ${SOURCE_DIR}/botlib/be_aas_bspq3.c

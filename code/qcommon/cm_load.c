@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cmodel.c -- model loading
 
 #include "cm_local.h"
+#include "cm_terrain.h"
 #ifndef BSPC
 #include "oax.h"
 #endif
@@ -600,6 +601,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	CM_ClearLevelPatches();
 #ifndef BSPC
 	CM_ClearGuiSurfaces();
+	CM_OAXTerrainClear();
 #endif
 
 	if ( !name[0] ) {
@@ -656,6 +658,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 #ifndef BSPC
 	BSPX_SetCurrentMap( buf.v, length );
 	CM_LoadGuiSurfaces( cmod_base, &header );	// oax in-world GUIs
+	CM_OAXTerrainLoad( buf.v, length );	// oax heightmap terrain
 #endif
 
 	// we are NOT freeing the file, because it is cached for the ref
@@ -681,6 +684,7 @@ void CM_ClearMap( void ) {
 	CM_ClearLevelPatches();
 #ifndef BSPC
 	CM_ClearGuiSurfaces();
+	CM_OAXTerrainClear();
 #endif
 }
 

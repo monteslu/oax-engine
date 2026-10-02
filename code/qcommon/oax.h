@@ -56,6 +56,15 @@ typedef enum {
 	// 1070-1079 unified lighting (phase 5)
 	G_OAX_ULIGHT_BASE = 1070,
 
+	// 1090-1099 navigation: Recast/Detour navmesh for bots where AAS is absent (server/sv_nav_oax.c)
+	G_OAX_NAV_BASE = 1090,
+	G_OAX_NAV_STATUS = 1090,         // ( void ) -> navmesh polygon count, 0 if none
+	G_OAX_NAV_FINDPATH = 1091,       // ( const vec3_t start, const vec3_t goal, float *points, int maxPoints, int *flags )
+	                                 //   -> corner points written (start first), 0 if an end is off the mesh;
+	                                 //   flags & 1: goal unreachable, the path ends nearest to it
+	G_OAX_NAV_NEAREST = 1092,        // ( const vec3_t point, const vec3_t halfExtents, vec3_t out ) -> 1 found
+	G_OAX_NAV_RANDOMPOINT = 1093,    // ( int seed, vec3_t out ) -> 1 found (area-weighted, deterministic)
+
 	G_OAX_END = 1300	// 1200-1299: physics (oaxPhysImport_t below)
 } gameImportOAX_t;
 

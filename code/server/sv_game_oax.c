@@ -91,4 +91,5 @@ void SV_OAXInit( void ) {
 	Phys_Init();
 	SV_OAXRegisterGameHandler( Phys_GameCalls );
 	OAX_AddFeature( "physics" );
+	SV_OAXNavInit();		// "nav": Recast/Detour navmesh for bots (sv_nav_oax.c)
 }

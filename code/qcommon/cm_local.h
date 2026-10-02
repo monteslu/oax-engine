@@ -194,3 +194,10 @@ struct patchCollide_s	*CM_GeneratePatchCollide( int width, int height, vec3_t *p
 void CM_TraceThroughPatchCollide( traceWork_t *tw, const struct patchCollide_s *pc );
 qboolean CM_PositionTestInPatchCollide( traceWork_t *tw, const struct patchCollide_s *pc );
 void CM_ClearLevelPatches( void );
+
+// cm_terrain.c (oax heightmap terrain, world model only)
+void CM_OAXTerrainTrace( traceWork_t *tw );
+void CM_OAXTerrainPositionTest( traceWork_t *tw );
+int CM_OAXTerrainPointContents( const vec3_t p );
+void CM_TestBoxInBrush( traceWork_t *tw, cbrush_t *brush );
+void CM_TraceThroughBrush( traceWork_t *tw, cbrush_t *brush );

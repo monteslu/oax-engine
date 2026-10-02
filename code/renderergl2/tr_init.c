@@ -1450,6 +1450,7 @@ void R_Register( void )
 	// make sure all the commands added here are also
 	// removed in R_Shutdown
 	R_OAXRegisterCvars();
+	R_OAXTerrainRegisterCvars();
 
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
 	ri.Cmd_AddCommand( "shaderlist", R_ShaderList_f );
@@ -1626,6 +1627,7 @@ void RE_Shutdown( qboolean destroyWindow ) {
 		R_DeleteTextures();
 		R_ShutdownVaos();
 		R_ULightShutdown();
+		R_OAXTerrainShutdown();
 		GLSL_ShutdownGPUShaders();
 	}
 
