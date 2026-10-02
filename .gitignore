@@ -45,3 +45,6 @@ build-*/
 *.log
 home-test/
 scratch-qvm/
+
+# the test-map builder is source, not a build directory
+!tests/maps/build.mjs

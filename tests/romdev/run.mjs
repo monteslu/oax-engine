@@ -26,6 +26,16 @@ let failed = 0, infra = 0;
 for (const f of files) {
   const t = await import(path.join(here, 'tests', f));
   if (only.length && !only.includes(t.name)) continue;
+  // tests that need content from outside this repo (locally built maps) run
+  // only when named or with OA_EXTERNAL=1
+  if (t.slow && !only.length && !process.env.OA_SLOW) {
+    console.log(`SKIP ${t.name} (slow; name it or set OA_SLOW=1)`);
+    continue;
+  }
+  if (t.external && !only.length && !process.env.OA_EXTERNAL) {
+    console.log(`SKIP ${t.name} (external content; name it or set OA_EXTERNAL=1)`);
+    continue;
+  }
   const t0 = Date.now();
   try {
     const r = await t.run({ goldens, out, update });

@@ -99,6 +99,25 @@ typedef struct {
 	qboolean (*inPVS)( const vec3_t p1, const vec3_t p2 );
 
 	void (*TakeVideoFrame)( int h, int w, byte* captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
+
+	// oax extensions (qcommon/oax.h): in-world GUIs. A GUI is drawn with
+	// SetColor / DrawStretchPic / DrawQuad between BeginGuiTarget and
+	// EndGuiTarget into its own texture, which "map $gui" stages show on
+	// the entities whose refEntityExt_t names it. BeginGuiTarget returns
+	// qfalse when the renderer has no render targets (nothing to draw).
+	void	(*AddRefEntityToSceneExt)( const refEntity_t *re, const refEntityExt_t *ext );
+	qboolean (*BeginGuiTarget)( int handle, int width, int height );
+	void	(*EndGuiTarget)( void );
+	// a 2D quad with free corners (x y and s t pairs, clockwise from top left)
+	void	(*DrawQuad)( const float *xy, const float *st, qhandle_t hShader );
+	// oax extensions (NULL in renderers that lack them)
+	// unified lighting: the cgame drives a map light (entity-lump ordinal)
+	void	(*OAXUpdateLight)( int index, const float *origin, const float *axis, const float *rgb, const float *parms, int flags );
+	int		(*OAXLightingModel)( void );
+	// oax map features (NULL in renderers without them; see qcommon/oax.h)
+	void	(*OAXSetLightStyle)( int style, float r, float g, float b );
+	void	(*OAXSetViewFog)( const float *rgb, float density, float start, float end );
+	const char *(*OAXFeatures)( void );	// oax_features tokens the renderer implements
 } refexport_t;
 
 //
@@ -180,6 +199,9 @@ typedef struct {
 	void	(*Sys_GLimpSafeInit)( void );
 	void	(*Sys_GLimpInit)( void );
 	qboolean (*Sys_LowPhysicalMemory)( void );
+
+	// oax: named debug values for tests (Com_DebugSet); append-only
+	void	(*DebugSet)( const char *name, const char *value );
 } refimport_t;
 
 

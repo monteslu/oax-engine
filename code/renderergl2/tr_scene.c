@@ -224,6 +224,7 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
+	backEndData->entities[r_numentities].guiHandle = 0;
 
 	CrossProduct(ent->axis[0], ent->axis[1], cross);
 	backEndData->entities[r_numentities].mirrored = (DotProduct(ent->axis[2], cross) < 0.f);
@@ -434,6 +435,8 @@ void RE_BeginScene(const refdef_t *fd)
 	// each scene / view.
 	tr.frameSceneNum++;
 	tr.sceneCount++;
+
+	R_OAXBeginScene();
 }
 
 
@@ -476,7 +479,16 @@ void RE_RenderScene( const refdef_t *fd ) {
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
+	// oax sky portal scene: skipped when sky portals are off, so the
+	// scene drawn after it shows the fallback skybox
+	if ( ( fd->rdflags & RDF_OAX_SKYPORTAL ) && ( !r_oaxSkyPortal->integer || ( fd->rdflags & RDF_NOWORLDMODEL ) ) ) {
+		return;
+	}
+
 	RE_BeginScene(fd);
+
+	// unified lighting: material expressions, scene dlights
+	R_ULightBeginScene();
 
 	// SmileTheory: playing with shadow mapping
 	if (!( fd->rdflags & RDF_NOWORLDMODEL ) && tr.refdef.num_dlights && r_dlightMode->integer >= 2)
@@ -485,13 +497,13 @@ void RE_RenderScene( const refdef_t *fd ) {
 	}
 
 	/* playing with more shadows */
-	if(glRefConfig.framebufferObject && !( fd->rdflags & RDF_NOWORLDMODEL ) && r_shadows->integer == 4)
+	if(glRefConfig.framebufferObject && !( fd->rdflags & ( RDF_NOWORLDMODEL | RDF_OAX_SKYPORTAL ) ) && r_shadows->integer == 4)
 	{
 		R_RenderPshadowMaps(fd);
 	}
 
 	// playing with even more shadows
-	if(glRefConfig.framebufferObject && r_sunlightMode->integer && !( fd->rdflags & RDF_NOWORLDMODEL ) && (r_forceSun->integer || tr.sunShadows))
+	if(glRefConfig.framebufferObject && r_sunlightMode->integer && !( fd->rdflags & ( RDF_NOWORLDMODEL | RDF_OAX_SKYPORTAL ) ) && (r_forceSun->integer || tr.sunShadows))
 	{
 		if (r_shadowCascadeZFar->integer != 0)
 		{
@@ -559,17 +571,26 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 	VectorCopy( fd->vieworg, parms.pvsOrigin );
 
-	if(!( fd->rdflags & RDF_NOWORLDMODEL ) && r_depthPrepass->value && ((r_forceSun->integer) || tr.sunShadows))
+	if(!( fd->rdflags & ( RDF_NOWORLDMODEL | RDF_OAX_SKYPORTAL ) ) && r_depthPrepass->value && ((r_forceSun->integer) || tr.sunShadows))
 	{
 		parms.flags = VPF_USESUNLIGHT;
 	}
 
 	R_RenderView( &parms );
 
+	if ( tr.refdef.rdflags & RDF_OAX_SKYPORTAL ) {
+		// the scene drawn over the sky portal reuses this scene's entities,
+		// dlights and polys, and post-processes (tonemaps) both at once
+		r_firstSceneDrawSurf = tr.refdef.numDrawSurfs;
+		tr.frontEndMsec += ri.Milliseconds() - startTime;
+		return;
+	}
+
 	if(!( fd->rdflags & RDF_NOWORLDMODEL ))
 		R_AddPostProcessCmd();
 
 	RE_EndScene();
+	tr.oaxSkyArea = -1;
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
 }

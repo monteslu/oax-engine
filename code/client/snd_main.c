@@ -497,6 +497,7 @@ void S_Init( void )
 		Cmd_AddCommand( "s_list", S_SoundList );
 		Cmd_AddCommand( "s_stop", S_StopAllSounds );
 		Cmd_AddCommand( "s_info", S_SoundInfo );
+		S_OcclusionInit();
 
 		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH );
 		if( cv->integer ) {

@@ -68,13 +68,19 @@ R_BindAnimatedImageToTMU
 
 =================
 */
-static void R_BindAnimatedImageToTMU( textureBundle_t *bundle, int tmu ) {
+void R_BindAnimatedImageToTMU( textureBundle_t *bundle, int tmu ) {
 	int64_t index;
 
 	if ( bundle->isVideoMap ) {
 		ri.CIN_RunCinematic(bundle->videoMapHandle);
 		ri.CIN_UploadCinematic(bundle->videoMapHandle);
 		GL_BindToTMU(tr.scratchImage[bundle->videoMapHandle], tmu);
+		return;
+	}
+
+	if ( bundle->isGuiMap ) {
+		// oax "map $gui": the GUI of the entity being drawn
+		R_BindGuiImage( tmu );
 		return;
 	}
 
@@ -321,7 +327,7 @@ extern float EvalWaveForm( const waveForm_t *wf );
 extern float EvalWaveFormClamped( const waveForm_t *wf );
 
 
-static void ComputeTexMods( shaderStage_t *pStage, int bundleNum, vec4_t outMatrix[8])
+void ComputeTexMods( shaderStage_t *pStage, int bundleNum, vec4_t outMatrix[8])
 {
 	int tm;
 	float matrix[6];
@@ -448,7 +454,7 @@ static void ComputeTexMods( shaderStage_t *pStage, int bundleNum, vec4_t outMatr
 }
 
 
-static void ComputeDeformValues(int *deformGen, vec5_t deformParams)
+void ComputeDeformValues(int *deformGen, vec5_t deformParams)
 {
 	// u_DeformGen
 	*deformGen = DGEN_NONE;
@@ -671,6 +677,12 @@ static void ComputeShaderColors( shaderStage_t *pStage, vec4_t baseColor, vec4_t
 			baseColor[1] =
 			baseColor[2] = overbright;
 			break;
+		case CGEN_OAX_LIGHTSTYLE:
+			// a style lightmap stage: identity scaled by the style
+			baseColor[0] = overbright * tr.oaxLightStyles[pStage->oaxLightStyle][0];
+			baseColor[1] = overbright * tr.oaxLightStyles[pStage->oaxLightStyle][1];
+			baseColor[2] = overbright * tr.oaxLightStyles[pStage->oaxLightStyle][2];
+			break;
 		case CGEN_IDENTITY_LIGHTING:
 		case CGEN_BAD:
 			break;
@@ -689,6 +701,10 @@ static void ComputeShaderColors( shaderStage_t *pStage, vec4_t baseColor, vec4_t
 			break;
 		case AGEN_WAVEFORM:
 			baseColor[3] = RB_CalcWaveAlphaSingle( &pStage->alphaWave );
+			vertColor[3] = 0.0f;
+			break;
+		case AGEN_OAX_LIGHTSTYLE:
+			baseColor[3] = Com_Clamp( 0.0f, 1.0f, tr.oaxLightStyles[pStage->oaxLightStyle][0] );
 			vertColor[3] = 0.0f;
 			break;
 		case AGEN_ENTITY:
@@ -1162,6 +1178,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 		if ( !pStage )
 		{
 			break;
+		}
+
+		// unified lighting drew this stage in its light passes
+		if ( ulb.skipLitStages && RB_ULightSkipStage( input, stage ) )
+		{
+			continue;
 		}
 
 		if (backEnd.depthFill)
@@ -1698,6 +1720,16 @@ void RB_StageIteratorGeneric( void )
 	if ( input->shader->polygonOffset )
 	{
 		qglEnable( GL_POLYGON_OFFSET_FILL );
+	}
+
+	// unified lighting passes (ambient, interaction, shadow depth)
+	if ( ulb.mode && RB_ULightStageIterator( input ) )
+	{
+		if ( input->shader->polygonOffset )
+		{
+			qglDisable( GL_POLYGON_OFFSET_FILL );
+		}
+		return;
 	}
 
 	//

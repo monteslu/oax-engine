@@ -627,6 +627,8 @@ void SV_Init (void)
 {
 	int index;
 
+	SV_OAXInit();
+
 	SV_AddOperatorCommands ();
 
 	// serverinfo vars

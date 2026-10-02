@@ -864,6 +864,11 @@ void RB_StageIteratorSky( void ) {
 		return;
 	}
 
+	// oax: a sky portal scene already filled the sky behind this one
+	if ( ( backEnd.refdef.rdflags & RDF_OAX_UNDERSKY ) && tess.shader->oaxSkyPortal ) {
+		return;
+	}
+
 	// go through all the polygons and project them onto
 	// the sky box to see which blocks on each side need
 	// to be drawn

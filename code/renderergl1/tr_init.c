@@ -1320,6 +1320,21 @@ void RE_EndRegistration( void ) {
 }
 
 
+// oax in-world GUIs (see tr_public.h)
+static void RE_AddRefEntityToSceneExtGL1( const refEntity_t *ent, const refEntityExt_t *ext ) {
+	RE_AddRefEntityToScene( ent );
+}
+
+static qboolean RE_BeginGuiTargetGL1( int handle, int width, int height ) {
+	return qfalse;
+}
+
+static void RE_EndGuiTargetGL1( void ) {
+}
+
+static void RE_DrawQuadGL1( const float *xy, const float *st, qhandle_t hShader ) {
+}
+
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -1383,6 +1398,13 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.inPVS = R_inPVS;
 
 	re.TakeVideoFrame = RE_TakeVideoFrame;
+
+	// oax in-world GUIs need render targets, which this renderer lacks:
+	// GUI entities draw as plain entities and GUI drawing is skipped
+	re.AddRefEntityToSceneExt = RE_AddRefEntityToSceneExtGL1;
+	re.BeginGuiTarget = RE_BeginGuiTargetGL1;
+	re.EndGuiTarget = RE_EndGuiTargetGL1;
+	re.DrawQuad = RE_DrawQuadGL1;
 
 	return &re;
 }

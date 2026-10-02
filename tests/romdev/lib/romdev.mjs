@@ -80,6 +80,8 @@ export class Session {
   }
 
   // Run a console command at the start of the next frame.
+  // The field holds one line until the next frame runs it: a second write
+  // before a step replaces the first, so join commands with ';'.
   async command(cmd) {
     const bytes = Buffer.concat([Buffer.from(cmd, 'utf8'), Buffer.from([0])]);
     await this.call('wasm', { op: 'write', name: 'console_cmd', hex: bytes.toString('hex') });

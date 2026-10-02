@@ -289,7 +289,7 @@ void FBO_Init(void)
 	{
 		tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
 		FBO_CreateBuffer(tr.renderFbo, hdrFormat, 0, multisample);
-		FBO_CreateBuffer(tr.renderFbo, GL_DEPTH_COMPONENT24, 0, multisample);
+		FBO_CreateBuffer(tr.renderFbo, R_ULightDepthFormat(), 0, multisample);
 		R_CheckFBO(tr.renderFbo);
 
 		tr.msaaResolveFbo = FBO_Create("_msaaResolve", tr.renderDepthImage->width, tr.renderDepthImage->height);
@@ -301,7 +301,7 @@ void FBO_Init(void)
 	{
 		tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
 		FBO_AttachImage(tr.renderFbo, tr.renderImage, GL_COLOR_ATTACHMENT0, 0);
-		FBO_AttachImage(tr.renderFbo, tr.renderDepthImage, GL_DEPTH_ATTACHMENT, 0);
+		FBO_AttachImage(tr.renderFbo, tr.renderDepthImage, R_ULightDepthFormat() == GL_DEPTH24_STENCIL8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, 0);
 		R_CheckFBO(tr.renderFbo);
 	}
 

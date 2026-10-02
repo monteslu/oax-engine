@@ -813,13 +813,13 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		return args[1];
 
 	case TRAP_SIN:
-		return FloatAsInt( sin( VMF(1) ) );
+		return FloatAsInt( Q_detSin( VMF(1) ) );
 
 	case TRAP_COS:
-		return FloatAsInt( cos( VMF(1) ) );
+		return FloatAsInt( Q_detCos( VMF(1) ) );
 
 	case TRAP_ATAN2:
-		return FloatAsInt( atan2( VMF(1), VMF(2) ) );
+		return FloatAsInt( Q_detAtan2( VMF(1), VMF(2) ) );
 
 	case TRAP_SQRT:
 		return FloatAsInt( sqrt( VMF(1) ) );
@@ -829,7 +829,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case TRAP_ANGLEVECTORS:
-		AngleVectors( VMA(1), VMA(2), VMA(3), VMA(4) );
+		Q_detAngleVectors( VMA(1), VMA(2), VMA(3), VMA(4) );
 		return 0;
 
 	case TRAP_PERPENDICULARVECTOR:
@@ -844,6 +844,12 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 
 
 	default:
+		{
+			intptr_t ret;
+			if ( SV_GameSystemCallsOAX( args, &ret ) ) {
+				return ret;
+			}
+		}
 		Com_Error( ERR_DROP, "Bad game system trap: %ld", (long int) args[0] );
 	}
 	return 0;
@@ -888,6 +894,7 @@ static void SV_InitGameVM( qboolean restart ) {
 	
 	// use the current msec count for a random seed
 	// init for this gamestate
+	SV_OAXGuiReset();	// oax: the game reloads its GUIs
 	VM_Call (gvm, GAME_INIT, sv.time, Com_Milliseconds(), restart);
 }
 

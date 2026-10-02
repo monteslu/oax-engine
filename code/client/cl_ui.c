@@ -1009,13 +1009,13 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return args[1];
 
 	case UI_SIN:
-		return FloatAsInt( sin( VMF(1) ) );
+		return FloatAsInt( Q_detSin( VMF(1) ) );
 
 	case UI_COS:
-		return FloatAsInt( cos( VMF(1) ) );
+		return FloatAsInt( Q_detCos( VMF(1) ) );
 
 	case UI_ATAN2:
-		return FloatAsInt( atan2( VMF(1), VMF(2) ) );
+		return FloatAsInt( Q_detAtan2( VMF(1), VMF(2) ) );
 
 	case UI_SQRT:
 		return FloatAsInt( sqrt( VMF(1) ) );

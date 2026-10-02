@@ -364,6 +364,11 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 		// broadcast entities are always sent
 		if ( ent->r.svFlags & SVF_BROADCAST ) {
 			SV_AddEntToSnapshot( svEnt, ent, eNums );
+			// oax: a broadcast portal (misc_oax_skyportal) always adds what
+			// its camera sees; no stock entity sets both flags
+			if ( ent->r.svFlags & SVF_PORTAL ) {
+				SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, qtrue );
+			}
 			continue;
 		}
 

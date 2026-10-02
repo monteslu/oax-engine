@@ -2,6 +2,7 @@ include_guard(GLOBAL)
 
 include(utils/add_git_dependency)
 include(utils/disable_warnings)
+include(idgui)
 
 set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/cm_load.c
@@ -21,6 +22,18 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/huffman.c
     ${SOURCE_DIR}/qcommon/q_math.c
     ${SOURCE_DIR}/qcommon/q_shared.c
+    ${SOURCE_DIR}/qcommon/q_detmath.c
+    ${SOURCE_DIR}/qcommon/bspx.c
+    ${SOURCE_DIR}/qcommon/oax_common.c
+    ${SOURCE_DIR}/qcommon/detmath/__sin.c
+    ${SOURCE_DIR}/qcommon/detmath/__cos.c
+    ${SOURCE_DIR}/qcommon/detmath/__rem_pio2.c
+    ${SOURCE_DIR}/qcommon/detmath/__rem_pio2_large.c
+    ${SOURCE_DIR}/qcommon/detmath/sin.c
+    ${SOURCE_DIR}/qcommon/detmath/cos.c
+    ${SOURCE_DIR}/qcommon/detmath/atan.c
+    ${SOURCE_DIR}/qcommon/detmath/atan2.c
+    ${SOURCE_DIR}/qcommon/detmath/acos.c
     ${SOURCE_DIR}/qcommon/unzip.c
     ${SOURCE_DIR}/qcommon/ioapi.c
     ${SOURCE_DIR}/qcommon/vm.c
@@ -29,9 +42,16 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/vm_powerpc.c
     ${SOURCE_DIR}/qcommon/vm_sparc.c
     ${SOURCE_DIR}/qcommon/vm_x86.c
+    ${SOURCE_DIR}/qcommon/cm_guisurf.c
+    ${IDGUI_SOURCES}
 )
 
+# musl sources, kept unmodified (see qcommon/detmath/README.md)
+file(GLOB DETMATH_SOURCES ${SOURCE_DIR}/qcommon/detmath/*.c)
+set_source_files_properties(${DETMATH_SOURCES} PROPERTIES COMPILE_OPTIONS "-ffp-contract=off;-fno-builtin")
+
 disable_warnings(
+    ${DETMATH_SOURCES}
     ${SOURCE_DIR}/qcommon/unzip.c
     ${SOURCE_DIR}/qcommon/ioapi.c
 )
@@ -57,12 +77,19 @@ set(SERVER_SOURCES
     ${SOURCE_DIR}/server/sv_client.c
     ${SOURCE_DIR}/server/sv_ccmds.c
     ${SOURCE_DIR}/server/sv_game.c
+    ${SOURCE_DIR}/server/sv_game_oax.c
+    ${SOURCE_DIR}/server/sv_gui_oax.c
     ${SOURCE_DIR}/server/sv_init.c
     ${SOURCE_DIR}/server/sv_main.c
     ${SOURCE_DIR}/server/sv_net_chan.c
     ${SOURCE_DIR}/server/sv_snapshot.c
     ${SOURCE_DIR}/server/sv_world.c
+    ${SOURCE_DIR}/server/sv_script_oax.c
 )
+
+# id Tech 4 script VM (C++), driven by sv_script_oax.c
+include(idscript)
+list(APPEND SERVER_SOURCES ${IDSCRIPT_SOURCES})
 
 set(BOTLIB_SOURCES
     ${SOURCE_DIR}/botlib/be_aas_bspq3.c

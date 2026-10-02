@@ -469,9 +469,9 @@ int Q_isnan(float x);
 	{\
 		vec3_t *temp = (vec);\
 		\
-		(*temp)[0] = round((*temp)[0]);\
-		(*temp)[1] = round((*temp)[1]);\
-		(*temp)[2] = round((*temp)[2]);\
+		(*temp)[0] = rintf((*temp)[0]);\
+		(*temp)[1] = rintf((*temp)[1]);\
+		(*temp)[2] = rintf((*temp)[2]);\
 	} while(0)
 #endif
 /*

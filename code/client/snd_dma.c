@@ -430,7 +430,10 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, int *left_vol, int *righ
     vec3_t		vec;
 
 	const float dist_mult = SOUND_ATTENUATE;
-	
+
+	// oax: quieter behind a closed area portal (snd_occlusion.c)
+	master_vol = (int)( master_vol * S_OcclusionScale( origin ) );
+
 	// calculate stereo separation and distance attenuation
 	VectorSubtract(origin, listener_origin, source_vec);
 
@@ -724,6 +727,7 @@ void S_Base_StopAllSounds(void) {
 	// stop the background music
 	S_Base_StopBackgroundTrack();
 
+	S_ReverbReset();
 	S_Base_ClearSoundBuffer ();
 }
 

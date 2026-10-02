@@ -252,6 +252,10 @@ extern int	   sfxScratchIndex;
 
 qboolean S_Base_Init( soundInterface_t *si );
 
+// snd_occlusion.c (oax): sounds behind closed area portals
+void S_OcclusionInit( void );
+float S_OcclusionScale( const vec3_t origin );
+
 // OpenAL stuff
 typedef enum
 {
@@ -269,3 +273,10 @@ qboolean S_AL_Init( soundInterface_t *si );
 #ifdef idppc_altivec
 void S_PaintChannelFrom16_altivec( portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE], int snd_vol, channel_t *ch, const sfx_t *sc, int count, int sampleOffset, int bufferOffset );
 #endif
+
+// snd_reverb.c: zone reverb on the DMA mix (oax token "reverb")
+void S_ReverbSet( const char *preset, float decay, float wet );
+void S_ReverbReset( void );
+qboolean S_ReverbActive( void );
+void S_ReverbProcess( portable_samplepair_t *pb, int start, int count );
+void S_MeterPaint( const portable_samplepair_t *pb, int start, int count );

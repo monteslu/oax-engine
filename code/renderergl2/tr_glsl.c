@@ -629,7 +629,7 @@ static int GLSL_InitGPUShader2(shaderProgram_t * program, const char *name, int 
 	return 1;
 }
 
-static int GLSL_InitGPUShader(shaderProgram_t * program, const char *name,
+int GLSL_InitGPUShader(shaderProgram_t * program, const char *name,
 	int attribs, qboolean fragmentShader, const GLchar *extra, qboolean addHeader,
 	const char *fallback_vp, const char *fallback_fp)
 {
@@ -735,6 +735,24 @@ void GLSL_FinishGPUShader(shaderProgram_t *program)
 {
 	GLSL_ShowProgramUniforms(program->program);
 	GL_CheckErrors();
+}
+
+/*
+====================
+GLSL_InitOAXShader
+
+Unified lighting (tb_ulight.c) builds its programs through the same header,
+attribute binding and uniform table as the stock ones.
+====================
+*/
+int GLSL_InitOAXShader(shaderProgram_t *program, const char *name, int attribs, const char *extra, const char *vp, const char *fp)
+{
+	if (!GLSL_InitGPUShader(program, name, attribs, qtrue, extra, qtrue, vp, fp))
+		return 0;
+
+	GLSL_InitUniforms(program);
+	GLSL_FinishGPUShader(program);
+	return 1;
 }
 
 void GLSL_SetUniformInt(shaderProgram_t *program, int uniformNum, GLint value)
@@ -1554,6 +1572,8 @@ void GLSL_InitGPUShaders(void)
 #endif
 
 
+	R_OAXInitGLSL();
+
 	endTime = ri.Milliseconds();
 
 	ri.Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n", 
@@ -1602,6 +1622,8 @@ void GLSL_ShutdownGPUShaders(void)
 
 	for ( i = 0; i < 4; i++)
 		GLSL_DeleteGPUShader(&tr.depthBlurShader[i]);
+
+	R_OAXShutdownGLSL();
 }
 
 

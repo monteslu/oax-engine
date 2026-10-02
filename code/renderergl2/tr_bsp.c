@@ -2712,6 +2712,8 @@ void RE_LoadWorldMap( const char *name ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
 
+	R_OAXResetMapState();
+
 	// set default map light scale
 	tr.sunShadowScale = 0.5f;
 
@@ -3000,6 +3002,9 @@ void RE_LoadWorldMap( const char *name ) {
 
 	// only set tr.world now that we know the entire level has loaded properly
 	tr.world = &s_worldData;
+
+	// unified lighting: light entities, interactions, shadow volumes
+	R_ULightLoadWorld( header );
 
 	// make sure the VAO glState entry is safe
 	R_BindNullVao();

@@ -64,4 +64,11 @@ qboolean	CM_AreasConnected( int area1, int area2 );
 int			CM_WriteAreaBits( byte *buffer, int area );
 
 // cm_patch.c
+// cm_guisurf.c: GUI surfaces (oax in-world GUIs)
+void		CM_LoadGuiSurfaces( const byte *base, const dheader_t *header );
+void		CM_ClearGuiSurfaces( void );
+int			CM_NumGuiSurfaces( int model );		// model -1: all
+qboolean	CM_GuiTrace( int model, const vec3_t origin, const vec3_t angles, const vec3_t start, const vec3_t end,
+				float *x, float *y, float *fraction );
+
 void CM_DrawDebugSurface( void (*drawPoly)(int color, int numPoints, float *points) );

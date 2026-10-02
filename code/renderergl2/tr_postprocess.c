@@ -486,3 +486,60 @@ void RB_GaussianBlur(FBO_t *srcFbo, FBO_t *dstFbo, float blur)
 		FBO_Blit(tr.textureScratchFbo[0], srcBox, NULL, dstFbo, dstBox, NULL, color, GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
 	}
 }
+
+/*
+=============
+RB_OAXViewFog
+
+oax view fog (cgame CG_OAX_R_SETVIEWFOG, or the r_oaxViewFog test cvar):
+blends the fog colour over the scene by the distance read back from the
+depth buffer. Runs after the MSAA resolve and before tonemapping, so the
+fog lives in scene light like the rest of the view. The pass draws into
+an FBO holding only tr.renderImage, so it can sample tr.renderDepthImage
+without a feedback loop.
+=============
+*/
+FBO_t *FBO_Create(const char *name, int width, int height);
+qboolean R_CheckFBO(const FBO_t * fbo);
+
+void RB_OAXViewFog(FBO_t *srcFbo, ivec4_t box)
+{
+	FBO_t *oldFbo = glState.currentFBO;
+	shaderProgram_t *sp = &tr.oaxViewFogShader;
+	vec4_t viewInfo, fovInfo, sizeInfo, texCorners;
+	float w, h;
+
+	if (!srcFbo || !tr.renderImage || !tr.renderDepthImage || !sp->program)
+		return;
+
+	if (!tr.oaxFogFbo)
+	{
+		tr.oaxFogFbo = FBO_Create("_oaxfog", tr.renderImage->width, tr.renderImage->height);
+		FBO_AttachImage(tr.oaxFogFbo, tr.renderImage, GL_COLOR_ATTACHMENT0, 0);
+		R_CheckFBO(tr.oaxFogFbo);
+		FBO_Bind(oldFbo);
+	}
+
+	w = tr.renderDepthImage->width;
+	h = tr.renderDepthImage->height;
+
+	texCorners[0] =  box[0]           / w;
+	texCorners[1] = (box[1] + box[3]) / h;
+	texCorners[2] = (box[0] + box[2]) / w;
+	texCorners[3] =  box[1]           / h;
+
+	VectorSet4(viewInfo, r_znear->value, backEnd.viewParms.zFar,
+		backEnd.refdef.oaxViewFogRange[0], backEnd.refdef.oaxViewFogRange[1]);
+	VectorSet4(fovInfo, tan(backEnd.viewParms.fovX * M_PI / 360.0f), tan(backEnd.viewParms.fovY * M_PI / 360.0f),
+		box[0] / w, box[1] / h);
+	VectorSet4(sizeInfo, box[2] / w, box[3] / h, 0.0f, 0.0f);
+
+	GLSL_SetUniformVec4(sp, UNIFORM_VIEWINFO, viewInfo);
+	GLSL_SetUniformVec4(sp, UNIFORM_NORMALSCALE, fovInfo);
+	GLSL_SetUniformVec4(sp, UNIFORM_SPECULARSCALE, sizeInfo);
+
+	FBO_BlitFromTexture(tr.renderDepthImage, texCorners, NULL, tr.oaxFogFbo, box, sp,
+		backEnd.refdef.oaxViewFog, GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
+
+	FBO_Bind(oldFbo);
+}

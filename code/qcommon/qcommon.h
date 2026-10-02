@@ -366,6 +366,7 @@ intptr_t		QDECL VM_Call( vm_t *vm, int callNum, ... );
 void	VM_Debug( int level );
 
 void	*VM_ArgPtr( intptr_t intValue );
+void	VM_CheckBlock( intptr_t vmAddr, int size, const char *what );
 void	*VM_ExplicitArgPtr( vm_t *vm, intptr_t intValue );
 
 #define	VMA(x) VM_ArgPtr(args[x])
@@ -1228,5 +1229,17 @@ extern huffman_t clientHuffTables;
 #define DLF_NO_REDIRECT 2
 #define DLF_NO_UDP 4
 #define DLF_NO_DISCONNECT 8
+
+
+// deterministic math for the QVM traps (q_detmath.c, detmath/)
+double Q_detSin( double x );
+double Q_detCos( double x );
+double Q_detAtan2( double y, double x );
+double Q_detAcos( double x );
+float Q_detSinf( float x );
+float Q_detCosf( float x );
+float Q_detAtan2f( float y, float x );
+float Q_detAcosf( float c );
+void Q_detAngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up );
 
 #endif // _QCOMMON_H_

@@ -12,6 +12,7 @@ latest snapshot and predicted state, so a test sees what the player sees.
 
 #include "../client/client.h"
 #include "wc_local.h"
+#include "../qcommon/oax.h"
 
 typedef struct {
 	uint32_t name_ptr;
@@ -46,6 +47,7 @@ static struct {
 	int32_t padStartTime;       // command time the last pad script started (-1 = none)
 	char    mapname[64];
 	char    command[256];       // written by a harness; executed at the next frame
+	char    values[65536];      // named debug values, "name value\n" lines (Com_DebugSet)
 } dbg;
 
 // Per-frame movement trace: one row per rendered frame while a player state
@@ -79,6 +81,7 @@ static wcDebugField_t dbgTable[] = {
 	FIELD( "frame_count", &dbg.frameCount, WC_DBG_I32, 1 ),
 	FIELD( "mapname", dbg.mapname, WC_DBG_BYTES, sizeof( dbg.mapname ) ),
 	FIELD( "console_cmd", dbg.command, WC_DBG_BYTES, sizeof( dbg.command ) ),
+	FIELD( "debug_values", dbg.values, WC_DBG_BYTES, sizeof( dbg.values ) ),
 	FIELD( "trace_count", &dbgTraceCount, WC_DBG_I32, 1 ),
 	FIELD( "trace", dbgTrace, WC_DBG_F32, WC_TRACE_ROWS * WC_TRACE_COLS ),
 	{ 0, 0, 0, { 0, 0, 0 }, 0 }
@@ -135,6 +138,7 @@ void WC_Debug_Frame( int frameMsec ) {
 	dbg.clRealtime = cls.realtime;
 	dbg.svsTime = WC_Debug_ServerStaticTime();
 	dbg.padStartTime = cl_padScriptStartTime;
+	Com_DebugValuesText( dbg.values, sizeof( dbg.values ) );
 
 	// the local server's copy is authoritative; fall back to the snapshot
 	ps = WC_Debug_ServerPlayerState( &dbg.serverTime, &dbg.serverEntities );

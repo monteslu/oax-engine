@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_extramath.h"
 #include "tr_fbo.h"
 #include "tr_postprocess.h"
+#include "tr_oax.h"
 #include "../renderercommon/iqm.h"
 #include "../renderercommon/qgl.h"
 
@@ -63,6 +64,7 @@ typedef unsigned int vaoCacheGlIndex_t;
 #define MAX_SHADERS		(1<<SHADERNUM_BITS)
 
 #define	MAX_FBOS      64
+#define	MAX_GUI_TARGETS	64		// oax: client GUI handles (idgui IDGUI_MAX_GUIS)
 #define MAX_VISCOUNTS 5
 #define MAX_VAOS      4096
 
@@ -102,6 +104,7 @@ typedef struct {
 	vec3_t		ambientLight;	// color normalized to 0-255
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
+	int			guiHandle;		// oax: client GUI for "map $gui" stages, 0 = none
 } trRefEntity_t;
 
 
@@ -244,6 +247,7 @@ typedef enum {
 	AGEN_WAVEFORM,
 	AGEN_PORTAL,
 	AGEN_CONST,
+	AGEN_OAX_LIGHTSTYLE,		// oax: tr.oaxLightStyles[stage->oaxLightStyle], red channel
 } alphaGen_t;
 
 typedef enum {
@@ -260,7 +264,8 @@ typedef enum {
 	CGEN_WAVEFORM,			// programmatically generated
 	CGEN_LIGHTING_DIFFUSE,
 	CGEN_FOG,				// standard fog
-	CGEN_CONST				// fixed color
+	CGEN_CONST,				// fixed color
+	CGEN_OAX_LIGHTSTYLE		// oax: tr.oaxLightStyles[stage->oaxLightStyle]
 } colorGen_t;
 
 typedef enum {
@@ -357,6 +362,7 @@ typedef struct {
 	int				videoMapHandle;
 	qboolean		isLightmap;
 	qboolean		isVideoMap;
+	qboolean		isGuiMap;		// oax "map $gui": the entity's GUI texture
 } textureBundle_t;
 
 enum
@@ -413,6 +419,10 @@ typedef struct {
 	vec4_t normalScale;
 	vec4_t specularScale;
 
+	// unified lighting (tr_matexpr.c): color expression registers
+	short			oaxColorReg[4];
+	qboolean		oaxColorExpr;
+	int			oaxLightStyle;				// CGEN_/AGEN_OAX_LIGHTSTYLE style number
 } shaderStage_t;
 
 struct shaderCommands_s;
@@ -490,6 +500,14 @@ typedef struct shader_s {
   double timeOffset;                                 // current time offset for this shader
 
   struct shader_s *remappedShader;                  // current shader this one is remapped too
+
+	// unified lighting (tr_matexpr.c, tr_ulight.c)
+	struct matExpr_s *oaxExpr;			// expression registers, NULL if none
+	struct image_s	*oaxLightFalloff;	// light materials: lightFalloffImage
+	int			oaxLightFlags;			// ULSF_*
+	int			oaxInteraction;			// 0 unknown, -1 none, else interaction stage + 1
+	qboolean	oaxProcedural;			// a stage uses a procedural texture (tr_procedural.c)
+	qboolean	oaxSkyPortal;			// surfaceparm skyportal: sky a sky portal scene shows through
 
 	struct	shader_s	*next;
 } shader_t;
@@ -778,6 +796,9 @@ typedef struct {
 
 	float       autoExposureMinMax[2];
 	float       toneMinAvgMaxLinear[3];
+
+	float       oaxViewFog[4];		// oax view fog: rgb, density (0 = off)
+	float       oaxViewFogRange[2];	// start, end
 } trRefdef_t;
 
 
@@ -848,6 +869,7 @@ typedef struct {
 	float		zFar;
 	float       zNear;
 	stereoFrame_t	stereoFrame;
+	int			ulightView;			// unified lighting: view index + 1, 0 none
 } viewParms_t;
 
 
@@ -1495,6 +1517,7 @@ typedef struct {
 	trRefEntity_t	entity2D;	// currentEntity will point at this when doing 2D rendering
 
 	FBO_t *last2DFBO;
+	FBO_t		*guiTarget;	// oax: 2D draws go to this GUI target while set
 	qboolean    colorMask[4];
 	qboolean    depthFill;
 	float       greyscale;
@@ -1537,6 +1560,11 @@ typedef struct {
 	image_t					*flareImage;
 	image_t					*whiteImage;			// full of 0xff
 	image_t					*identityLightImage;	// full of tr.identityLightByte
+
+	// oax in-world GUIs (tr_gui.c)
+	image_t					*guiImages[MAX_GUI_TARGETS];
+	image_t					*guiBlankImage;
+	FBO_t					*guiFbo;
 
 	image_t                 *shadowCubemaps[MAX_DLIGHTS];
 	
@@ -1682,6 +1710,13 @@ typedef struct {
 	float					sawToothTable[FUNCTABLE_SIZE];
 	float					inverseSawToothTable[FUNCTABLE_SIZE];
 	float					fogTable[FOG_TABLE_SIZE];
+
+	// oax extensions (tr_oax.c, tr_procedural.c)
+	vec3_t					oaxLightStyles[OAX_MAX_LIGHTSTYLES];
+	int						oaxSkyArea;			// area of the current sky portal camera, -1 none
+	shaderProgram_t			oaxViewFogShader;
+	FBO_t					*oaxFogFbo;			// renderImage without depth, for the view fog pass
+	shaderProgram_t			oaxProcShader[OAX_PROC_NUM_PROGRAMS];
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -2412,6 +2447,18 @@ typedef struct {
 
 typedef struct {
 	int		commandId;
+	shader_t	*shader;
+	float	xy[8];
+	float	st[8];
+} stretchQuadCommand_t;
+
+typedef struct {
+	int		commandId;
+	image_t	*image;
+} guiTargetCommand_t;
+
+typedef struct {
+	int		commandId;
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;
 	drawSurf_t *drawSurfs;
@@ -2478,7 +2525,10 @@ typedef enum {
 	RC_CLEARDEPTH,
 	RC_CAPSHADOWMAP,
 	RC_POSTPROCESS,
-	RC_EXPORT_CUBEMAPS
+	RC_EXPORT_CUBEMAPS,
+	RC_STRETCH_QUAD,		// oax in-world GUIs
+	RC_BEGIN_GUI_TARGET,
+	RC_END_GUI_TARGET
 } renderCommand_t;
 
 
@@ -2524,10 +2574,63 @@ void RE_SaveJPG(char * filename, int quality, int image_width, int image_height,
                 unsigned char *image_buffer, int padding);
 size_t RE_SaveJPGToBuffer(byte *buffer, size_t bufSize, int quality,
 		          int image_width, int image_height, byte *image_buffer, int padding);
+// tr_gui.c (oax in-world GUIs)
+image_t *R_GuiBlankImage( void );
+void R_BindGuiImage( int tmu );
+void RE_AddRefEntityToSceneExt( const refEntity_t *ent, const refEntityExt_t *ext );
+qboolean RE_BeginGuiTarget( int handle, int width, int height );
+void RE_EndGuiTarget( void );
+void RE_DrawQuad( const float *xy, const float *st, qhandle_t hShader );
+const void *RB_BeginGuiTarget( const void *data );
+const void *RB_EndGuiTarget( const void *data );
+const void *RB_StretchQuad( const void *data );
+void RB_FinishGuiTarget( void );
+void RB_SetGL2D( void );
+
 void RE_TakeVideoFrame( int width, int height,
 		byte *captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
 
 void R_ConvertTextureFormat( const byte *in, int width, int height, GLenum format, GLenum type, byte *out );
 
+#include "tr_ulight.h"
+
+/*
+============================================================
+oax map features (tr_oax.c, tr_postprocess.c, tr_image_program.c,
+tr_procedural.c)
+============================================================
+*/
+extern cvar_t	*r_oaxSkyPortal;
+extern cvar_t	*r_oaxViewFog;
+
+void GLSL_InitUniforms(shaderProgram_t *program);
+void GLSL_FinishGPUShader(shaderProgram_t *program);
+void GLSL_DeleteGPUShader(shaderProgram_t *program);
+int GLSL_InitGPUShader(shaderProgram_t * program, const char *name,
+	int attribs, qboolean fragmentShader, const GLchar *extra, qboolean addHeader,
+	const char *fallback_vp, const char *fallback_fp);
+
+void R_OAXRegisterCvars( void );
+void R_OAXResetMapState( void );
+void RE_OAXSetLightStyle( int style, float r, float g, float b );
+void RE_OAXSetViewFog( const float *rgb, float density, float start, float end );
+const char *RE_OAXFeatures( void );
+void R_OAXBeginScene( void );
+qboolean R_OAXCullEntity( const trRefEntity_t *ent );
+void R_OAXInitGLSL( void );
+void R_OAXShutdownGLSL( void );
+
+void RB_OAXViewFog( FBO_t *srcFbo, ivec4_t box );
+
+qboolean R_OAXIsImageProgram( const char *name );
+const char *R_OAXImageProgramKey( const char *name );
+qboolean R_OAXLoadImageProgram( const char *name, byte **pic, int *width, int *height );
+const char *R_OAXParseImageName( const char *token, char **text );
+void R_OAXImageProgram_f( void );
+
+image_t *R_OAXParseProcedural( char **text, const char *shaderName );
+void R_OAXProcMarkVisible( const shader_t *shader );
+void RB_OAXUpdateProcedurals( double shaderTime );
+void R_OAXProcReset( void );
 
 #endif //TR_LOCAL_H

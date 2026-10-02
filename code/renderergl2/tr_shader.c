@@ -637,6 +637,13 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 				stage->bundle[0].image[0] = tr.whiteImage;
 				continue;
 			}
+			else if ( !Q_stricmp( token, "$gui" ) )
+			{
+				// oax in-world GUIs: the texture of the entity's GUI (tr_gui.c)
+				stage->bundle[0].isGuiMap = qtrue;
+				stage->bundle[0].image[0] = R_GuiBlankImage();
+				continue;
+			}
 			else if ( !Q_stricmp( token, "$lightmap" ) )
 			{
 				stage->bundle[0].isLightmap = qtrue;
@@ -688,6 +695,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 						flags |= IMGFLAG_GENNORMALMAP;
 				}
 
+				token = (char *)R_OAXParseImageName( token, text );
 				stage->bundle[0].image[0] = R_FindImageFile( token, type, flags );
 
 				if ( !stage->bundle[0].image[0] )
@@ -696,6 +704,18 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 					return qfalse;
 				}
 			}
+		}
+		//
+		// procedural <type> <size> [params] (oax, tr_procedural.c)
+		//
+		else if ( !Q_stricmp( token, "procedural" ) )
+		{
+			stage->bundle[0].image[0] = R_OAXParseProcedural( text, shader.name );
+			if ( !stage->bundle[0].image[0] )
+			{
+				return qfalse;
+			}
+			shader.oaxProcedural = qtrue;
 		}
 		//
 		// clampmap <name>
@@ -733,6 +753,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			}
 
 
+			token = (char *)R_OAXParseImageName( token, text );
 			stage->bundle[0].image[0] = R_FindImageFile( token, type, flags );
 			if ( !stage->bundle[0].image[0] )
 			{
@@ -1214,6 +1235,18 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			{
 				stage->rgbGen = CGEN_ONE_MINUS_VERTEX;
 			}
+			else if ( !Q_stricmp( token, "lightstyle" ) )
+			{
+				// oax: rgbGen lightstyle <n>, driven by cgame (tr_oax.c)
+				token = COM_ParseExt( text, qfalse );
+				stage->oaxLightStyle = atoi( token );
+				if ( stage->oaxLightStyle < 0 || stage->oaxLightStyle >= OAX_MAX_LIGHTSTYLES )
+				{
+					ri.Printf( PRINT_WARNING, "WARNING: rgbGen lightstyle %s out of range in shader '%s'\n", token, shader.name );
+					stage->oaxLightStyle = 0;
+				}
+				stage->rgbGen = CGEN_OAX_LIGHTSTYLE;
+			}
 			else
 			{
 				ri.Printf( PRINT_WARNING, "WARNING: unknown rgbGen parameter '%s' in shader '%s'\n", token, shader.name );
@@ -1266,6 +1299,18 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			else if ( !Q_stricmp( token, "oneMinusVertex" ) )
 			{
 				stage->alphaGen = AGEN_ONE_MINUS_VERTEX;
+			}
+			else if ( !Q_stricmp( token, "lightstyle" ) )
+			{
+				// oax: alphaGen lightstyle <n> (the style's red channel)
+				token = COM_ParseExt( text, qfalse );
+				stage->oaxLightStyle = atoi( token );
+				if ( stage->oaxLightStyle < 0 || stage->oaxLightStyle >= OAX_MAX_LIGHTSTYLES )
+				{
+					ri.Printf( PRINT_WARNING, "WARNING: alphaGen lightstyle %s out of range in shader '%s'\n", token, shader.name );
+					stage->oaxLightStyle = 0;
+				}
+				stage->alphaGen = AGEN_OAX_LIGHTSTYLE;
 			}
 			else if ( !Q_stricmp( token, "portal" ) )
 			{
@@ -1351,6 +1396,11 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			depthMaskBits = GLS_DEPTHMASK_TRUE;
 			depthMaskExplicit = qtrue;
 
+			continue;
+		}
+		// id Tech 4 stage keywords (tr_matexpr.c)
+		else if ( R_MatExprParseStageKeyword( token, text, &shader, stage ) )
+		{
 			continue;
 		}
 		else
@@ -1727,6 +1777,11 @@ static void ParseSurfaceParm( char **text ) {
 	int		i;
 
 	token = COM_ParseExt( text, qfalse );
+	// oax: renderer-only marker, no surface or content bits
+	if ( !Q_stricmp( token, "skyportal" ) ) {
+		shader.oaxSkyPortal = qtrue;
+		return;
+	}
 	for ( i = 0 ; i < numInfoParms ; i++ ) {
 		if ( !Q_stricmp( token, infoParms[i].name ) ) {
 			shader.surfaceFlags |= infoParms[i].surfaceFlags;
@@ -1753,6 +1808,7 @@ will optimize it.
 static qboolean ParseShader( char **text )
 {
 	char *token;
+	char shorthand[MAX_QPATH + 64];
 	int s;
 
 	s = 0;
@@ -2007,6 +2063,28 @@ static qboolean ParseShader( char **text )
 		else if ( !Q_stricmp( token, "sort" ) )
 		{
 			ParseSort( text );
+			continue;
+		}
+		// id Tech 4 stage shorthands: diffusemap / bumpmap / specularmap <image>
+		else if ( R_MatExprStageShorthand( token, text, shorthand, sizeof( shorthand ) ) )
+		{
+			char *p = shorthand;
+
+			if ( s >= MAX_SHADER_STAGES ) {
+				ri.Printf( PRINT_WARNING, "WARNING: too many stages in shader %s (max is %i)\n", shader.name, MAX_SHADER_STAGES );
+				return qfalse;
+			}
+			if ( !ParseStage( &stages[s], &p ) )
+			{
+				return qfalse;
+			}
+			stages[s].active = qtrue;
+			s++;
+			continue;
+		}
+		// id Tech 4 light material keywords (tr_matexpr.c)
+		else if ( R_MatExprParseShaderKeyword( token, text, &shader ) )
+		{
 			continue;
 		}
 		else

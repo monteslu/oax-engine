@@ -560,6 +560,9 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	R_InitNextFrame();
 
+	// unified lighting: per-frame counters as named debug values
+	R_ULightPublishStats( tr.frontEndMsec, backEnd.pc.msec );
+
 	if ( frontEndMsec ) {
 		*frontEndMsec = tr.frontEndMsec;
 	}

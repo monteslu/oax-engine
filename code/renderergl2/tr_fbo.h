@@ -54,6 +54,7 @@ typedef struct FBO_s
 	int             multisample;    // samples in its renderbuffers, 0 = none
 } FBO_t;
 
+FBO_t *FBO_Create(const char *name, int width, int height);	// oax: exported for tr_gui.c
 void FBO_AttachImage(FBO_t *fbo, image_t *image, GLenum attachment, GLuint cubemapside);
 void FBO_Bind(FBO_t *fbo);
 void FBO_Init(void);

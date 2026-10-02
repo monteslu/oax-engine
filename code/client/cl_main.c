@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cl_main.c  -- client main loop
 
 #include "client.h"
+#include "../qcommon/oax.h"
 #include <limits.h>
 
 #include "../sys/sys_local.h"
@@ -3341,6 +3342,8 @@ void CL_InitRef( void ) {
 	ri.Sys_GLimpInit = Sys_GLimpInit;
 	ri.Sys_LowPhysicalMemory = Sys_LowPhysicalMemory;
 
+	ri.DebugSet = Com_DebugSet;
+
 	ret = GetRefAPI( REF_API_VERSION, &ri );
 
 #if defined __USEA3D && defined __A3D_GEOM
@@ -3354,6 +3357,8 @@ void CL_InitRef( void ) {
 	}
 
 	re = *ret;
+
+	CL_OAXRendererFeatures();
 
 	// unpause so the cgame definitely gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
@@ -3735,6 +3740,7 @@ void CL_Init( void ) {
 	Cmd_SetCommandCompletionFunc( "demo", CL_CompleteDemoName );
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);
 	CL_TestScriptInit();
+	CL_OAXInit();
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f);
 	Cmd_AddCommand ("connect", CL_Connect_f);
 	Cmd_AddCommand ("reconnect", CL_Reconnect_f);

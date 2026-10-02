@@ -791,7 +791,7 @@ void R_AddWorldSurfaces (void) {
 	// now add all the potentially visible surfaces
 	// also mask invisible dlights for next frame
 	{
-		int i;
+		int i, added = 0;
 
 		tr.refdef.dlightMask = 0;
 
@@ -802,8 +802,16 @@ void R_AddWorldSurfaces (void) {
 
 			R_AddWorldSurface( tr.world->surfaces + i, tr.world->surfacesDlightBits[i], tr.world->surfacesPshadowBits[i] );
 			tr.refdef.dlightMask |= tr.world->surfacesDlightBits[i];
+			added++;
 		}
 
 		tr.refdef.dlightMask = ~tr.refdef.dlightMask;
+
+		// oax: world surfaces the player's view drew, for tests that check
+		// culling (area portals); not the portal, mirror or shadow views
+		if ( !tr.viewParms.isPortal && !( tr.viewParms.flags & ( VPF_DEPTHSHADOW | VPF_SHADOWMAP | VPF_ORTHOGRAPHIC ) )
+			&& !( tr.refdef.rdflags & RDF_NOWORLDMODEL ) && ri.DebugSet ) {
+			ri.DebugSet( "r_surfs_world", va( "%i", added ) );
+		}
 	}
 }

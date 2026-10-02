@@ -163,6 +163,24 @@ void VM_StackTrace( vm_t *vm, int programCounter, int programStack ) {
 
 
 /*
+==============
+VM_FloatToInt
+
+OP_CVFI, the QVM's (int) cast: truncation, exactly as the x86-64 build
+computes it (Q_ftol is cvttss2si into a 64-bit register, keeping the low 32
+bits; 0 for NaN and values beyond 64 bits). Q_ftol elsewhere is lrintf,
+which ROUNDS: a cart printed 0.5587 as "1." and every (int) of a fraction
+of .5 or more came out one higher than on native.
+==============
+*/
+static int VM_FloatToInt( float f ) {
+	if ( f >= -9223372036854775808.0f && f < 9223372036854775808.0f ) {
+		return (int)(unsigned int)(uint64_t)(int64_t)f;
+	}
+	return 0;
+}
+
+/*
 ====================
 VM_PrepareInterpreter
 ====================
@@ -877,7 +895,7 @@ nextInstruction2:
 			((float *) opStack)[opStackOfs] = (float) opStack[opStackOfs];
 			goto nextInstruction;
 		case OP_CVFI:
-			opStack[opStackOfs] = Q_ftol(((float *) opStack)[opStackOfs]);
+			opStack[opStackOfs] = VM_FloatToInt(((float *) opStack)[opStackOfs]);
 			goto nextInstruction;
 		case OP_SEX8:
 			opStack[opStackOfs] = (signed char) opStack[opStackOfs];

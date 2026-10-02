@@ -1449,6 +1449,8 @@ void R_Register( void )
 
 	// make sure all the commands added here are also
 	// removed in R_Shutdown
+	R_OAXRegisterCvars();
+
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
 	ri.Cmd_AddCommand( "shaderlist", R_ShaderList_f );
 	ri.Cmd_AddCommand( "skinlist", R_SkinList_f );
@@ -1563,6 +1565,10 @@ void R_Init( void ) {
 
 	GLSL_InitGPUShaders();
 
+	// unified lighting: generated light images, tables, programs (before
+	// the shaders, whose expressions reference the tables)
+	R_ULightInit();
+
 	R_InitVaos();
 
 	R_InitShaders();
@@ -1604,6 +1610,7 @@ void RE_Shutdown( qboolean destroyWindow ) {
 	ri.Cmd_RemoveCommand( "gfxinfo" );
 	ri.Cmd_RemoveCommand( "minimize" );
 	ri.Cmd_RemoveCommand( "gfxmeminfo" );
+	ri.Cmd_RemoveCommand( "imageprogram" );
 	ri.Cmd_RemoveCommand( "exportCubemaps" );
 
 
@@ -1614,6 +1621,7 @@ void RE_Shutdown( qboolean destroyWindow ) {
 			FBO_Shutdown();
 		R_DeleteTextures();
 		R_ShutdownVaos();
+		R_ULightShutdown();
 		GLSL_ShutdownGPUShaders();
 	}
 
@@ -1714,7 +1722,18 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetEntityToken = R_GetEntityToken;
 	re.inPVS = R_inPVS;
 
+	re.OAXUpdateLight = RE_OAXUpdateLight;
+	re.OAXLightingModel = R_ULightLightingModel;
+
 	re.TakeVideoFrame = RE_TakeVideoFrame;
+
+	re.AddRefEntityToSceneExt = RE_AddRefEntityToSceneExt;
+	re.BeginGuiTarget = RE_BeginGuiTarget;
+	re.EndGuiTarget = RE_EndGuiTarget;
+	re.DrawQuad = RE_DrawQuad;
+	re.OAXSetLightStyle = RE_OAXSetLightStyle;
+	re.OAXSetViewFog = RE_OAXSetViewFog;
+	re.OAXFeatures = RE_OAXFeatures;
 
 	return &re;
 }

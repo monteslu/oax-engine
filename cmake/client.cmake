@@ -10,6 +10,10 @@ include(renderer_common)
 
 set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_cgame.c
+    ${SOURCE_DIR}/client/cl_cgame_oax.c
+    ${SOURCE_DIR}/client/cl_gui_oax.c
+    ${SOURCE_DIR}/client/cl_cgame_ulight.c
+    ${SOURCE_DIR}/client/cl_cgame_oax_render.c
     ${SOURCE_DIR}/client/cl_cin.c
     ${SOURCE_DIR}/client/cl_console.c
     ${SOURCE_DIR}/client/cl_gamepad.c
@@ -28,8 +32,10 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/snd_dma.c
     ${SOURCE_DIR}/client/snd_mem.c
     ${SOURCE_DIR}/client/snd_mix.c
+    ${SOURCE_DIR}/client/snd_reverb.c
     ${SOURCE_DIR}/client/snd_wavelet.c
     ${SOURCE_DIR}/client/snd_main.c
+    ${SOURCE_DIR}/client/snd_occlusion.c
     ${SOURCE_DIR}/client/snd_codec.c
     ${SOURCE_DIR}/client/snd_codec_wav.c
     ${SOURCE_DIR}/client/snd_codec_ogg.c

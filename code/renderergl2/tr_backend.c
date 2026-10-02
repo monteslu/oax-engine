@@ -368,7 +368,7 @@ void RB_BeginDrawingView (void) {
 	{
 		clearBits |= GL_STENCIL_BUFFER_BIT;
 	}
-	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
+	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & ( RDF_NOWORLDMODEL | RDF_OAX_UNDERSKY ) ) )
 	{
 		clearBits |= GL_COLOR_BUFFER_BIT;	// FIXME: only if sky shaders have been used
 	}
@@ -819,7 +819,7 @@ const void *RB_StretchPic ( const void *data ) {
 	cmd = (const stretchPicCommand_t *)data;
 
 	if (glRefConfig.framebufferObject)
-		FBO_Bind(tr.renderFbo);
+		FBO_Bind(backEnd.guiTarget ? backEnd.guiTarget : tr.renderFbo);	// oax: GUI targets
 
 	RB_SetGL2D();
 
@@ -911,6 +911,10 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 	isShadowView = !!(backEnd.viewParms.flags & VPF_DEPTHSHADOW);
 
+	// oax procedural textures used by this frame, before the view's FBO is bound
+	if (!isShadowView && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL))
+		RB_OAXUpdateProcedurals(backEnd.refdef.floatTime);
+
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView ();
 
@@ -919,7 +923,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 		qglEnable(GL_DEPTH_CLAMP);
 	}
 
-	if (glRefConfig.framebufferObject && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && (r_depthPrepass->integer || isShadowView))
+	if (glRefConfig.framebufferObject && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && (r_depthPrepass->integer || isShadowView || backEnd.viewParms.ulightView))
 	{
 		FBO_t *oldFbo = glState.currentFBO;
 		vec4_t viewInfo;
@@ -1146,9 +1150,17 @@ const void	*RB_DrawSurfs( const void *data ) {
 		qglDisable(GL_DEPTH_CLAMP);
 	}
 
-	if (!isShadowView)
+	if (!isShadowView && (backEnd.refdef.rdflags & RDF_OAX_SKYPORTAL))
 	{
+		// oax sky portal scene: no sun, sun rays or flares
 		RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
+	}
+	else if (!isShadowView)
+	{
+		if (backEnd.viewParms.ulightView)
+			RB_ULightDrawViewSurfs( cmd->drawSurfs, cmd->numDrawSurfs );	// unified lighting
+		else
+			RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
 
 		if (r_drawSun->integer)
 		{
@@ -1576,6 +1588,10 @@ const void *RB_PostProcess(const void *data)
 	dstBox[2] = backEnd.viewParms.viewportWidth;
 	dstBox[3] = backEnd.viewParms.viewportHeight;
 
+	// oax view fog, in scene light before tonemapping
+	if (backEnd.refdef.oaxViewFog[3] > 0.0f)
+		RB_OAXViewFog(srcFbo, dstBox);
+
 	if (r_ssao->integer)
 	{
 		srcBox[0] = backEnd.viewParms.viewportX      * tr.screenSsaoImage->width  / (float)glConfig.vidWidth;
@@ -1833,6 +1849,21 @@ void RB_ExecuteRenderCommands( const void *data ) {
 	while ( 1 ) {
 		data = PADP(data, sizeof(void *));
 
+		// oax: anything but 2D drawing ends a GUI render target
+		if ( backEnd.guiTarget ) {
+			switch ( *(const int *)data ) {
+			case RC_SET_COLOR:
+			case RC_STRETCH_PIC:
+			case RC_STRETCH_QUAD:
+			case RC_BEGIN_GUI_TARGET:
+			case RC_END_GUI_TARGET:
+				break;
+			default:
+				RB_FinishGuiTarget();
+				break;
+			}
+		}
+
 		switch ( *(const int *)data ) {
 		case RC_SET_COLOR:
 			data = RB_SetColor( data );
@@ -1869,6 +1900,15 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_EXPORT_CUBEMAPS:
 			data = RB_ExportCubemaps(data);
+			break;
+		case RC_STRETCH_QUAD:
+			data = RB_StretchQuad(data);
+			break;
+		case RC_BEGIN_GUI_TARGET:
+			data = RB_BeginGuiTarget(data);
+			break;
+		case RC_END_GUI_TARGET:
+			data = RB_EndGuiTarget(data);
 			break;
 		case RC_END_OF_LIST:
 		default:

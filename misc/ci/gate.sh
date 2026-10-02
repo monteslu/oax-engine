@@ -7,6 +7,7 @@
 # Needs: cmake, a C compiler, emsdk (EMSDK or emcc on PATH), node, unzip,
 # OpenArena content (OA_BASEOA or a distro install), OA QVMs (OA_QVM_DIR, a
 # directory containing vm/*.qvm; defaults to a sibling oa-gamecode build),
+# q3map2 + bspc for the test maps (Q3MAP2/BSPC, default ../oa-mapgen/vendor/bin),
 # and a romdev server (ROMDEV_URL, default http://127.0.0.1:7331).
 #
 # Exit codes follow tests/romdev/run.mjs: 0 pass, 1 test failure,
@@ -43,8 +44,19 @@ echo "== cart build"
 emcmake cmake -S . -B build-cart -DWASMCART=ON -DCMAKE_BUILD_TYPE=Release >/dev/null || exit 2
 cmake --build build-cart -j"$JOBS" >build-cart.log 2>&1 || { tail -30 build-cart.log; exit 2; }
 
+echo "== test maps"
+node tests/maps/build.mjs || exit 2
+
+# maps converted by an external converter (local builds, never committed), for the
+# converter-validation test
+CONVERTED_DIR="${OA_CONVERTED_DIR:-$HOME/.openarena/baseoa}"
+CONVERTED=()
+for m in ${OA_CONVERTED_MAPS//,/ }; do
+  [ -f "$CONVERTED_DIR/$m.pk3" ] && CONVERTED+=(--pk3 "$CONVERTED_DIR/$m.pk3")
+done
+
 echo "== pack"
-node misc/wasmcart/pack-cart.mjs --wasm build-cart/Release/ioquake3.wasm --qvm "$OA_QVM_DIR" --overlay tests/romdev/data --out build-cart/cart | tail -1
+node misc/wasmcart/pack-cart.mjs --wasm build-cart/Release/ioquake3.wasm --qvm "$OA_QVM_DIR" "${CONVERTED[@]}" --overlay tests/romdev/data --overlay tests/maps/out/baseoa --out build-cart/cart | tail -1
 
 echo "== romdev tests"
 node tests/romdev/run.mjs "$@"

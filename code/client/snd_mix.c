@@ -516,6 +516,7 @@ void S_PaintChannels( int endtime ) {
 	sfx_t	*sc;
 	int		ltime, count;
 	int		sampleOffset;
+	qboolean	reverb;
 
 	if(s_muted->integer)
 		snd_vol = 0;
@@ -532,8 +533,11 @@ void S_PaintChannels( int endtime ) {
 		}
 
 		// clear the paint buffer and mix any raw samples...
+		// (with zone reverb on, raw streams such as music are mixed after
+		// it, so only world sounds reverberate)
 		Com_Memset(paintbuffer, 0, sizeof (paintbuffer));
-		for (stream = 0; stream < MAX_RAW_STREAMS; stream++) {
+		reverb = S_ReverbActive();
+		for (stream = 0; stream < MAX_RAW_STREAMS && !reverb; stream++) {
 			if ( s_rawend[stream] >= s_paintedtime ) {
 				// copy from the streaming sound source
 				const portable_samplepair_t *rawsamples = s_rawsamples[stream];
@@ -617,6 +621,23 @@ void S_PaintChannels( int endtime ) {
 				}
 			} while ( ltime < end);
 		}
+
+		if ( reverb ) {
+			S_ReverbProcess( paintbuffer, s_paintedtime, end - s_paintedtime );
+			for (stream = 0; stream < MAX_RAW_STREAMS; stream++) {
+				if ( s_rawend[stream] >= s_paintedtime ) {
+					const portable_samplepair_t *rawsamples = s_rawsamples[stream];
+					const int stop = (end < s_rawend[stream]) ? end : s_rawend[stream];
+					for ( i = s_paintedtime ; i < stop ; i++ ) {
+						const int s = i&(MAX_RAW_SAMPLES-1);
+						paintbuffer[i-s_paintedtime].left += rawsamples[s].left;
+						paintbuffer[i-s_paintedtime].right += rawsamples[s].right;
+					}
+				}
+			}
+		}
+
+		S_MeterPaint( paintbuffer, s_paintedtime, end - s_paintedtime );
 
 		// transfer out according to DMA format
 		S_TransferPaintBuffer( end );

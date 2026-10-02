@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cl_cgame.c  -- client system interaction with client game
 
 #include "client.h"
+#include "../qcommon/oax.h"
 
 #include "../botlib/botlib.h"
 
@@ -405,11 +406,25 @@ static int	FloatAsInt( float f ) {
 CL_RenderScene
 
 Applies cl_overrideView to the main world view before rendering.
+
+An oax sky portal scene (OAX_RDF_SKYPORTAL) keeps its camera position and
+turns with the override: its axis is the cgame's sky rotation applied to
+the overridden view, the rotation recovered from the cgame's own main
+view (the previous main scene's, before the override).
 ====================
 */
 static void CL_RenderScene( const refdef_t *fd ) {
+	static vec3_t	mainAxis[3];
+	static qboolean	haveMainAxis;
 	float	v[6];
 	refdef_t	ref;
+	vec3_t	o[3], t[3];
+	int		i, j, k;
+
+	if ( !( fd->rdflags & ( RDF_NOWORLDMODEL | OAX_RDF_SKYPORTAL ) ) ) {
+		AxisCopy( (vec3_t *)fd->viewaxis, mainAxis );
+		haveMainAxis = qtrue;
+	}
 
 	if ( !cl_overrideView->string[0] || ( fd->rdflags & RDF_NOWORLDMODEL ) ||
 		sscanf( cl_overrideView->string, "%f %f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5] ) != 6 ) {
@@ -418,6 +433,27 @@ static void CL_RenderScene( const refdef_t *fd ) {
 	}
 
 	ref = *fd;
+	if ( fd->rdflags & OAX_RDF_SKYPORTAL ) {
+		if ( haveMainAxis ) {
+			// sky axis = override * mainAxis^T * cgame sky axis
+			AnglesToAxis( v + 3, o );
+			for ( i = 0; i < 3; i++ ) {
+				for ( j = 0; j < 3; j++ ) {
+					t[i][j] = 0;
+					for ( k = 0; k < 3; k++ ) {
+						t[i][j] += mainAxis[k][i] * fd->viewaxis[k][j];
+					}
+				}
+			}
+			for ( i = 0; i < 3; i++ ) {
+				for ( j = 0; j < 3; j++ ) {
+					ref.viewaxis[i][j] = o[i][0] * t[0][j] + o[i][1] * t[1][j] + o[i][2] * t[2][j];
+				}
+			}
+		}
+		re.RenderScene( &ref );
+		return;
+	}
 	VectorCopy( v, ref.vieworg );
 	AnglesToAxis( v + 3, ref.viewaxis );
 	re.RenderScene( &ref );
@@ -644,11 +680,11 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		strncpy( VMA(1), VMA(2), args[3] );
 		return args[1];
 	case CG_SIN:
-		return FloatAsInt( sin( VMF(1) ) );
+		return FloatAsInt( Q_detSin( VMF(1) ) );
 	case CG_COS:
-		return FloatAsInt( cos( VMF(1) ) );
+		return FloatAsInt( Q_detCos( VMF(1) ) );
 	case CG_ATAN2:
-		return FloatAsInt( atan2( VMF(1), VMF(2) ) );
+		return FloatAsInt( Q_detAtan2( VMF(1), VMF(2) ) );
 	case CG_SQRT:
 		return FloatAsInt( sqrt( VMF(1) ) );
 	case CG_FLOOR:
@@ -656,7 +692,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CEIL:
 		return FloatAsInt( ceil( VMF(1) ) );
 	case CG_ACOS:
-		return FloatAsInt( Q_acos( VMF(1) ) );
+		return FloatAsInt( Q_detAcosf( VMF(1) ) );
 
 	case CG_PC_ADD_GLOBAL_DEFINE:
 		return botlib_export->PC_AddGlobalDefine( VMA(1) );
@@ -717,7 +753,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return re.inPVS( VMA(1), VMA(2) );
 
 	default:
-	        assert(0);
+		{
+			intptr_t ret;
+			if ( CL_CgameSystemCallsOAX( args, &ret ) ) {
+				return ret;
+			}
+		}
 		Com_Error( ERR_DROP, "Bad cgame system trap: %ld", (long int) args[0] );
 	}
 	return 0;
@@ -765,6 +806,7 @@ void CL_InitCGame( void ) {
 	// init for this gamestate
 	// use the lastExecutedServerCommand instead of the serverCommandSequence
 	// otherwise server commands sent just before a gamestate are dropped
+	CL_OAXGuiReset();	// oax: the cgame reloads its GUIs
 	VM_Call( cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum );
 
 	// reset any CVAR_CHEAT cvars registered by cgame

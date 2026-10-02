@@ -764,6 +764,24 @@ void *VM_ArgPtr( intptr_t intValue ) {
 	}
 }
 
+/*
+============
+VM_CheckBlock
+
+Errors out if a QVM buffer [vmAddr, vmAddr + size) leaves the VM's data
+segment. The OAX syscalls check every buffer they write through this.
+============
+*/
+void VM_CheckBlock( intptr_t vmAddr, int size, const char *what ) {
+	if ( !currentVM || currentVM->entryPoint ) {
+		return;   // native library: no data segment to check against
+	}
+	if ( size < 0 || ( vmAddr & currentVM->dataMask ) != vmAddr ||
+		( vmAddr + size ) > (intptr_t)currentVM->dataMask + 1 ) {
+		Com_Error( ERR_DROP, "%s: buffer out of VM data range", what );
+	}
+}
+
 void *VM_ExplicitArgPtr( vm_t *vm, intptr_t intValue ) {
 	if ( !intValue ) {
 		return NULL;

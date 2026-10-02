@@ -2232,6 +2232,13 @@ image_t *R_CreateImage2( const char *name, byte *pic, int width, int height, GLe
 	dataFormat = PixelDataFormatFromInternalFormat(internalFormat);
 	dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 
+	// packed depth and stencil (unified lighting's stencil shadows)
+	if (internalFormat == GL_DEPTH24_STENCIL8)
+	{
+		dataFormat = GL_DEPTH_STENCIL;
+		dataType = GL_UNSIGNED_INT_24_8;
+	}
+
 	// Convert image data format for OpenGL ES, data is converted for each mip level
 	if (qglesMajorVersion)
 	{
@@ -2311,6 +2318,10 @@ image_t *R_CreateImage2( const char *name, byte *pic, int width, int height, GLe
 				dataFormat = GL_DEPTH_COMPONENT;
 				dataType = GL_FLOAT;
 				break;
+			case GL_DEPTH24_STENCIL8:
+				if (qglesMajorVersion < 3)
+					goto unsupported;
+				break;
 			default:
 			unsupported:
 				ri.Error( ERR_DROP, "Missing OpenGL ES support for image '%s' with internal format 0x%X\n", name, internalFormat );
@@ -2389,6 +2400,7 @@ image_t *R_CreateImage2( const char *name, byte *pic, int width, int height, GLe
 		case GL_DEPTH_COMPONENT16_ARB:
 		case GL_DEPTH_COMPONENT24_ARB:
 		case GL_DEPTH_COMPONENT32_ARB:
+		case GL_DEPTH24_STENCIL8:
 			// Fix for sampling depth buffer on old nVidia cards.
 			// from http://www.idevgames.com/forums/thread-4141-post-34844.html#pid34844
 			if ( !qglesMajorVersion && !QGL_VERSION_ATLEAST( 3, 0 ) ) {
@@ -2585,9 +2597,17 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 	int picNumMips;
 	long	hash;
 	imgFlags_t checkFlagsTrue, checkFlagsFalse;
+	const char *program = NULL;
 
 	if (!name) {
 		return NULL;
+	}
+
+	// oax: DOOM-3 style image programs (tr_image_program.c)
+	if ( R_OAXIsImageProgram( name ) ) {
+		program = name;
+		name = R_OAXImageProgramKey( program );
+		flags &= ~IMGFLAG_GENNORMALMAP;
 	}
 
 	hash = generateHashValue(name);
@@ -2610,7 +2630,15 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	R_LoadImage( name, &pic, &width, &height, &picFormat, &picNumMips );
+	if ( program ) {
+		if ( !R_OAXLoadImageProgram( program, &pic, &width, &height ) ) {
+			return NULL;
+		}
+		picFormat = GL_RGBA8;
+		picNumMips = 0;
+	} else {
+		R_LoadImage( name, &pic, &width, &height, &picFormat, &picNumMips );
+	}
 	if ( pic == NULL ) {
 		return NULL;
 	}
@@ -2963,7 +2991,8 @@ void R_CreateBuiltinImages( void ) {
 		if (r_drawSunRays->integer)
 			tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
 
-		tr.renderDepthImage  = R_CreateImage("*renderdepth",  NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+		// unified lighting: a stencil buffer for shadow volumes (r_ulightStencil)
+		tr.renderDepthImage  = R_CreateImage("*renderdepth",  NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, R_ULightDepthFormat());
 		tr.textureDepthImage = R_CreateImage("*texturedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
 
 		{

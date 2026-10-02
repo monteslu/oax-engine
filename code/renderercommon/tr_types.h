@@ -119,6 +119,15 @@ typedef struct {
 	float		rotation;
 } refEntity_t;
 
+// oax extension (qcommon/oax.h): what a refEntity carries beyond the stock
+// layout, passed with AddRefEntityToSceneExt. Plain ints and floats, so the
+// cgame QVM can build it.
+typedef struct {
+	int			guiHandle;			// client GUI shown by this entity's "map $gui" stages, 0 = none
+	float		shaderParms[12];	// unified lighting (phase 5)
+	int			lightDefMask;		// unified lighting (phase 5)
+} refEntityExt_t;
+
 
 #define	MAX_RENDER_STRINGS			8
 #define	MAX_RENDER_STRING_LENGTH	32

@@ -493,3 +493,13 @@ void SV_Netchan_Transmit( client_t *client, msg_t *msg);
 int SV_Netchan_TransmitNextFragment(client_t *client);
 qboolean SV_Netchan_Process( client_t *client, msg_t *msg );
 void SV_Netchan_FreeQueue(client_t *client);
+
+// sv_game_oax.c
+qboolean SV_GameSystemCallsOAX( intptr_t *args, intptr_t *ret );
+void SV_OAXInit( void );
+void SV_OAXScriptInit( void );
+
+// sv_gui_oax.c
+void SV_OAXGuiInit( void );
+void SV_OAXGuiReset( void );
+void SV_OAXRegisterGameHandler( qboolean ( *h )( intptr_t *args, intptr_t *ret ) );

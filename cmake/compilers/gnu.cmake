@@ -11,10 +11,15 @@ set(ASM_SOURCES
     ${SOURCE_DIR}/asm/snapvector.c
 )
 
-add_compile_options(-Wall -Wimplicit -Wshadow
-    -Wstrict-prototypes -Wformat=2  -Wformat-security
+add_compile_options(-Wall -Wshadow
+    -Wformat=2  -Wformat-security
     -Wstrict-aliasing=2 -Wmissing-format-attribute
-    -Wdisabled-optimization -Werror-implicit-function-declaration)
+    -Wdisabled-optimization)
+
+# C only (the in-world GUI module, code/idgui, is C++)
+add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wimplicit>
+    $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes>
+    $<$<COMPILE_LANGUAGE:C>:-Werror-implicit-function-declaration>)
 
 add_compile_options(-Wno-format-zero-length -Wno-format-nonliteral)
 

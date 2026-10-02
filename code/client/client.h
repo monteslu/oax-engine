@@ -665,3 +665,16 @@ qboolean CL_VideoRecording( void );
 //
 void CL_WriteDemoMessage ( msg_t *msg, int headerBytes );
 
+// cl_cgame_oax.c
+qboolean CL_CgameSystemCallsOAX( intptr_t *args, intptr_t *ret );
+void CL_OAXInit( void );
+
+// cl_gui_oax.c
+void CL_OAXGuiInit( void );
+void CL_OAXGuiReset( void );
+void CL_OAXRegisterCgameHandler( qboolean ( *h )( intptr_t *args, intptr_t *ret ) );
+
+// cl_cgame_ulight.c
+void CL_ULightInit( void );
+void CL_OAXRenderInit( void );
+void CL_OAXRendererFeatures( void );

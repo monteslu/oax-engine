@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
+#include "../qcommon/oax.h"
 
 char *svc_strings[256] = {
 	"svc_bad",
@@ -305,6 +306,7 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	// copy to the current good spot
 	cl.snap = newSnap;
 	cl.snap.ping = 999;
+	Com_DebugSetInt( "cl_snap_entities", cl.snap.numEntities );	// oax: tests (area portal culling)
 	// calculate ping time
 	for ( i = 0 ; i < PACKET_BACKUP ; i++ ) {
 		packetNum = ( clc.netchan.outgoingSequence - 1 - i ) & PACKET_MASK;

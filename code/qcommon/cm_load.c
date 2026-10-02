@@ -22,6 +22,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cmodel.c -- model loading
 
 #include "cm_local.h"
+#ifndef BSPC
+#include "oax.h"
+#endif
 
 #ifdef BSPC
 
@@ -595,6 +598,9 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	// free old stuff
 	Com_Memset( &cm, 0, sizeof( cm ) );
 	CM_ClearLevelPatches();
+#ifndef BSPC
+	CM_ClearGuiSurfaces();
+#endif
 
 	if ( !name[0] ) {
 		cm.numLeafs = 1;
@@ -647,6 +653,11 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	CMod_LoadVisibility( &header.lumps[LUMP_VISIBILITY] );
 	CMod_LoadPatches( &header.lumps[LUMP_SURFACES], &header.lumps[LUMP_DRAWVERTS] );
 
+#ifndef BSPC
+	BSPX_SetCurrentMap( buf.v, length );
+	CM_LoadGuiSurfaces( cmod_base, &header );	// oax in-world GUIs
+#endif
+
 	// we are NOT freeing the file, because it is cached for the ref
 	FS_FreeFile (buf.v);
 
@@ -668,6 +679,9 @@ CM_ClearMap
 void CM_ClearMap( void ) {
 	Com_Memset( &cm, 0, sizeof( cm ) );
 	CM_ClearLevelPatches();
+#ifndef BSPC
+	CM_ClearGuiSurfaces();
+#endif
 }
 
 /*
