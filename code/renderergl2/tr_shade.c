@@ -672,6 +672,14 @@ static void ComputeShaderColors( shaderStage_t *pStage, vec4_t baseColor, vec4_t
 			}
 			break;
 		case CGEN_IDENTITY:
+			// oax: a fullbright material in a unified-lighting map shows its
+			// texture colour: identityLight here, times the overbright the
+			// frame is scaled by at the end (tr_ulight.c R_ULightShaderIsFullbright)
+			if ( tr.world && R_ULightLightingModel() == ULIGHT_UNIFIED && tess.shader && R_ULightShaderIsFullbright( tess.shader ) ) {
+				baseColor[0] = baseColor[1] = baseColor[2] = tr.identityLight;
+				break;
+			}
+			// fall through
 		case CGEN_LIGHTING_DIFFUSE:
 			baseColor[0] =
 			baseColor[1] =
@@ -738,6 +746,12 @@ static void ComputeShaderColors( shaderStage_t *pStage, vec4_t baseColor, vec4_t
 			break;
 	}
 
+	// oax: oaxTint multiplies the stage colour (docs/materials.md)
+	if ( pStage->oaxTinted )
+	{
+		baseColor[0] *= pStage->oaxTint[0]; baseColor[1] *= pStage->oaxTint[1]; baseColor[2] *= pStage->oaxTint[2];
+		vertColor[0] *= pStage->oaxTint[0]; vertColor[1] *= pStage->oaxTint[1]; vertColor[2] *= pStage->oaxTint[2];
+	}
 }
 
 
@@ -1153,6 +1167,8 @@ static unsigned int RB_CalcShaderVertexAttribs( shaderCommands_t *input )
 	return vertexAttribs;
 }
 
+static const vec4_t vec4_origin_oax = { 0, 0, 0, 0 };
+
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
 	int stage;
@@ -1279,6 +1295,16 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 		GLSL_SetUniformMat4(sp, UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
 		GLSL_SetUniformVec3(sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.or.origin);
 		GLSL_SetUniformVec3(sp, UNIFORM_LOCALVIEWORIGIN, backEnd.or.viewOrigin);
+
+		// oax: detailFade (docs/materials.md); off for every other stage
+		if ( pStage->oaxDetailFade && !backEnd.depthFill )
+		{
+			GLSL_SetUniformVec4(sp, UNIFORM_OAXDETAILFADE, pStage->oaxDetailFadeParms);
+		}
+		else
+		{
+			GLSL_SetUniformVec4(sp, UNIFORM_OAXDETAILFADE, vec4_origin_oax);
+		}
 
 		GLSL_SetUniformFloat(sp, UNIFORM_VERTEXLERP, glState.vertexAttribsInterpolation);
 
@@ -1873,7 +1899,17 @@ void RB_EndSurface( void ) {
 
 	//
 	// call off to shader specific tess end function
+	// (the oax surface id pass draws every surface with its id program)
 	//
+	if ( backEnd.oaxIdFill ) {
+		RB_OAXSurfIdIterate();
+		tess.numIndexes = 0;
+		tess.numVertexes = 0;
+		tess.firstIndex = 0;
+		tess.useCacheVao = qfalse;
+		tess.useInternalVao = qfalse;
+		return;
+	}
 	tess.currentStageIteratorFunc();
 
 	//
@@ -1893,4 +1929,177 @@ void RB_EndSurface( void ) {
 	tess.useInternalVao = qfalse;
 
 	GLimp_LogComment( "----------\n" );
+}
+
+/*
+=================
+RB_OAXSurfIdIterate
+
+The surface id pass (tr_oax_surfid.c): draws tess with the id program,
+depth tested and written, no blending. The stage that carries the shader's
+alpha test (else the first stage) supplies the texture, texture matrix and
+colours the test needs, so masked surfaces keep their holes.
+=================
+*/
+void RB_OAXSurfIdIterate( void )
+{
+	shaderCommands_t *input = &tess;
+	shaderStage_t *pStage = NULL;
+	shaderProgram_t *sp;
+	unsigned int vertexAttribs;
+	int attribs = 0, stage, atest = 0, deformGen;
+	vec5_t deformParams;
+	GLint idLoc = -1;
+	int id = backEnd.oaxIdCurrent;
+
+	if ( !input->numVertexes || !input->numIndexes || id <= 0 )
+		return;
+
+	if ( tess.useInternalVao )
+		RB_DeformTessGeometry();
+
+	vertexAttribs = RB_CalcShaderVertexAttribs( input ) | ATTR_POSITION;
+
+	if ( tess.useInternalVao )
+		RB_UpdateTessVao( vertexAttribs );
+
+	for ( stage = 0; stage < MAX_SHADER_STAGES && input->xstages[stage]; stage++ )
+	{
+		if ( input->xstages[stage]->stateBits & GLS_ATEST_BITS )
+		{
+			pStage = input->xstages[stage];
+			break;
+		}
+	}
+	if ( !pStage )
+		pStage = input->xstages[0];
+	if ( pStage )
+		atest = pStage->stateBits & GLS_ATEST_BITS;
+
+	ComputeDeformValues( &deformGen, deformParams );
+	if ( input->shader->numDeforms && !ShaderRequiresCPUDeforms( input->shader ) )
+		attribs |= GENERICDEF_USE_DEFORM_VERTEXES;
+	if ( glState.vertexAnimation )
+		attribs |= GENERICDEF_USE_VERTEX_ANIMATION;
+	else if ( glState.boneAnimation )
+		attribs |= GENERICDEF_USE_BONE_ANIMATION;
+	if ( atest )
+	{
+		attribs |= GENERICDEF_USE_TCGEN_AND_TCMOD;
+		if ( pStage->rgbGen == CGEN_LIGHTING_DIFFUSE || pStage->alphaGen == AGEN_LIGHTING_SPECULAR || pStage->alphaGen == AGEN_PORTAL )
+			attribs |= GENERICDEF_USE_RGBAGEN;
+	}
+
+	sp = RB_OAXSurfIdProgram( attribs, &idLoc );
+	if ( !sp )
+		return;
+
+	// face culling and polygon offset as the real draw
+	if ( input->shader->cullType == CT_TWO_SIDED )
+	{
+		GL_Cull( CT_TWO_SIDED );
+	}
+	else
+	{
+		qboolean cullFront = ( input->shader->cullType == CT_FRONT_SIDED );
+
+		if ( backEnd.viewParms.isMirror )
+			cullFront = !cullFront;
+		if ( backEnd.currentEntity && backEnd.currentEntity->mirrored )
+			cullFront = !cullFront;
+		GL_Cull( cullFront ? CT_FRONT_SIDED : CT_BACK_SIDED );
+	}
+	if ( input->shader->polygonOffset )
+		qglEnable( GL_POLYGON_OFFSET_FILL );
+
+	GLSL_BindProgram( sp );
+	GLSL_SetUniformMat4( sp, UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection );
+	GLSL_SetUniformVec3( sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.or.origin );
+	GLSL_SetUniformVec3( sp, UNIFORM_LOCALVIEWORIGIN, backEnd.or.viewOrigin );
+	GLSL_SetUniformFloat( sp, UNIFORM_VERTEXLERP, glState.vertexAttribsInterpolation );
+	if ( glState.boneAnimation )
+		GLSL_SetUniformMat4BoneMatrix( sp, UNIFORM_BONEMATRIX, glState.boneMatrix, glState.boneAnimation );
+	GLSL_SetUniformInt( sp, UNIFORM_DEFORMGEN, deformGen );
+	if ( deformGen != DGEN_NONE )
+	{
+		GLSL_SetUniformFloat5( sp, UNIFORM_DEFORMPARAMS, deformParams );
+		GLSL_SetUniformFloat( sp, UNIFORM_TIME, tess.shaderTime );
+	}
+	GLSL_SetUniformMat4( sp, UNIFORM_MODELMATRIX, backEnd.or.transformMatrix );
+
+	if ( atest )
+	{
+		vec4_t texMatrix[8], baseColor, vertColor;
+
+		ComputeShaderColors( pStage, baseColor, vertColor, pStage->stateBits );
+		GLSL_SetUniformVec4( sp, UNIFORM_BASECOLOR, baseColor );
+		GLSL_SetUniformVec4( sp, UNIFORM_VERTCOLOR, vertColor );
+		if ( pStage->rgbGen == CGEN_LIGHTING_DIFFUSE )
+		{
+			vec4_t vec;
+
+			VectorScale( backEnd.currentEntity->ambientLight, 1.0f / 255.0f, vec );
+			GLSL_SetUniformVec3( sp, UNIFORM_AMBIENTLIGHT, vec );
+			VectorScale( backEnd.currentEntity->directedLight, 1.0f / 255.0f, vec );
+			GLSL_SetUniformVec3( sp, UNIFORM_DIRECTEDLIGHT, vec );
+			VectorCopy( backEnd.currentEntity->lightDir, vec );
+			vec[3] = 0.0f;
+			GLSL_SetUniformVec4( sp, UNIFORM_LIGHTORIGIN, vec );
+			GLSL_SetUniformVec3( sp, UNIFORM_MODELLIGHTDIR, backEnd.currentEntity->modelLightDir );
+			GLSL_SetUniformFloat( sp, UNIFORM_LIGHTRADIUS, 0.0f );
+		}
+		if ( pStage->alphaGen == AGEN_PORTAL )
+			GLSL_SetUniformFloat( sp, UNIFORM_PORTALRANGE, tess.shader->portalRange );
+		GLSL_SetUniformInt( sp, UNIFORM_COLORGEN, pStage->rgbGen );
+		GLSL_SetUniformInt( sp, UNIFORM_ALPHAGEN, pStage->alphaGen );
+
+		ComputeTexMods( pStage, TB_DIFFUSEMAP, texMatrix );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX0, texMatrix[0] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX1, texMatrix[1] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX2, texMatrix[2] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX3, texMatrix[3] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX4, texMatrix[4] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX5, texMatrix[5] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX6, texMatrix[6] );
+		GLSL_SetUniformVec4( sp, UNIFORM_DIFFUSETEXMATRIX7, texMatrix[7] );
+		GLSL_SetUniformInt( sp, UNIFORM_TCGEN0, pStage->bundle[0].tcGen );
+		if ( pStage->bundle[0].tcGen == TCGEN_VECTOR )
+		{
+			GLSL_SetUniformVec3( sp, UNIFORM_TCGEN0VECTOR0, pStage->bundle[0].tcGenVectors[0] );
+			GLSL_SetUniformVec3( sp, UNIFORM_TCGEN0VECTOR1, pStage->bundle[0].tcGenVectors[1] );
+		}
+
+		if ( atest == GLS_ATEST_GT_0 )
+			GLSL_SetUniformInt( sp, UNIFORM_ALPHATEST, 1 );
+		else if ( atest == GLS_ATEST_LT_80 )
+			GLSL_SetUniformInt( sp, UNIFORM_ALPHATEST, 2 );
+		else
+			GLSL_SetUniformInt( sp, UNIFORM_ALPHATEST, 3 );
+
+		if ( pStage->bundle[TB_COLORMAP].image[0] )
+			R_BindAnimatedImageToTMU( &pStage->bundle[TB_COLORMAP], TB_DIFFUSEMAP );
+		else
+			GL_BindToTMU( tr.whiteImage, TB_DIFFUSEMAP );
+	}
+	else
+	{
+		vec4_t one = { 1.0f, 1.0f, 1.0f, 1.0f }, zero = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+		GLSL_SetUniformVec4( sp, UNIFORM_BASECOLOR, one );
+		GLSL_SetUniformVec4( sp, UNIFORM_VERTCOLOR, zero );
+		GLSL_SetUniformInt( sp, UNIFORM_COLORGEN, CGEN_IDENTITY );
+		GLSL_SetUniformInt( sp, UNIFORM_ALPHAGEN, AGEN_IDENTITY );
+		GLSL_SetUniformInt( sp, UNIFORM_TCGEN0, TCGEN_TEXTURE );
+		GLSL_SetUniformInt( sp, UNIFORM_ALPHATEST, 0 );
+		GL_BindToTMU( tr.whiteImage, TB_DIFFUSEMAP );
+	}
+
+	if ( idLoc >= 0 )
+		qglUniform4f( idLoc, ( id & 255 ) / 255.0f, ( ( id >> 8 ) & 255 ) / 255.0f, ( ( id >> 16 ) & 255 ) / 255.0f, 1.0f );
+
+	GL_State( GLS_DEPTHMASK_TRUE );
+	R_DrawElements( input->numIndexes, input->firstIndex );
+
+	if ( input->shader->polygonOffset )
+		qglDisable( GL_POLYGON_OFFSET_FILL );
 }

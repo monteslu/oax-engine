@@ -48,6 +48,7 @@ static int       padStepFrame;  // frames played in the current step
 static qboolean  padWaiting;    // waiting for the start phase
 static char      padOnDone[MAX_STRING_CHARS];  // console command run when the script ends
 static int       padLastCmdTime;
+static int       padLastSvTime;
 static qboolean  padClockHeld;
 static qboolean  padAligned;    // clock aligned, the idle command before the start is out
 int              cl_padScriptStartTime = -1;   // command time the script started at
@@ -55,6 +56,8 @@ int              cl_padScriptStartTime = -1;   // command time the script starte
 static fileHandle_t traceFile;
 
 const playerState_t *SV_TestPlayerState( void );
+int SV_TestLevelTime( void );
+void SV_TestSetResidual( int residual );
 
 // The script starts on the client's command clock (cl.serverTime) crossing a
 // multiple of this, and the time it started is recorded: two builds' clocks
@@ -156,6 +159,7 @@ static void CL_PadScript_f( void ) {
 	padAligned = qfalse;
 	padClockHeld = qfalse;
 	padLastCmdTime = cl.serverTime;
+	padLastSvTime = SV_TestLevelTime();
 	cl_padScriptStartTime = -1;
 	Com_Printf( "padscript: %s, %d steps\n", name, numPadSteps );
 }
@@ -194,9 +198,46 @@ qboolean CL_PadScriptFrame( int eventTime ) {
 			Com_sprintf( row, sizeof( row ), "# start %d\n", cl.serverTime );
 			FS_Write( row, (int)strlen( row ), traceFile );
 		}
+	} else if ( padWaiting && SV_TestLevelTime() >= 0 ) {
+		// A local server (every test): lock the client to the server itself.
+		// Start on a server frame whose time is a multiple of 400 ms (both 16
+		// and 50 divide it), put the command clock on that server time plus
+		// one client frame, and set the server's frame accumulator to a fixed
+		// value. From then on every build sends the same command times AND
+		// runs its 50 ms server frames at the same command times, so
+		// anything on the server's own clock (trigger_hurt timers, movers,
+		// vehicle ticks, level-time events) lines up too. Aligning only the
+		// client clock left the server phase to each build's startup history.
+		// padscript_minstart: the earliest level time to start at, so builds
+		// that reach the map at different times still start the script at the
+		// same absolute level time (events on the level clock, such as item
+		// respawns and hurt timers, then land at the same script time too)
+		int sv = SV_TestLevelTime();
+		int minStart = Cvar_VariableIntegerValue( "padscript_minstart" );
+
+		if ( clc.state == CA_ACTIVE && sv != padLastSvTime && sv % PADSCRIPT_PHASE_MSEC == 0 && sv >= minStart ) {
+			int target = sv + PADSCRIPT_ALIGN_MSEC;
+			int base = cls.realtime + cl.serverTimeDelta;
+
+			if ( target >= cl.oldServerTime ) {
+				cl.serverTimeDelta += target - base;
+				cl.serverTime = cl.oldServerTime = target;
+				SV_TestSetResidual( 0 );
+				padClockHeld = qtrue;
+				padAligned = qtrue;
+				IN_GamepadFrame( &idle, eventTime, threshold->value, analog->integer ? qtrue : qfalse );
+				padLastSvTime = sv;
+				padLastCmdTime = cl.serverTime;
+				return qtrue;
+			}
+		}
+		padLastSvTime = sv;
+		padLastCmdTime = cl.serverTime;
+		return qfalse;
 	} else if ( padWaiting ) {
 		int t = cl.serverTime;
 
+		// no local server (a client of a remote one): align the client clock only
 		if ( clc.state == CA_ACTIVE && t / PADSCRIPT_PHASE_MSEC != padLastCmdTime / PADSCRIPT_PHASE_MSEC ) {
 			// Put the command clock on a whole frame, so every build issues
 			// its commands at the same times (pmove_fixed steps on 8 ms

@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 phys_bsp.c: static Box3D collision from the loaded map, and height fields.
 
 Brushes become convex hulls: each side's plane is clipped by every other
@@ -448,6 +467,68 @@ static int Phys_AddSurfaces( physWorld_t *w, physBsp_t *b, b3BodyId body, int fi
 
 /*
 ==================
+Phys_AddCollisionMeshes
+
+The map's OAX_COLLISION triangles (cm_oaxsurf.c) as one mesh: a surface
+world's collision for sources the hull's brushes cannot express.
+==================
+*/
+static int Phys_AddCollisionMeshes( physWorld_t *w, b3BodyId body, int contentsMask, const b3ShapeDef *sd ) {
+	physMeshBuild_t m;
+	b3MeshDef md;
+	b3MeshData *mesh;
+	int i, k, n = CM_OAXNumCollisionTris();
+
+	if ( !n ) {
+		return 0;
+	}
+	Com_Memset( &m, 0, sizeof( m ) );
+	for ( i = 0; i < n; i++ ) {
+		float v[3][3], e1[3], e2[3], fn[3];
+		int base;
+
+		if ( !( CM_OAXCollisionTri( i, v ) & contentsMask ) ) {
+			continue;
+		}
+		Phys_MeshGrow( &m, 3, 3 );
+		base = m.numV;
+		for ( k = 0; k < 3; k++ ) {
+			m.v[m.numV].x = v[k][0];
+			m.v[m.numV].y = v[k][1];
+			m.v[m.numV].z = v[k][2];
+			m.numV++;
+		}
+		VectorSubtract( v[1], v[0], e1 );
+		VectorSubtract( v[2], v[0], e2 );
+		CrossProduct( e1, e2, fn );
+		Phys_MeshTri( &m, base, base + 1, base + 2, fn );
+	}
+	if ( m.numI < 3 ) {
+		if ( m.v ) Z_Free( m.v );
+		if ( m.idx ) Z_Free( m.idx );
+		return 0;
+	}
+	Com_Memset( &md, 0, sizeof( md ) );
+	md.vertices = m.v;
+	md.indices = m.idx;
+	md.vertexCount = m.numV;
+	md.triangleCount = m.numI / 3;
+	md.weldVertices = true;
+	md.weldTolerance = PHYS_HULL_EPSILON;
+	md.identifyEdges = true;
+	mesh = b3CreateMesh( &md, NULL, 0 );
+	Z_Free( m.v );
+	Z_Free( m.idx );
+	if ( !mesh ) {
+		return 0;
+	}
+	Phys_WorldOwn( w, mesh, 0 );
+	b3CreateMeshShape( body, sd, mesh, b3Vec3_one );
+	return 1;
+}
+
+/*
+==================
 Phys_AddBSP
 
 The world model's brushes (contents & contentsMask) as hulls on one static
@@ -480,6 +561,8 @@ int Phys_AddBSP( physOwner_t owner, int world, int contentsMask, int flags, cons
 	if ( flags & ( PHYS_BSP_PATCHES | PHYS_BSP_TRISOUPS ) ) {
 		meshes = Phys_AddSurfaces( w, &b, body, b.models[0].firstSurface, b.models[0].numSurfaces, contentsMask, flags, &sd );
 	}
+	// oax collision meshes (OAX_COLLISION) always: they are the map's solid
+	meshes += Phys_AddCollisionMeshes( w, body, contentsMask, &sd );
 	FS_FreeFile( b.buf );
 	handle = Phys_BodyRegister( owner, world, body, material ? material->userData : 0 );
 	Com_DPrintf( "physics: %s: %d brush hulls, %d meshes for world %d\n", cm.name, hulls, meshes, world );

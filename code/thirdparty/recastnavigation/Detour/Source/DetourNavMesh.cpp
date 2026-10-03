@@ -521,6 +521,78 @@ void dtNavMesh::connectExtOffMeshLinks(dtMeshTile* tile, dtMeshTile* target, int
 
 }
 
+// oax patch: far off-mesh landings (see DetourNavMesh.h). The body is
+// connectExtOffMeshLinks for one connection, without the side test.
+int dtNavMesh::connectFarOffMeshLinks()
+{
+	int connected = 0;
+	for (int t = 0; t < m_maxTiles; ++t)
+	{
+		dtMeshTile* target = &m_tiles[t];
+		if (!target->header || target->header->offMeshConCount <= 0)
+			continue;
+		for (int i = 0; i < target->header->offMeshConCount; ++i)
+		{
+			dtOffMeshConnection* targetCon = &target->offMeshCons[i];
+			if (targetCon->side == 0xff)
+				continue;
+			dtPoly* targetPoly = &target->polys[targetCon->poly];
+			if (targetPoly->firstLink == DT_NULL_LINK)
+				continue;
+			const float* p = &targetCon->pos[3];
+			int lx, ly;
+			calcTileLoc(p, &lx, &ly);
+			if (dtAbs(lx - target->header->x) <= 1 && dtAbs(ly - target->header->y) <= 1)
+				continue;
+			dtMeshTile* tiles[32];
+			const int ntiles = getTilesAt(lx, ly, tiles, 32);
+			for (int j = 0; j < ntiles; ++j)
+			{
+				dtMeshTile* tile = tiles[j];
+				const float halfExtents[3] = { targetCon->rad, target->header->walkableClimb, targetCon->rad };
+				float nearestPt[3];
+				dtPolyRef ref = findNearestPolyInTile(tile, p, halfExtents, nearestPt);
+				if (!ref)
+					continue;
+				if (dtSqr(nearestPt[0]-p[0])+dtSqr(nearestPt[2]-p[2]) > dtSqr(targetCon->rad))
+					continue;
+				float* v = &target->verts[targetPoly->verts[1]*3];
+				dtVcopy(v, nearestPt);
+				unsigned int idx = allocLink(target);
+				if (idx != DT_NULL_LINK)
+				{
+					dtLink* link = &target->links[idx];
+					link->ref = ref;
+					link->edge = (unsigned char)1;
+					link->side = 0xff;
+					link->bmin = link->bmax = 0;
+					link->next = targetPoly->firstLink;
+					targetPoly->firstLink = idx;
+					connected++;
+				}
+				if (targetCon->flags & DT_OFFMESH_CON_BIDIR)
+				{
+					unsigned int tidx = allocLink(tile);
+					if (tidx != DT_NULL_LINK)
+					{
+						const unsigned short landPolyIdx = (unsigned short)decodePolyIdPoly(ref);
+						dtPoly* landPoly = &tile->polys[landPolyIdx];
+						dtLink* link = &tile->links[tidx];
+						link->ref = getPolyRefBase(target) | (dtPolyRef)(targetCon->poly);
+						link->edge = 0xff;
+						link->side = 0xff;
+						link->bmin = link->bmax = 0;
+						link->next = landPoly->firstLink;
+						landPoly->firstLink = tidx;
+					}
+				}
+				break;
+			}
+		}
+	}
+	return connected;
+}
+
 void dtNavMesh::connectIntLinks(dtMeshTile* tile)
 {
 	if (!tile) return;

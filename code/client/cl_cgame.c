@@ -428,13 +428,18 @@ static void CL_RenderScene( const refdef_t *fd ) {
 		haveMainAxis = qtrue;
 	}
 
+	ref = *fd;
+	CL_OAXSceneHooks( &ref );
+
 	if ( !cl_overrideView->string[0] || ( fd->rdflags & RDF_NOWORLDMODEL ) ||
 		sscanf( cl_overrideView->string, "%f %f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5] ) != 6 ) {
-		re.RenderScene( fd );
+		if ( !( fd->rdflags & ( RDF_NOWORLDMODEL | OAX_RDF_SKYPORTAL ) ) ) {
+			CL_OAXViewReadback( &ref );
+		}
+		re.RenderScene( &ref );
 		return;
 	}
 
-	ref = *fd;
 	if ( fd->rdflags & OAX_RDF_SKYPORTAL ) {
 		if ( haveMainAxis ) {
 			// sky axis = override * mainAxis^T * cgame sky axis
@@ -458,6 +463,7 @@ static void CL_RenderScene( const refdef_t *fd ) {
 	}
 	VectorCopy( v, ref.vieworg );
 	AnglesToAxis( v + 3, ref.viewaxis );
+	CL_OAXViewReadback( &ref );
 	re.RenderScene( &ref );
 }
 

@@ -15,6 +15,11 @@
 import { MapFile, box } from '../mapwriter.mjs';
 import { tga, bricks, tiles, normalMap, image, gobo } from '../lib/texgen.mjs';
 
+// Light values are doubled (x2): the map was authored when unified light drew
+// at 2x on screen; since the frame contract (docs/lights.md: light 1 is the
+// texture at 1x) the same frame needs twice the light.
+const x2 = (c) => c.map((v) => v * 2);
+
 const T = 'textures/oax_unified';
 const M = 'oax_unified'; // map texture names omit the textures/ prefix
 const WALL = `${M}/brick`, FLOOR = `${M}/floor`, CEIL = `${M}/ceil`;
@@ -144,29 +149,29 @@ export function build() {
   const map = new MapFile({
     message: 'oax test: unified lighting',
     oax_lighting: 'unified',
-    oax_ambient: '0.035 0.045 0.11',
+    oax_ambient: x2([0.035, 0.045, 0.11]).join(' '),
     oax_shadowmode: 'maps',
     _keepLights: 1,
   });
   geometry(map);
 
   // lights. Point lights use D3 keys; light_radius bounds the light.
-  map.entity('light', { origin: [-880, 300, 240], light_radius: [1000, 1000, 800], _color: [1.6, 1.5, 1.3] });
+  map.entity('light', { origin: [-880, 300, 240], light_radius: [1000, 1000, 800], _color: x2([1.6, 1.5, 1.3]) });
   map.entity('light', {
     origin: [-1250, -250, 270], light_target: [0, 0, -270], light_end: [0, 0, -330], light_right: [140, 0, 0], light_up: [0, 140, 0],
-    texture: 'lights/oax_gobo', _color: [1, 1, 1],
+    texture: 'lights/oax_gobo', _color: x2([1, 1, 1]),
   });
   // room B: a light bound to a bobbing mover, and a flickering light
   map.entity('func_bobbing', { targetname: 'bobber', spawnflags: 1, height: 160, speed: 6 }, [
     box([-8, -8, 192], [8, 8, 208], 'common/nodraw'),
   ]);
-  map.entity('light', { origin: [0, 0, 200], light_radius: [260, 260, 260], _color: [0.4, 0.9, 0.5], bind: 'bobber' });
-  map.entity('light', { origin: [0, 330, 220], light_radius: [240, 240, 240], _color: [1, 0.6, 0.3], texture: 'lights/oax_flicker' });
+  map.entity('light', { origin: [0, 0, 200], light_radius: [260, 260, 260], _color: x2([0.4, 0.9, 0.5]), bind: 'bobber' });
+  map.entity('light', { origin: [0, 330, 220], light_radius: [240, 240, 240], _color: x2([1, 0.6, 0.3]), texture: 'lights/oax_flicker' });
   // room C (kept inside room C so door BC culls it by area)
-  map.entity('light', { origin: [830, 0, 200], light_radius: [420, 360, 520], _color: [1.2, 1.25, 1.5] });
+  map.entity('light', { origin: [830, 0, 200], light_radius: [420, 360, 520], _color: x2([1.2, 1.25, 1.5]) });
   map.entity('light', {
     origin: [1250, 250, 270], light_target: [0, 0, -270], light_end: [0, 0, -330], light_right: [110, 0, 0], light_up: [0, 110, 0],
-    texture: 'lights/oax_gobo', _color: [1, 0.5, 0.5],
+    texture: 'lights/oax_gobo', _color: x2([1, 0.5, 0.5]),
   });
 
   return {

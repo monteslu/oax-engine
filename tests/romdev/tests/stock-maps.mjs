@@ -20,6 +20,7 @@ import { CLEAN_VIEW, loadScene, placeCamera, spawns } from '../lib/scenes.mjs';
 import { findBaseoa } from '../lib/native.mjs';
 import { execFileSync } from 'node:child_process';
 
+export const timeoutSec = 2400;
 export const name = 'stock-maps';
 export const slow = true;
 

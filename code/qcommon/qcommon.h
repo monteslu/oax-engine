@@ -700,6 +700,7 @@ int		FS_Seek( fileHandle_t f, long offset, int origin );
 // seek on a file
 
 qboolean FS_FilenameCompare( const char *s1, const char *s2 );
+void FS_OAXSetMapPack( const char *bspPath );	// oax: the loaded map's own package wins (files.c)
 
 const char *FS_LoadedPakNames( void );
 const char *FS_LoadedPakChecksums( void );

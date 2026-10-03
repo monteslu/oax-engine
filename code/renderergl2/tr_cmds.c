@@ -344,6 +344,9 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	tr.frameCount++;
 	tr.frameSceneNum = 0;
 
+	// oax: the surface id programs, the first time a test asks for ids
+	R_OAXSurfIdBeginFrame();
+
 	//
 	// do overdraw measurement
 	//

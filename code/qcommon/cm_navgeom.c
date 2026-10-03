@@ -1,13 +1,34 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 cm_navgeom.c: the world's collision geometry as triangles, for the
 navigation mesh (server/sv_nav_oax.c).
 
-- Every solid or playerclip brush of the world model (not movers: their
-  brushes belong to inline models) as its face polygons, cut from the
-  brush planes with cm_polylib. Sky faces are left out.
+- Every solid or playerclip brush of the world model (not movers,
+  triggers or zones: their brushes belong to inline models) as its face
+  polygons, cut from the brush planes with cm_polylib. Sky faces are left
+  out.
 - Every terrain triangle (cm_terrain.c / oax_terrain.h).
 - Every collidable foliage trunk as a box.
+- Every OAX_COLLISION triangle (cm_oaxsurf.c), as it faces.
 
 Brush faces buried in terrain (a floor under the terrain, say) are left
 out, so the navmesh does not grow walkable area under the ground.
@@ -28,6 +49,9 @@ build.
 typedef struct {
 	oaxNavGeometry_t	*g;
 	int					maxVerts, maxTris;
+	int					maxVolumes, maxPlanes;
+	int					closedFaces;
+	int					buriedBrushes;
 } navBuild_t;
 
 static void Grow( navBuild_t *b, int verts, int tris ) {
@@ -101,9 +125,91 @@ static qboolean UnderTerrain( int numPoints, vec3_t *p ) {
 	return ( CM_OAXTerrainPointContents( c ) & CONTENTS_SOLID ) != 0;
 }
 
+/*
+Every world brush is also handed over as a convex volume: the navmesh
+builder fills each column's span through it, so faces buried inside other
+brushes (overlapping brushes, stacked convex cells of an imported hull)
+merge into solid instead of standing as floors in mid-air. A plane caps
+walkably when its face is walkable (normal z >= 0.7, not sky, not under
+terrain).
+*/
+static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top ) {
+	oaxNavGeometry_t *g = b->g;
+	int i;
+
+	if ( g->numVolumes + 1 > b->maxVolumes ) {
+		b->maxVolumes = ( g->numVolumes + 1 ) * 2;
+		g->volFirstPlane = realloc( g->volFirstPlane, b->maxVolumes * sizeof( int ) );
+		g->volNumPlanes = realloc( g->volNumPlanes, b->maxVolumes * sizeof( int ) );
+		g->volBounds = realloc( g->volBounds, b->maxVolumes * 6 * sizeof( float ) );
+	}
+	if ( g->numPlanes + brush->numsides > b->maxPlanes ) {
+		b->maxPlanes = ( g->numPlanes + brush->numsides ) * 2;
+		g->planes = realloc( g->planes, b->maxPlanes * 4 * sizeof( float ) );
+		g->planeTop = realloc( g->planeTop, b->maxPlanes );
+	}
+	if ( !g->volFirstPlane || !g->volNumPlanes || !g->volBounds || !g->planes || !g->planeTop ) {
+		Com_Error( ERR_DROP, "CM_OAXNavGeometry: out of memory" );
+	}
+	g->volFirstPlane[g->numVolumes] = g->numPlanes;
+	g->volNumPlanes[g->numVolumes] = brush->numsides;
+	for ( i = 0; i < 3; i++ ) {
+		g->volBounds[g->numVolumes * 6 + i] = brush->bounds[0][i];
+		g->volBounds[g->numVolumes * 6 + 3 + i] = brush->bounds[1][i];
+	}
+	for ( i = 0; i < brush->numsides; i++ ) {
+		const cplane_t *pl = brush->sides[i].plane;
+		float *q = &g->planes[g->numPlanes * 4];
+		q[0] = pl->normal[0];
+		q[1] = pl->normal[1];
+		q[2] = pl->normal[2];
+		q[3] = pl->dist;
+		g->planeTop[g->numPlanes] = top[i];
+		g->numPlanes++;
+	}
+	g->numVolumes++;
+}
+
+/* is there open air (a leaf with a cluster) just in front of the face: at
+   its centre or near any corner, a unit out along its normal? */
+static qboolean FaceOpen( const winding_t *w, const vec3_t normal ) {
+	vec3_t c, q;
+	int i;
+
+	VectorClear( c );
+	for ( i = 0; i < w->numpoints; i++ ) {
+		VectorAdd( c, w->p[i], c );
+	}
+	VectorScale( c, 1.0f / w->numpoints, c );
+	VectorMA( c, 1.0f, normal, q );
+	if ( cm.leafs[CM_PointLeafnum( q )].cluster >= 0 ) {
+		return qtrue;
+	}
+	for ( i = 0; i < w->numpoints; i++ ) {
+		vec3_t d;
+		float len;
+		VectorSubtract( c, w->p[i], d );
+		len = VectorNormalize( d );
+		VectorMA( w->p[i], len < 4.0f ? len * 0.5f : 2.0f, d, q );
+		VectorMA( q, 1.0f, normal, q );
+		if ( cm.leafs[CM_PointLeafnum( q )].cluster >= 0 ) {
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
 static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 	int i, j;
+	qboolean anyOpen = qfalse;
+	unsigned char top[1024];
 
+	if ( brush->numsides > (int)sizeof( top ) ) {
+		Com_Error( ERR_DROP, "CM_OAXNavGeometry: a brush with %i sides", brush->numsides );
+	}
+	for ( i = 0; i < brush->numsides; i++ ) {
+		top[i] = 0;
+	}
 	for ( i = 0; i < brush->numsides; i++ ) {
 		cbrushside_t *side = &brush->sides[i];
 		winding_t *w;
@@ -129,10 +235,35 @@ static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 			continue;
 		}
 		if ( !UnderTerrain( w->numpoints, w->p ) ) {
-			AddPolygon( b, w->numpoints, w->p, side->plane->normal[2] );
+			// a walkable face with no open air in front of it (it lies in
+			// structural solid or faces the void) is no floor: it would only
+			// widen the build to the whole hull of an imported map
+			float nz = side->plane->normal[2];
+			qboolean open = FaceOpen( w, side->plane->normal );
+			anyOpen |= open;
+			if ( nz >= NAV_MIN_WALK_NORMAL && !open ) {
+				nz = 0.0f;
+				b->closedFaces++;
+			}
+			AddPolygon( b, w->numpoints, w->p, nz );
+			top[i] = nz >= NAV_MIN_WALK_NORMAL;
 		}
 		FreeWinding( w );
 	}
+	// a brush with no face in open air lies wholly in opaque space: its
+	// columns hold no walkable span to merge away, so it needs no fill
+	if ( anyOpen ) {
+		AddVolume( b, brush, top );
+	} else {
+		b->buriedBrushes++;
+	}
+}
+
+int CM_OAXNavOpenAt( const float p[3] ) {
+	vec3_t q;
+
+	VectorCopy( p, q );
+	return cm.leafs[CM_PointLeafnum( q )].cluster >= 0;
 }
 
 static void AddBox( navBuild_t *b, const vec3_t mins, const vec3_t maxs ) {
@@ -200,6 +331,20 @@ int CM_OAXNavGeometry( oaxNavGeometry_t *g ) {
 			}
 		}
 	}
+	// q3map2 lists brush entities' brushes in the world leafs too: drop the
+	// ones an inline model owns (triggers, movers, zones). OA's common/trigger
+	// shader has no nonsolid, so trigger brushes carry CONTENTS_SOLID, and
+	// every trigger_hurt, teleporter or zone would otherwise cut a hole in
+	// the mesh (the items inside a hazard became unreachable).
+	for ( i = 1; i < cm.numSubModels; i++ ) {
+		cLeaf_t *leaf = &cm.cmodels[i].leaf;
+		for ( k = 0; k < leaf->numLeafBrushes; k++ ) {
+			int bn = cm.leafbrushes[leaf->firstLeafBrush + k];
+			if ( bn >= 0 && bn < cm.numBrushes ) {
+				seen[bn] = 0;
+			}
+		}
+	}
 	for ( i = 0; i < cm.numBrushes; i++ ) {
 		if ( seen[i] && ( cm.brushes[i].contents & ( CONTENTS_SOLID | CONTENTS_PLAYERCLIP ) ) ) {
 			AddBrush( &b, &cm.brushes[i] );
@@ -228,6 +373,16 @@ int CM_OAXNavGeometry( oaxNavGeometry_t *g ) {
 		AddBox( &b, mins, maxs );
 	}
 
+	// collision meshes: the triangles as they face (the front is the outside)
+	for ( t = 0; t < CM_OAXNumCollisionTris(); t++ ) {
+		float tri[3][3];
+		if ( CM_OAXCollisionTri( t, tri ) & ( CONTENTS_SOLID | CONTENTS_PLAYERCLIP ) ) {
+			AddTriangle( &b, tri );
+		}
+	}
+
+	g->closedFaces = b.closedFaces;
+	g->buriedBrushes = b.buriedBrushes;
 	ClearBounds( g->mins, g->maxs );
 	for ( i = 0; i < g->numVerts; i++ ) {
 		AddPointToBounds( &g->verts[i * 3], g->mins, g->maxs );
@@ -239,5 +394,11 @@ void CM_OAXNavGeometryFree( oaxNavGeometry_t *g ) {
 	free( g->verts );
 	free( g->tris );
 	free( g->walkable );
+	free( g->volFirstPlane );
+	free( g->volNumPlanes );
+	free( g->volBounds );
+	free( g->planes );
+	free( g->planeTop );
 	Com_Memset( g, 0, sizeof( *g ) );
 }
+

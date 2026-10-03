@@ -5,8 +5,9 @@ GPL source release:
 
 - Source: https://github.com/id-Software/DOOM-3
 - Copyright (C) 1999-2011 id Software LLC, a ZeniMax Media company.
-- License: GNU General Public License version 3 (COPYING-GPLv3.txt), with the additional terms in
-  DOOM-3's README.txt.
+- License: GNU General Public License version 3 (COPYING-GPLv3.txt), with the
+  release's additional terms, copied verbatim from its COPYING.txt into
+  DOOM3-ADDITIONAL-TERMS.txt.
 
 ioquake3 and the OpenArena gamecode are licensed "GPL version 2 or (at your
 option) any later version", so they combine with GPLv3 code; once id Tech 4

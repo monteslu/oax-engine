@@ -403,6 +403,13 @@ public:
 	int getTilesAt(const int x, const int y,
 				   dtMeshTile const** tiles, const int maxTiles) const;
 	
+	/// oax patch: connects the landing ends of off-mesh connections that end
+	/// in a tile other than their start tile and its 8 neighbours (addTile
+	/// links only those). Call once after every tile has been added.
+	/// @return The number of landings connected.
+	int connectFarOffMeshLinks();
+
+	
 	/// Gets the tile reference for the tile at specified grid location.
 	///  @param[in]	x		The tile's x-location. (x, y, layer)
 	///  @param[in]	y		The tile's y-location. (x, y, layer)

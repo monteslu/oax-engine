@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 phys_vehicle.c: raycast-wheel and hover vehicles in a physics world, and
 heightmap terrain (OAX_TERRAIN) as static collision (phase 8).
 
@@ -519,6 +538,30 @@ static void Phys_VehicleGetState( physOwner_t owner, physVehicle_t *v, oaxPhysVe
 	out->ticks = v->ticks;
 }
 
+// teleport a vehicle to a state read elsewhere (a cgame predicting its own
+// vehicle from the server's): the chassis transform and velocities, the
+// steering, and the cosmetic wheel values; awake or asleep as told
+static void Phys_VehicleSetState( physOwner_t owner, physVehicle_t *v, const oaxPhysVehicleState_t *in, int flags ) {
+	physBody_t *b = Phys_Body( owner, v->body );
+	int i;
+
+	if ( !b ) {
+		return;
+	}
+	b3Body_SetTransform( b->id, Phys_Vec( in->origin ), Phys_Quat( in->quat ) );
+	b3Body_SetLinearVelocity( b->id, Phys_Vec( in->velocity ) );
+	b3Body_SetAngularVelocity( b->id, Phys_Vec( in->angularVelocity ) );
+	b3Body_SetAwake( b->id, ( flags & PHYS_VSS_AWAKE ) ? true : false );
+	v->steer = in->steer;
+	for ( i = 0; i < v->def.numWheels; i++ ) {
+		v->susp[i] = in->suspension[i];
+		v->spin[i] = in->spin[i];
+	}
+	v->contacts = in->contacts;
+	v->flipTime = 0.0f;
+	VectorCopy( in->origin, v->lastPos );
+}
+
 /*
 ==============================================================================
 terrain: the collision model's heightmaps as height fields, its trunks as
@@ -635,6 +678,13 @@ qboolean Phys_VehicleSyscall( physOwner_t owner, intptr_t *args, intptr_t *ret )
 			*ret = 1;
 		} else {
 			Com_Memset( VMA( 2 ), 0, sizeof( oaxPhysVehicleState_t ) );
+		}
+		return qtrue;
+	case PHYS_VEHICLE_SET_STATE:
+		CHECK( 2, sizeof( oaxPhysVehicleState_t ), "PHYSVEHSET" );
+		if ( ( v = Phys_Vehicle( owner, args[1] ) ) ) {
+			Phys_VehicleSetState( owner, v, VMA( 2 ), args[3] );
+			*ret = 1;
 		}
 		return qtrue;
 	case PHYS_WORLD_ADD_TERRAIN:

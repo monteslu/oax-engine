@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 wasmcart platform backend: input.
 
 Reads the host-written pad, keyboard and pointer state once per frame and
@@ -179,6 +198,7 @@ static void IN_PadFrame( int time ) {
 		gp.buttons[2] = ( pad->buttons & WC_BTN_X ) != 0;
 		gp.buttons[3] = ( pad->buttons & WC_BTN_Y ) != 0;
 		gp.buttons[4] = ( pad->buttons & WC_BTN_SELECT ) != 0;
+		gp.buttons[5] = ( pad->buttons & WC_BTN_GUIDE ) != 0;
 		gp.buttons[6] = ( pad->buttons & WC_BTN_START ) != 0;
 		gp.buttons[7] = ( pad->buttons & WC_BTN_L3 ) != 0;
 		gp.buttons[8] = ( pad->buttons & WC_BTN_R3 ) != 0;
@@ -193,8 +213,9 @@ static void IN_PadFrame( int time ) {
 		gp.axes[1] = pad->left_y;
 		gp.axes[2] = pad->right_x;
 		gp.axes[3] = pad->right_y;
-		gp.axes[4] = pad->left_trigger * 32767 / 255;
-		gp.axes[5] = pad->right_trigger * 32767 / 255;
+		// ABI v4 triggers are already 0..32767, the scale SDL2 reports
+		gp.axes[4] = pad->left_trigger;
+		gp.axes[5] = pad->right_trigger;
 	}
 
 	IN_GamepadFrame( &gp, time, in_joystickThreshold->value, in_joystickUseAnalog->integer ? qtrue : qfalse );

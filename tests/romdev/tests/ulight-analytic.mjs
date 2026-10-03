@@ -22,7 +22,7 @@ export const name = 'ulight-analytic';
 const W = 1280, H = 720, CAM_Z = 600;
 const TAN_X = 1, TAN_Y = 720 / 1280;     // cg_fov 90 at 16:9
 export const VIEW = `0 0 ${CAM_Z} 90 0 0`;
-export const LINEAR = 'r_toneMap 0;r_autoExposure 0;r_cameraExposure 0;r_gamma 1';
+export const LINEAR = 'r_toneMap 0;r_autoExposure 0;r_cameraExposure 1;r_gamma 1';
 
 // --- the oracle: the engine's generated light images and GL's bilinear lookup
 

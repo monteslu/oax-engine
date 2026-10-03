@@ -36,6 +36,7 @@ set(RENDERER_GL2_SOURCES
     ${SOURCE_DIR}/renderergl2/tr_oax_trail.c
     ${SOURCE_DIR}/renderergl2/tr_oax_water.c
     ${SOURCE_DIR}/renderergl2/tr_oax_bloom.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_surfid.c
     ${SOURCE_DIR}/renderergl2/tr_postprocess.c
     ${SOURCE_DIR}/renderergl2/tr_scene.c
     ${SOURCE_DIR}/renderergl2/tr_shade.c
@@ -48,9 +49,12 @@ set(RENDERER_GL2_SOURCES
     ${SOURCE_DIR}/renderergl2/tr_world.c
     ${SOURCE_DIR}/renderergl2/tr_matexpr.c
     ${SOURCE_DIR}/renderergl2/tr_ulight.c
+    ${SOURCE_DIR}/renderergl2/tr_ulight_phys.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_display.c
     ${SOURCE_DIR}/renderergl2/tb_ulight.c
     ${SOURCE_DIR}/renderergl2/tb_ulight_stencil.c
     ${SOURCE_DIR}/renderergl2/tr_terrain.c
+    ${SOURCE_DIR}/renderergl2/tr_surfworld.c
 )
 
 # image programs must compute the same bytes on every host (tests compare
@@ -97,7 +101,7 @@ list(APPEND RENDERER_GL2_BINARY_SOURCES
 
 if(USE_RENDERER_DLOPEN)
     # the terrain sampler; a statically linked renderer gets it from the engine
-    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES} ${SOURCE_DIR}/qcommon/oax_terrain.c)
+    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES} ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/oax_surfaces.c)
 
     add_library(${RENDERER_GL2_BINARY} SHARED ${RENDERER_GL2_BINARY_SOURCES})
 

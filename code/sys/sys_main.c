@@ -458,6 +458,13 @@ void Sys_Error( const char *error, ... )
 	Q_vsnprintf (string, sizeof(string), error, argptr);
 	va_end (argptr);
 
+	// oax: with com_errorQuit (tests, tools) print and exit at once; the
+	// dialog would block until someone closes it
+	if ( Cvar_VariableIntegerValue( "com_errorQuit" ) ) {
+		fprintf( stderr, "Sys_Error: %s\n", string );
+		Sys_Exit( 3 );
+	}
+
 	Sys_ErrorDialog( string );
 
 	Sys_Exit( 3 );

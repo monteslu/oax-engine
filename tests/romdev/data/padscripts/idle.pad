@@ -1,0 +1,3 @@
+# idle: no input for 30 frames (an aligned start for a command at the end)
+# frames lx ly rx ry lt rt [buttons]
+30 0 0 0 0 0 0

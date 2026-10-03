@@ -217,6 +217,7 @@ typedef struct {
 
 	// oax: named debug values for tests (Com_DebugSet); append-only
 	void	(*DebugSet)( const char *name, const char *value );
+	void	(*DebugSetBlob)( const char *data, int len );
 } refimport_t;
 
 

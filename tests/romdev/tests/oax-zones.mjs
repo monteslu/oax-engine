@@ -18,6 +18,7 @@ import { runNative } from '../lib/native.mjs';
 import { parseDebugValues, readValues } from '../lib/values.mjs';
 import { cartRun, nativeRun, compareRows } from '../lib/sim.mjs';
 
+export const timeoutSec = 2400;
 export const name = 'oax-zones';
 
 const MAP = 'oax_zones';

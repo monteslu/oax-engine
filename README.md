@@ -1,3 +1,44 @@
+# oax engine
+
+oax is a next-generation engine for [OpenArena](https://openarena.ws),
+built on [ioquake3](https://github.com/ioquake/ioq3). Every OpenArena map
+still runs, and new maps can use:
+
+  * a GLES 3.0 / GL 3.2 renderer with unified dynamic lighting and shadows,
+    physically described lights, bloom, soft particles, decals and trails
+  * heightmap terrain, instanced foliage and occlusion culling for large
+    outdoor maps
+  * render-surface worlds over a separate collision hull, zones, sky portals
+  * movers, triggers, in-world GUIs and map scripts (id Tech 4 style)
+  * Box3D rigid body physics for effects and for drivable vehicles
+  * navmesh bots for maps without AAS, with links built from authored intent
+  * deterministic simulation: the native client and the
+    [wasmcart](https://github.com/wasmcart) cart build play the same match
+
+This branch (`next`) is the oax work. It is under active development and
+open for testing; expect rough edges.
+
+**Build and play:** [docs/getting-started.md](docs/getting-started.md) covers
+Linux and macOS, the game code
+([oax-gamecode](https://github.com/monteslu/oax-gamecode)), OpenArena's data
+and the oax test maps. Console variables: [docs/cvars.md](docs/cvars.md).
+Map authors: [docs/map-format.md](docs/map-format.md),
+[docs/lights.md](docs/lights.md), [docs/materials.md](docs/materials.md),
+[docs/navigation.md](docs/navigation.md).
+
+**Licence:** ioquake3 is GPLv2 or later. oax includes code from id
+Software's DOOM-3 GPL release, which is GPLv3, so the engine as a whole is
+distributed under the GNU General Public License version 3
+([COPYING-GPLv3.txt](COPYING-GPLv3.txt)), with the DOOM-3 release's
+additional terms ([DOOM3-ADDITIONAL-TERMS.txt](DOOM3-ADDITIONAL-TERMS.txt))
+for the files that carry them
+([docs/idtech4-attribution.md](docs/idtech4-attribution.md)). Third-party
+code: [docs/third-party.md](docs/third-party.md).
+
+The rest of this file is ioquake3's README, kept as it is.
+
+---
+
 ![Build](https://github.com/ioquake/ioq3/workflows/Build/badge.svg)
 
                    ,---------------------------------------.

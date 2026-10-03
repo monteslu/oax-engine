@@ -233,6 +233,7 @@ void R_ULightShutdown( void ) {
 	r_ulightStencil = NULL;     // the next R_Init takes a latched value
 	RB_ULightShutdown();
 	R_ULightStencilFreeWorld();
+	R_ULightZonesFree();
 	if ( ulw.lights ) {
 		int i;
 
@@ -584,15 +585,7 @@ LIGHT ENTITIES (Light.cpp ParseSpawnArgsToRenderLight)
 =====================================================================
 */
 
-#define MAX_LIGHT_KEYS 32
-
-typedef struct {
-	int  numKeys;
-	char keys[MAX_LIGHT_KEYS][64];
-	char values[MAX_LIGHT_KEYS][256];
-} spawnArgs_t;
-
-static const char *Arg( const spawnArgs_t *a, const char *key ) {
+const char *R_ULightArg( const spawnArgs_t *a, const char *key ) {
 	int i;
 
 	for ( i = 0; i < a->numKeys; i++ ) {
@@ -602,6 +595,8 @@ static const char *Arg( const spawnArgs_t *a, const char *key ) {
 	}
 	return NULL;
 }
+
+#define Arg R_ULightArg
 
 static qboolean ArgVector( const spawnArgs_t *a, const char *key, const char *def, vec3_t out ) {
 	const char *v = Arg( a, key );
@@ -747,6 +742,13 @@ static qboolean ParseLight( const spawnArgs_t *a, const spawnArgs_t *ents, int n
 	ArgFloat( a, "shaderParm5", 0, &p->shaderParms[5] );
 	ArgFloat( a, "shaderParm6", 0, &p->shaderParms[6] );
 	ArgFloat( a, "shaderParm7", 0, &p->shaderParms[7] );
+	// light-mask groups: the light reaches surfaces whose mask shares a bit
+	// (surface-world surfaces carry one, docs/map-format.md; everything
+	// else is in group 1)
+	p->lightMask = 1;
+	if ( ( v = Arg( a, "light_mask" ) ) != NULL ) {
+		p->lightMask = (unsigned)strtoul( v, NULL, 0 );
+	}
 	p->noShadows = ArgBool( a, "noshadows" );
 	p->noSpecular = ArgBool( a, "nospecular" );
 	p->parallel = ArgBool( a, "parallel" );
@@ -760,6 +762,17 @@ static qboolean ParseLight( const spawnArgs_t *a, const spawnArgs_t *ents, int n
 			ri.Printf( PRINT_WARNING, "light texture '%s' not found, using the default\n", texture );
 		}
 	}
+
+	// step 7.5 B: the physical light description (tr_ulight_phys.c)
+	if ( R_ULightPhysHasKeys( a ) ) {
+		R_ULightPhysParse( a, p );
+		// one light mask: a physical light's groups (oax_mask, ue1_bSpecialLit)
+		// unless light_mask names them outright
+		if ( !Arg( a, "light_mask" ) ) {
+			p->lightMask = (unsigned)p->phys.mask;
+		}
+	}
+	p->phys.mask = (int)( p->lightMask & ULIGHT_MASK_ALL );
 	return qtrue;
 }
 
@@ -987,6 +1000,9 @@ static void WalkLightNodes( interactionWalk_t *w, mnode_t *node ) {
 			if ( ( ci->type & CULLINFO_BOX ) && !BoxInLight( l, ci->bounds[0], ci->bounds[1] ) ) {
 				continue;
 			}
+			if ( !( (unsigned)R_ULightSurfaceMask( surf->shader, s ) & l->parms.lightMask ) ) {
+				continue;	// not in a group this light lights
+			}
 			if ( l->numWorldSurfs == l->maxWorldSurfs ) {
 				int *n;
 
@@ -1070,7 +1086,7 @@ LOADING
 =====================================================================
 */
 
-static void R_ULightLoadLights( void ) {
+static void R_ULightLoadLights( const void *header ) {
 	spawnArgs_t *ents;
 	int numEnts, i, n;
 	const char *v;
@@ -1101,6 +1117,8 @@ static void R_ULightLoadLights( void ) {
 	} else if ( v && !Q_stricmp( v, "stencil" ) ) {
 		ulw.shadowMode = ULIGHT_SHADOW_STENCIL;
 	}
+	R_ULightPhysWorldspawn( &ents[0] );
+	R_ULightZonesLoad( header, ents, numEnts );
 
 	// count lights: every `light` in unified maps (kept by _keepLights 1),
 	// `rtlight` in both
@@ -1145,8 +1163,11 @@ static void R_ULightLoadLights( void ) {
 		l->baseParms = l->parms;
 		l->entityNum = i;
 		l->rtlight = !Q_stricmp( cn, "rtlight" );
-		l->on = qtrue;
+		l->on = !l->parms.phys.startOff;
 		l->shadowSlot = -1;
+		if ( l->parms.phys.physical ) {
+			ulw.numPhysical++;
+		}
 		v = Arg( &ents[i], "targetname" );
 		if ( v ) {
 			Q_strncpyz( l->targetname, v, sizeof( l->targetname ) );
@@ -1177,12 +1198,16 @@ void R_ULightLoadWorld( const void *header ) {
 	ulw.loaded = qfalse;
 	ulw.numLights = ulw.numMapLights = 0;
 	ulw.lightingModel = ULIGHT_LIGHTMAP;
+	ulw.numPhysical = 0;
+	ulw.overbright = 1;
+	ulw.ue1LevelBrightness = 1;
+	R_ULightZonesFree();
 	if ( !tr.world || !tr.world->entityString ) {
 		return;
 	}
 
 	BuildSurfHash();
-	R_ULightLoadLights();
+	R_ULightLoadLights( header );
 	if ( ulw.lightingModel == ULIGHT_LIGHTMAP ) {
 		return;
 	}
@@ -1203,10 +1228,40 @@ void R_ULightLoadWorld( const void *header ) {
 			srfBspSurface_t *srf = (srfBspSurface_t *)tr.world->surfaces[i].data;
 
 			if ( srf->surfaceType == SF_FACE || srf->surfaceType == SF_GRID || srf->surfaceType == SF_TRIANGLES ) {
+				uint16_t sc[3];
+
+				sc[0] = c[0];
+				sc[1] = c[1];
+				sc[2] = c[2];
+				if ( ulw.zoneAmbient && srf->numVerts ) {
+					// step 7.5 B: a surface takes the ambient of the zone its
+					// centre faces into (a step off it along its normal);
+					// surfaces are split at zone boundaries (UE1's are)
+					vec3_t centre, normal, n, p, za;
+					int k;
+
+					VectorClear( centre );
+					VectorClear( normal );
+					for ( j = 0; j < srf->numVerts; j++ ) {
+						R_VaoUnpackNormal( n, srf->verts[j].normal );
+						VectorAdd( centre, srf->verts[j].xyz, centre );
+						VectorAdd( normal, n, normal );
+					}
+					VectorScale( centre, 1.0f / srf->numVerts, centre );
+					VectorNormalize( normal );
+					VectorMA( centre, 2.0f, normal, p );
+					if ( R_ULightZoneAmbientAt( p, za ) ) {
+						for ( k = 0; k < 3; k++ ) {
+							float f = za[k] * tr.identityLight;
+
+							sc[k] = (uint16_t)( 65535.0f * ( f < 0 ? 0 : f > 1 ? 1 : f ) );
+						}
+					}
+				}
 				for ( j = 0; j < srf->numVerts; j++ ) {
-					srf->verts[j].color[0] = c[0];
-					srf->verts[j].color[1] = c[1];
-					srf->verts[j].color[2] = c[2];
+					srf->verts[j].color[0] = sc[0];
+					srf->verts[j].color[1] = sc[1];
+					srf->verts[j].color[2] = sc[2];
 				}
 			}
 		}
@@ -1320,6 +1375,7 @@ void R_ULightBeginScene( void ) {
 		l->on = qtrue;
 		l->shadowSlot = -1;
 		l->parms.pointLight = qtrue;
+		l->parms.lightMask = ~0u;	// scene dlights light every group
 		AxisClear( l->parms.axis );
 		VectorCopy( dl->origin, l->parms.origin );
 		VectorSet( l->parms.lightRadius, dl->radius, dl->radius, dl->radius );
@@ -1341,6 +1397,43 @@ collapsed to lightall (diffuse + normal + specular), else the first opaque
 color stage that isn't a lightmap. -1 if none.
 =================
 */
+/*
+=================
+R_ULightShaderIsFullbright
+
+A fullbright (unlit) material: no lightmap (stage, bundle or lightmap
+index), and its first stage is
+opaque with an explicit `rgbGen identity`. Light interactions skip it, so
+it draws at its texture colour wherever it is, lights or none (an unlit
+sky-zone wall, a screen). A stage without rgbGen gets identityLighting
+and stays lit.
+=================
+*/
+qboolean R_ULightShaderIsFullbright( const shader_t *sh ) {
+	const shaderStage_t *first = NULL;
+	int i, b;
+
+	if ( sh->lightmapIndex >= 0 ) {
+		return qfalse;		// built on a lightmap (collapsed stages keep it in a second bundle)
+	}
+	for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
+		const shaderStage_t *st = sh->stages[i];
+
+		if ( !st || !st->active ) {
+			break;
+		}
+		for ( b = 0; b < NUM_TEXTURE_BUNDLES; b++ ) {
+			if ( st->bundle[b].isLightmap || ( b == 0 && st->bundle[0].tcGen == TCGEN_LIGHTMAP ) ) {
+				return qfalse;
+			}
+		}
+		if ( !first ) {
+			first = st;
+		}
+	}
+	return first && first->rgbGen == CGEN_IDENTITY && !( first->stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) );
+}
+
 int R_ULightInteractionStage( shader_t *sh ) {
 	int i;
 
@@ -1350,6 +1443,9 @@ int R_ULightInteractionStage( shader_t *sh ) {
 	sh->oaxInteraction = -1;   // none, unless a stage qualifies below
 	if ( sh->sort > SS_OPAQUE || sh->isSky || ( sh->surfaceFlags & ( SURF_SKY | SURF_NODRAW ) ) || sh->oaxLightFlags & ULSF_LIGHTSHADER ) {
 		return -1;
+	}
+	if ( R_ULightShaderIsFullbright( sh ) ) {
+		return -1;		// drawn at its texture colour by the stock stages
 	}
 	for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
 		shaderStage_t *st = sh->stages[i];
@@ -1607,6 +1703,8 @@ typedef struct {
 	qboolean    hasBounds;
 	qboolean    interaction;    // has an interaction stage (lit, ambient)
 	qboolean    caster;
+	int         mask;           // light-mask groups (step 7.5 B)
+	qboolean    maskNonDefault; // mask is not the default group alone
 } viewSurf_t;
 
 #define MAX_VIEW_SURFS 8192
@@ -1672,9 +1770,15 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 		vs->worldIndex = -1;
 		vs->hasBounds = qfalse;
 		vs->interaction = R_ULightInteractionStage( sh ) >= 0;
-		vs->caster = qtrue;
+		vs->caster = !sh->oaxNoShadow;
 		if ( entityNum == REFENTITYNUM_WORLD ) {
 			vs->worldIndex = WorldSurfIndex( ds->surface );
+			vs->mask = R_ULightSurfaceMask( sh, vs->worldIndex );
+		} else {
+			vs->mask = R_ULightSurfaceMask( sh, -1 );
+		}
+		vs->maskNonDefault = vs->mask != ULIGHT_MASK_DEFAULT;
+		if ( entityNum == REFENTITYNUM_WORLD ) {
 			if ( *ds->surface == SF_FACE || *ds->surface == SF_GRID || *ds->surface == SF_TRIANGLES ) {
 				srfBspSurface_t *srf = (srfBspSurface_t *)ds->surface;
 
@@ -1750,6 +1854,14 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 		for ( k = 0; k < 3; k++ ) {
 			vl->color[k] = l->parms.shaderParms[k] * c[k];
 		}
+		if ( l->parms.phys.physical ) {
+			// step 7.5 B: the unnormalised color and the effect's multiplier
+			float e = R_ULightPhysEffect( &l->parms.phys, tr.refdef.floatTime );
+
+			for ( k = 0; k < 3; k++ ) {
+				vl->color[k] *= l->parms.phys.color[k] * e;
+			}
+		}
 		if ( vl->color[0] <= 0 && vl->color[1] <= 0 && vl->color[2] <= 0 ) {
 			continue;
 		}
@@ -1767,6 +1879,12 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 
 			if ( !vs->interaction ) {
 				continue;
+			}
+			if ( l->parms.lightMask != ULIGHT_MASK_DEFAULT || vs->maskNonDefault ) {
+				// light-mask groups (the one mask: light_mask / oax_mask)
+				if ( !( l->parms.lightMask & (unsigned)vs->mask ) ) {
+					continue;
+				}
 			}
 			if ( vs->worldIndex >= 0 && j < ulw.numMapLights ) {
 				if ( !( lightFacingBits[j][vs->worldIndex >> 3] & ( 1 << ( vs->worldIndex & 7 ) ) ) ) {
@@ -1792,7 +1910,7 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 				for ( i = 0; i < l->numWorldSurfs && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
 					msurface_t *surf = &tr.world->surfaces[l->worldSurfs[i]];
 
-					if ( surf->shader->sort > SS_OPAQUE ) {
+					if ( surf->shader->sort > SS_OPAQUE || surf->shader->oaxNoShadow ) {
 						continue;
 					}
 					ComposeSort( &ulSurfs[ulNumSurfs++], surf->data, surf->shader, REFENTITYNUM_WORLD, 0, 0 );
@@ -1800,7 +1918,7 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 			} else {
 				// scene dlights with shadows: the world surfaces in view
 				for ( i = 0; i < numVS && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
-					if ( viewSurfs[i].entityNum == REFENTITYNUM_WORLD && viewSurfs[i].hasBounds
+					if ( viewSurfs[i].entityNum == REFENTITYNUM_WORLD && viewSurfs[i].hasBounds && viewSurfs[i].caster
 						&& BoxInLight( l, viewSurfs[i].bounds[0], viewSurfs[i].bounds[1] ) ) {
 						ulSurfs[ulNumSurfs++] = *viewSurfs[i].ds;
 					}
@@ -1878,6 +1996,9 @@ void R_ULightPublishStats( int frontEndMsec, int backEndMsec ) {
 	ri.DebugSet( "r_shadow_passes", va( "%d", ulw.statShadowPasses ) );
 	ri.DebugSet( "r_shadow_cache_hits", va( "%d", ulw.statShadowCacheHits ) );
 	ri.DebugSet( "r_stencil_tris", va( "%d", ulw.statStencilTris ) );
+	if ( ulw.numPhysical || ulw.numZoneAmbient ) {
+		R_ULightPhysPublish();
+	}
 	ulw.statDraws = ulw.statShadowPasses = ulw.statShadowCacheHits = ulw.statStencilTris = 0;
 }
 

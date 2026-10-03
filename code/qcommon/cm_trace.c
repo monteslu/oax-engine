@@ -1140,6 +1140,8 @@ void CM_TraceThroughTree( traceWork_t *tw, int num, float p1f, float p2f, vec3_t
 //======================================================================
 
 
+static void CM_OAXTraceOBB( traceWork_t *tw, qboolean position );	// oax oriented boxes, below
+
 /*
 ==================
 CM_Trace
@@ -1280,6 +1282,10 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 			}
 			else
 #endif
+			if ( CM_IS_OAX_OBB( model ) ) {
+				CM_OAXTraceOBB( &tw, qtrue );
+			}
+			else
 			if ( model == CAPSULE_MODEL_HANDLE ) {
 				if ( tw.sphere.use ) {
 					CM_TestCapsuleInCapsule( &tw, model );
@@ -1294,6 +1300,7 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 		} else {
 			CM_PositionTest( &tw );
 			CM_OAXTerrainPositionTest( &tw );	// oax heightmap terrain (cm_terrain.c)
+			CM_OAXCollisionPositionTest( &tw );	// oax collision meshes (cm_oaxsurf.c)
 		}
 	} else {
 		//
@@ -1325,6 +1332,10 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 			}
 			else
 #endif
+			if ( CM_IS_OAX_OBB( model ) ) {
+				CM_OAXTraceOBB( &tw, qfalse );
+			}
+			else
 			if ( model == CAPSULE_MODEL_HANDLE ) {
 				if ( tw.sphere.use ) {
 					CM_TraceCapsuleThroughCapsule( &tw, model );
@@ -1339,6 +1350,7 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 		} else {
 			CM_TraceThroughTree( &tw, 0, 0, 1, tw.start, tw.end );
 			CM_OAXTerrainTrace( &tw );	// oax heightmap terrain (cm_terrain.c)
+			CM_OAXCollisionTrace( &tw );	// oax collision meshes (cm_oaxsurf.c)
 		}
 	}
 
@@ -1469,4 +1481,99 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 	trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
 
 	*results = trace;
+}
+
+/*
+===============================================================================
+
+oax oriented boxes (vehicles): a temporary convex brush built from a box
+with any orientation, traced exactly like a map brush. Its sides are the
+box's six faces plus the six axial bevels of its world bounds, as q3map2
+bevels map brushes, so an axis-aligned box sweeps against it with the same
+plane expansion rule as everywhere else. Like CM_TempBoxModel, the handle
+is good until the next call.
+
+===============================================================================
+*/
+
+static cplane_t		obb_planes[12];
+static cbrushside_t	obb_sides[12];
+static cbrush_t		obb_brush;
+static cmodel_t		obb_model;
+
+cmodel_t *CM_OAXOBBModel( void ) {
+	return &obb_model;
+}
+
+static void CM_OAXSetOBBPlane( int i, const vec3_t normal, float dist ) {
+	cplane_t *p = &obb_planes[i];
+
+	VectorCopy( normal, p->normal );
+	p->dist = dist;
+	p->type = PlaneTypeForNormal( p->normal );
+	SetPlaneSignbits( p );
+	obb_sides[i].plane = p;
+	obb_sides[i].surfaceFlags = 0;
+	obb_sides[i].shaderNum = 0;
+}
+
+clipHandle_t CM_OAXTempOBBModel( const vec3_t center, const vec3_t axis[3], const vec3_t halfExtents, int contents ) {
+	vec3_t n;
+	float c, e;
+	int i, k;
+
+	// world bounds; the first six sides are the axial bevels in the order
+	// map brushes have them (-x +x -y +y -z +z: CM_TestBoxInBrush skips
+	// them and tests the bounds instead)
+	for ( i = 0; i < 3; i++ ) {
+		e = fabs( axis[0][i] ) * halfExtents[0] + fabs( axis[1][i] ) * halfExtents[1] + fabs( axis[2][i] ) * halfExtents[2];
+		obb_brush.bounds[0][i] = center[i] - e;
+		obb_brush.bounds[1][i] = center[i] + e;
+		VectorClear( n );
+		n[i] = -1.0f;
+		CM_OAXSetOBBPlane( i * 2, n, -obb_brush.bounds[0][i] );
+		n[i] = 1.0f;
+		CM_OAXSetOBBPlane( i * 2 + 1, n, obb_brush.bounds[1][i] );
+	}
+	// then the box's own faces
+	for ( k = 0; k < 3; k++ ) {
+		c = DotProduct( axis[k], center );
+		CM_OAXSetOBBPlane( 6 + k * 2, axis[k], c + halfExtents[k] );
+		VectorNegate( axis[k], n );
+		CM_OAXSetOBBPlane( 7 + k * 2, n, -c + halfExtents[k] );
+	}
+	obb_brush.numsides = 12;
+	obb_brush.sides = obb_sides;
+	obb_brush.contents = contents;
+	obb_brush.shaderNum = 0;
+	VectorCopy( obb_brush.bounds[0], obb_model.mins );
+	VectorCopy( obb_brush.bounds[1], obb_model.maxs );
+	return OAX_OBB_MODEL_HANDLE;
+}
+
+// CM_Trace: the oriented box instead of a leaf
+static void CM_OAXTraceOBB( traceWork_t *tw, qboolean position ) {
+	if ( !( obb_brush.contents & tw->contents ) ) {
+		return;
+	}
+	if ( position ) {
+		CM_TestBoxInBrush( tw, &obb_brush );
+		return;
+	}
+	if ( !CM_BoundsIntersect( tw->bounds[0], tw->bounds[1], obb_brush.bounds[0], obb_brush.bounds[1] ) ) {
+		return;
+	}
+	CM_TraceThroughBrush( tw, &obb_brush );
+}
+
+// CM_PointContents
+int CM_OAXOBBPointContents( const vec3_t p ) {
+	int i;
+
+	for ( i = 0; i < obb_brush.numsides; i++ ) {
+		if ( DotProduct( p, obb_sides[i].plane->normal ) > obb_sides[i].plane->dist ) {
+			return 0;
+		}
+	}
+	return obb_brush.contents;
 }

@@ -27,6 +27,8 @@ void		CM_LoadMap( const char *name, qboolean clientload, int *checksum);
 void		CM_ClearMap( void );
 clipHandle_t CM_InlineModel( int index );		// 0 = world, 1 + are bmodels
 clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs, int capsule );
+// oax: a box with any orientation in world space (vehicles); good until the next call
+clipHandle_t CM_OAXTempOBBModel( const vec3_t center, const vec3_t axis[3], const vec3_t halfExtents, int contents );
 
 void		CM_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs );
 

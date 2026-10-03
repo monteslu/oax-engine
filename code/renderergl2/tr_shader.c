@@ -875,6 +875,38 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			stage->isDetail = qtrue;
 		}
 		//
+		// oax: detailFade <start> <end>: a detail stage seen only up close; it
+		// fades to no effect between the two distances (docs/materials.md)
+		//
+		else if ( !Q_stricmp( token, "detailFade" ) )
+		{
+			float start, end;
+
+			token = COM_ParseExt( text, qfalse );
+			start = atof( token );
+			token = COM_ParseExt( text, qfalse );
+			end = atof( token );
+			if ( !token[0] || end <= start || start < 0 )
+			{
+				ri.Printf( PRINT_WARNING, "WARNING: detailFade needs <start> <end> with end > start >= 0 in shader '%s'\n", shader.name );
+				continue;
+			}
+			stage->isDetail = qtrue;
+			stage->oaxDetailFade = qtrue;
+			VectorSet4( stage->oaxDetailFadeParms, start, 1.0f / ( end - start ), 0, 1 );
+			// optional "vertex": the fade computed per vertex from its view
+			// depth and interpolated, as UE1's OpenGL driver does it
+			token = COM_ParseExt( text, qfalse );
+			if ( !Q_stricmp( token, "vertex" ) )
+			{
+				stage->oaxDetailFadeParms[3] = 2;
+			}
+			else if ( token[0] && Q_stricmp( token, "pixel" ) )
+			{
+				ri.Printf( PRINT_WARNING, "WARNING: detailFade mode '%s' is not vertex or pixel in shader '%s'\n", token, shader.name );
+			}
+		}
+		//
 		// blendfunc <srcFactor> <dstFactor>
 		// or blendfunc <add|filter|blend>
 		//
@@ -2092,6 +2124,34 @@ static qboolean ParseShader( char **text )
 		{
 			continue;
 		}
+		// oax: oaxNoShadow: the surface receives light but casts no
+		// unified-lighting shadow (UE1 non-solid and PF_NoShadows surfaces;
+		// docs/materials.md)
+		else if ( !Q_stricmp( token, "oaxNoShadow" ) )
+		{
+			shader.oaxNoShadow = qtrue;
+			continue;
+		}
+		// oax: oaxTint r g b: multiplies the colour of the diffuse stages
+		// (docs/materials.md)
+		else if ( !Q_stricmp( token, "oaxTint" ) )
+		{
+			int i;
+
+			for ( i = 0; i < 3; i++ )
+			{
+				token = COM_ParseExt( text, qfalse );
+				if ( !token[0] )
+				{
+					ri.Printf( PRINT_WARNING, "WARNING: oaxTint needs r g b in shader '%s'\n", shader.name );
+					break;
+				}
+				shader.oaxTint[i] = atof( token );
+			}
+			if ( i == 3 )
+				shader.oaxHasTint = qtrue;
+			continue;
+		}
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name );
@@ -2528,6 +2588,10 @@ static int CollapseStagesToGLSL(void)
 
 			// skip lightmaps
 			if (pStage->bundle[0].tcGen == TCGEN_LIGHTMAP)
+				continue;
+
+			// oax: a detailFade stage stays on the generic program, which fades it
+			if (pStage->oaxDetailFade)
 				continue;
 
 			diffuse  = pStage;
@@ -3136,6 +3200,49 @@ Returns a freshly allocated shader with all the needed info
 from the current global working shader
 =========================
 */
+/*
+=================
+R_OAXFinishMaterialKeywords
+
+oaxTint goes on every active stage that carries the surface colour: not a
+lightmap-only stage (the lightmap would be tinted a second time), not a
+detail stage (a tinted modulate would move its neutral value) and not an
+additive one (a glow keeps its own colour). detailFade fades to the
+blend's neutral value: 0.5 for 2x modulate (dst*src + src*dst), 1 for a
+filter (dst*src), 0 for add; other blends fade their alpha.
+=================
+*/
+static void R_OAXFinishMaterialKeywords( void ) {
+	int i;
+
+	for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
+		shaderStage_t *pStage = &stages[i];
+		unsigned src, dst;
+
+		if ( !pStage->active ) {
+			continue;
+		}
+		src = pStage->stateBits & GLS_SRCBLEND_BITS;
+		dst = pStage->stateBits & GLS_DSTBLEND_BITS;
+		if ( shader.oaxHasTint && !pStage->bundle[0].isLightmap && !pStage->isDetail
+			&& !( src == GLS_SRCBLEND_ONE && dst == GLS_DSTBLEND_ONE ) ) {
+			pStage->oaxTinted = qtrue;
+			VectorCopy( shader.oaxTint, pStage->oaxTint );
+		}
+		if ( pStage->oaxDetailFade ) {
+			if ( src == GLS_SRCBLEND_DST_COLOR && dst == GLS_DSTBLEND_SRC_COLOR ) {
+				pStage->oaxDetailFadeParms[2] = 0.5f;
+			} else if ( ( src == GLS_SRCBLEND_DST_COLOR && dst == GLS_DSTBLEND_ZERO ) || ( src == GLS_SRCBLEND_ZERO && dst == GLS_DSTBLEND_SRC_COLOR ) ) {
+				pStage->oaxDetailFadeParms[2] = 1.0f;
+			} else if ( src == GLS_SRCBLEND_ONE && dst == GLS_DSTBLEND_ONE ) {
+				pStage->oaxDetailFadeParms[2] = 0.0f;
+			} else {
+				pStage->oaxDetailFadeParms[2] = -1.0f;
+			}
+		}
+	}
+}
+
 static shader_t *FinishShader( void ) {
 	int stage;
 	qboolean		hasLightmapStage;
@@ -3317,6 +3424,9 @@ static shader_t *FinishShader( void ) {
 	if (stage == 0 && !shader.isSky)
 		shader.sort = SS_FOG;
 
+	// oax material keywords
+	R_OAXFinishMaterialKeywords();
+
 	// determine which stage iterator function is appropriate
 	ComputeStageIteratorFunc();
 
@@ -3464,6 +3574,8 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 	char		*shaderText;
 	image_t		*image;
 	shader_t	*sh;
+	const void	*oaxVariant = NULL;		// surface-world variant (tr_surfworld.c)
+	const char	*lookupName;
 
 	if ( name[0] == 0 ) {
 		return tr.defaultShader;
@@ -3500,10 +3612,18 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 
 	InitShaderEx( strippedName, lightmapIndex, realLightmapIndex );
 
+	// oax surface world: "#oaxsurf..." names a material with per-surface
+	// flags and tint; its text or image is the material's, the result is
+	// changed before FinishShader (tr_surfworld.c)
+	lookupName = strippedName;
+	if ( strippedName[0] == '#' && ( oaxVariant = R_OAXSurfVariant( strippedName ) ) != NULL ) {
+		lookupName = R_OAXSurfVariantMaterial( oaxVariant );
+	}
+
 	//
 	// attempt to define shader from an explicit parameter file
 	//
-	shaderText = FindShaderInShaderText( strippedName );
+	shaderText = FindShaderInShaderText( lookupName );
 	if ( shaderText ) {
 		// enable this when building a pak file to get a global list
 		// of all explicit shaders
@@ -3514,6 +3634,9 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 		if ( !ParseShader( &shaderText ) ) {
 			// had errors, so use default shader
 			shader.defaultShader = qtrue;
+		}
+		if ( oaxVariant && !shader.defaultShader ) {
+			R_OAXSurfVariantApply( oaxVariant, &shader, stages );
 		}
 		sh = FinishShader();
 		return sh;
@@ -3541,9 +3664,9 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 			flags |= IMGFLAG_CLAMPTOEDGE;
 		}
 
-		image = R_FindImageFile( name, IMGTYPE_COLORALPHA, flags );
+		image = R_FindImageFile( oaxVariant ? lookupName : name, IMGTYPE_COLORALPHA, flags );
 		if ( !image ) {
-			ri.Printf( PRINT_DEVELOPER, "Couldn't find image file for shader %s\n", name );
+			ri.Printf( PRINT_DEVELOPER, "Couldn't find image file for shader %s\n", oaxVariant ? lookupName : name );
 			shader.defaultShader = qtrue;
 			return FinishShader();
 		}
@@ -3600,6 +3723,9 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 		stages[1].stateBits |= GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO;
 	}
 
+	if ( oaxVariant ) {
+		R_OAXSurfVariantApply( oaxVariant, &shader, stages );
+	}
 	return FinishShader();
 }
 

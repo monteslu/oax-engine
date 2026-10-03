@@ -1,10 +1,19 @@
+/*
+ * wasmcart.h: the wasmcart cart ABI (v4), copied from the wasmcart project
+ * (https://github.com/wasmcart/wasmcart, include/wasmcart.h).
+ *
+ * Copyright (c) Luis Montes
+ * Licensed under the MIT License (see the wasmcart project's LICENSE file);
+ * MIT is GPL compatible, so the GPLv3 engine can include it.
+ */
+
 #ifndef WASMCART_H
 #define WASMCART_H
 
 #include <stdint.h>
 
 // ABI version
-#define WC_ABI_VERSION 3
+#define WC_ABI_VERSION 4
 
 // Button bitmask
 #define WC_BTN_A       (1 << 0)
@@ -21,16 +30,27 @@
 #define WC_BTN_RIGHT   (1 << 11)
 #define WC_BTN_L3      (1 << 12)
 #define WC_BTN_R3      (1 << 13)
+// ABI v4: the rest of SDL2's controller button set; bits 21-31 reserved
+#define WC_BTN_GUIDE    (1 << 14)
+#define WC_BTN_MISC1    (1 << 15)
+#define WC_BTN_PADDLE1  (1 << 16)
+#define WC_BTN_PADDLE2  (1 << 17)
+#define WC_BTN_PADDLE3  (1 << 18)
+#define WC_BTN_PADDLE4  (1 << 19)
+#define WC_BTN_TOUCHPAD (1 << 20)
 
-// Pad struct (16 bytes — must match host PAD_SIZE)
+// full trigger travel (ABI v4: int16, as SDL2 and libretro report it)
+#define WC_TRIGGER_MAX  32767
+
+// Pad struct (20 bytes, ABI v4: every analog axis is int16, triggers 0..32767)
 typedef struct {
-    uint16_t buttons;
+    uint32_t buttons;
     int16_t  left_x;
     int16_t  left_y;
     int16_t  right_x;
     int16_t  right_y;
-    uint8_t  left_trigger;
-    uint8_t  right_trigger;
+    int16_t  left_trigger;
+    int16_t  right_trigger;
     uint8_t  connected;
     uint8_t  _pad[3];
 } wc_pad_t;

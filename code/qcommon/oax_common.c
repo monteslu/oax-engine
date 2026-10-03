@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 oax_common.c: engine-extension plumbing shared by every build.
 
 - `oax_features` / `oax_version`: read-only cvars new gamecode probes
@@ -62,6 +81,19 @@ void Com_DebugSet( const char *name, const char *value ) {
 		Q_strncpyz( debugValues[i].name, name, sizeof( debugValues[i].name ) );
 	}
 	Q_strncpyz( debugValues[i].value, value, sizeof( debugValues[i].value ) );
+}
+
+char com_debugBlob[COM_DEBUG_BLOB_SIZE];
+
+void Com_DebugSetBlob( const char *data, int len ) {
+	if ( len > COM_DEBUG_BLOB_SIZE - 1 ) {
+		len = COM_DEBUG_BLOB_SIZE - 1;
+	}
+	if ( len < 0 ) {
+		len = 0;
+	}
+	memcpy( com_debugBlob, data, len );
+	com_debugBlob[len] = 0;
 }
 
 void Com_DebugSetInt( const char *name, int value ) {

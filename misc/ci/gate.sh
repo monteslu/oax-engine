@@ -6,9 +6,10 @@
 #
 # Needs: cmake, a C compiler, emsdk (EMSDK or emcc on PATH), node, unzip,
 # OpenArena content (OA_BASEOA or a distro install), OA QVMs (OA_QVM_DIR, a
-# directory containing vm/*.qvm; defaults to a sibling oa-gamecode build),
-# q3map2 + bspc for the test maps (Q3MAP2/BSPC, default ../oa-mapgen/vendor/bin),
-# and a romdev server (ROMDEV_URL, default http://127.0.0.1:7331).
+# directory containing vm/*.qvm; defaults to a sibling oax-gamecode build),
+# q3map2 + bspc for the test maps (Q3MAP2/BSPC or on PATH), the test
+# references (a sibling oax-engine-testdata checkout, or OAX_TESTDATA) and a
+# romdev server (ROMDEV_URL, default http://127.0.0.1:7331).
 #
 # Exit codes follow tests/romdev/run.mjs: 0 pass, 1 test failure,
 # 3 infrastructure (romdev unreachable). A build failure exits 2.
@@ -16,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$PWD"
-JOBS="${JOBS:-$(nproc)}"
+JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 
 if ! command -v emcc >/dev/null 2>&1; then
   if [ -n "${EMSDK:-}" ] && [ -f "$EMSDK/emsdk_env.sh" ]; then
@@ -29,7 +30,7 @@ if ! command -v emcc >/dev/null 2>&1; then
 fi
 
 if [ -z "${OA_QVM_DIR:-}" ]; then
-  OA_QVM_DIR="$(ls -d "$ROOT"/../oa-gamecode/build/release-*/oax 2>/dev/null | head -1 || true)"
+  OA_QVM_DIR="$(ls -d "$ROOT"/../oax-gamecode/build/release-*/oax "$ROOT"/../oa-gamecode/build/release-*/oax 2>/dev/null | head -1 || true)"
 fi
 if [ -z "$OA_QVM_DIR" ] || [ ! -d "$OA_QVM_DIR/vm" ]; then
   echo "gate: no OpenArena QVMs; build OpenArena/gamecode and set OA_QVM_DIR" >&2
@@ -47,11 +48,13 @@ cmake --build build-cart -j"$JOBS" >build-cart.log 2>&1 || { tail -30 build-cart
 echo "== test maps"
 node tests/maps/build.mjs || exit 2
 
-# maps converted by an external converter (local builds, never committed), for the
-# converter-validation test
+# maps converted by an external converter (local builds, never committed) for
+# the converter-validation test: OA_CONVERTED_MAPS names them (comma
+# separated), OA_CONVERTED_DIR holds <map>.pk3
 CONVERTED_DIR="${OA_CONVERTED_DIR:-$HOME/.openarena/baseoa}"
 CONVERTED=()
-for m in ${OA_CONVERTED_MAPS//,/ }; do
+IFS=',' read -r -a CONVERTED_MAPS <<< "${OA_CONVERTED_MAPS:-}"
+for m in "${CONVERTED_MAPS[@]}"; do
   [ -f "$CONVERTED_DIR/$m.pk3" ] && CONVERTED+=(--pk3 "$CONVERTED_DIR/$m.pk3")
 done
 

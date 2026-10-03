@@ -1,5 +1,5 @@
 // Renderer reference: the cart's GLES 3.0 frames against the NATIVE desktop
-// renderer's frames from the same cameras (tests/romdev/reference/native,
+// renderer's frames from the same cameras (<oax-engine-testdata>/reference/native,
 // written by reference/capture-native.mjs). The goldens catch regressions;
 // this checks the cart renders what the desktop engine renders.
 //
@@ -8,13 +8,12 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { comparePng, readPng, halfSize } from '../lib/png.mjs';
+import { referenceDir } from '../lib/testdata.mjs';
 
 export const name = 'render-reference';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const refDir = path.join(here, '..', 'reference', 'native');
+const refDir = path.join(referenceDir, 'native');
 const TOLERANCE = 32;
 const MAX_MEAN = 4;          // mean per-pixel max-channel difference
 const MAX_BAD = 0.03;        // fraction of pixels beyond tolerance

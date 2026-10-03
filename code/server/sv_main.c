@@ -1180,6 +1180,13 @@ int SV_RateMsec(client_t *client)
 	int rate, rateMsec;
 	int messageSize;
 	
+	// a loopback client has no line to throttle, and this measures the wall
+	// clock: paced by it, the fragments of a large gamestate or snapshot
+	// reached the local client after a number of frames that depended on
+	// machine load, so fixedtime runs were not repeatable (oax-movers)
+	if(client->netchan.remoteAddress.type == NA_LOOPBACK)
+		return 0;
+
 	messageSize = client->netchan.lastSentSize;
 	rate = client->rate;
 

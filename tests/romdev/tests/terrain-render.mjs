@@ -14,7 +14,12 @@
 // - the native client renders the close view like the cart (mean
 //   difference over the hill, away from the box walls' shadow edge, which
 //   the two GLs rasterize differently); control: against the cart's
-//   terrain-off frame.
+//   terrain-off frame;
+// - the sun shadow mask (r_oaxTerrainDebug 4 paints it on the terrain) is
+//   the native one: few pixels of the lower frame may differ by more than
+//   half the range. Stair-stepped cart shadows (depth read at 16-bit
+//   precision through a lowp ES sampler) put 2.97% there; control: the cart
+//   mask with terrain casting no shadows (r_oaxTerrainDebug 5).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,6 +41,23 @@ const CRACK_VIEW = '0 -300 650 80 90 0';
 const TOLERANCE = 24;
 const HILL = { x0: 0, y0: 0.4, x1: 0.75, y1: 1 };
 const MIN_COLORS = 3000;
+const MASK_BAD = 0.01;     // fraction of the lower frame beyond MASK_TOL
+const MASK_TOL = 128;
+
+// fraction of pixels in the lower 60% of the frame whose largest channel
+// difference exceeds tol
+export function maskMismatch(a, b, tol = MASK_TOL) {
+  if (a.width !== b.width || a.height !== b.height) return 1;
+  let n = 0, tot = 0;
+  for (let y = Math.floor(a.height * 0.4); y < a.height; y++) {
+    for (let x = 0; x < a.width; x++) {
+      const i = (y * a.width + x) * 4;
+      tot++;
+      if (Math.max(Math.abs(a.data[i] - b.data[i]), Math.abs(a.data[i + 1] - b.data[i + 1]), Math.abs(a.data[i + 2] - b.data[i + 2])) > tol) n++;
+    }
+  }
+  return n / tot;
+}
 
 export function uniqueColors(img) {
   const s = new Set();
@@ -66,6 +88,9 @@ function shotList() {
     { cmd: `r_oaxTerrain 1;cl_overrideView "${CRACK_VIEW}";r_oaxTerrainLodDist 150;r_oaxTerrainDebug 1`, name: 'crack', values: 'crack' },
     { cmd: 'r_oaxTerrainDebug 2', name: 'crackctl', values: 'crackctl' },
     { cmd: 'r_oaxTerrainDebug 0;r_oaxTerrainLodDist 1200', name: null },
+    { cmd: `cl_overrideView "${VIEWS.near}";r_oaxTerrainDebug 4`, name: 'mask' },
+    { cmd: 'r_oaxTerrainDebug 5', name: 'maskctl' },
+    { cmd: 'r_oaxTerrainDebug 0', name: null },
   ];
 }
 
@@ -109,13 +134,25 @@ export async function run({ goldens, out, update }) {
   if (crackCtl.off === 0) failures.push('control did not fail: no cracks without stitching');
 
   // native cross-check
-  const nat = nativeShots('terrain-render', MAP, [{ cmd: `cl_overrideView "${VIEWS.near}"`, name: 'near' }], { setup: SETUP });
+  const nat = nativeShots('terrain-render', MAP, [
+    { cmd: `cl_overrideView "${VIEWS.near}"`, name: 'near' },
+    { cmd: 'r_oaxTerrainDebug 4', name: 'mask' },
+  ], { setup: SETUP });
   if (!nat.images.near) failures.push('native wrote no screenshot');
   else {
+    writePng(path.join(out, 'terrain-render_near.native.png'), nat.images.near);
     const m = meanDiff(nat.images.near, cart.images.near, HILL), mctl = meanDiff(nat.images.near, cart.images.off, HILL);
     rows.push(`native vs cart near view: mean difference ${m.toFixed(2)} (control against the cart's terrain-off frame ${mctl.toFixed(1)})`);
     if (m > 6) failures.push(`native near view differs from the cart's (mean ${m.toFixed(2)})`);
     if (mctl <= 6) failures.push('native control did not fail');
+  }
+  if (!nat.images.mask) failures.push('native wrote no shadow mask screenshot');
+  else {
+    writePng(path.join(out, 'terrain-render_mask.native.png'), nat.images.mask);
+    const b = maskMismatch(nat.images.mask, cart.images.mask), bctl = maskMismatch(nat.images.mask, cart.images.maskctl);
+    rows.push(`native vs cart sun shadow mask: ${(b * 100).toFixed(2)}% of the lower frame beyond ${MASK_TOL} (control, terrain casting no shadows on the cart: ${(bctl * 100).toFixed(2)}%)`);
+    if (b > MASK_BAD) failures.push(`the cart's sun shadow mask differs from native (${(b * 100).toFixed(2)}%)`);
+    if (bctl <= MASK_BAD) failures.push('shadow mask control did not fail');
   }
   return { ok: failures.length === 0, failures, rows };
 }

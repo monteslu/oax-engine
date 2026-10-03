@@ -21,6 +21,7 @@ import { readValues } from '../lib/values.mjs';
 import { mapPath, CLEAN_VIEW } from '../lib/scenes.mjs';
 import { terrainFromBsp } from '../lib/terrain.mjs';
 
+export const timeoutSec = 2400;
 export const name = 'outdoor-ctf';
 
 const MAP = 'oax_outdoor_ctf';

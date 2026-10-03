@@ -601,12 +601,18 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 		return;
 	}
 
+#ifndef BSPC
+	// oax: a map's own package supplies its assets first (files.c)
+	FS_OAXSetMapPack( name );
+#endif
+
 	// free old stuff
 	Com_Memset( &cm, 0, sizeof( cm ) );
 	CM_ClearLevelPatches();
 #ifndef BSPC
 	CM_ClearGuiSurfaces();
 	CM_OAXTerrainClear();
+	CM_OAXSurfClear();
 #endif
 
 	if ( !name[0] ) {
@@ -664,6 +670,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	BSPX_SetCurrentMap( buf.v, length );
 	CM_LoadGuiSurfaces( cmod_base, &header );	// oax in-world GUIs
 	CM_OAXTerrainLoad( buf.v, length );	// oax heightmap terrain
+	CM_OAXSurfLoad( buf.v, length );	// oax collision meshes; surface world kept for validation
 #endif
 
 	// we are NOT freeing the file, because it is cached for the ref
@@ -672,6 +679,10 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	CM_InitBoxHull ();
 
 	CM_FloodAreaConnections ();
+
+#ifndef BSPC
+	CM_OAXSurfValidate();	// surface world against the hull (cm_oaxsurf.c)
+#endif
 
 	// allow this to be cached if it is loaded by the server
 	if ( !clientload ) {
@@ -690,6 +701,7 @@ void CM_ClearMap( void ) {
 #ifndef BSPC
 	CM_ClearGuiSurfaces();
 	CM_OAXTerrainClear();
+	CM_OAXSurfClear();
 #endif
 }
 
@@ -707,6 +719,9 @@ cmodel_t	*CM_ClipHandleToModel( clipHandle_t handle ) {
 	}
 	if ( handle == BOX_MODEL_HANDLE ) {
 		return &box_model;
+	}
+	if ( CM_IS_OAX_OBB( handle ) ) {
+		return CM_OAXOBBModel();
 	}
 	if ( handle < MAX_SUBMODELS ) {
 		Com_Error( ERR_DROP, "CM_ClipHandleToModel: bad handle %i < %i < %i", 

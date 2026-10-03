@@ -140,7 +140,7 @@ function main() {
   const manifest = {
     name: args.name || 'OpenArena',
     version: '0.1.0',
-    abi: 3,
+    abi: 4,
     entry: 'cart.wasm',
     players: 1,
     width: 1280,

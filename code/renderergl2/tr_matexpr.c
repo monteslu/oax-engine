@@ -305,6 +305,86 @@ static void R_ParseTables( const char *text, int len, const char *file ) {
 	}
 }
 
+/*
+=================
+R_BuiltinTables
+
+Tables the physical light effects use (step 7.5 B, docs/lights.md), added
+after the .table files in scripts/ so a map's own table of the same name wins:
+  oax_sin      one cycle of sin, 64 values (lerped)
+  oax_blink    { 1, 0 } snapped: on for the first half of a cycle
+  oax_flicker  64 snapped values: 0 below 0.5, else the value (UE1 LT_Flicker)
+  oax_strobe   64 snapped values: 0 or 1, half each (UE1 LT_Strobe)
+The random tables come from a fixed LCG, so every host draws the same light.
+=================
+*/
+static void R_AddBuiltinTable( const char *name, const float *values, int n, qboolean snap ) {
+	matTable_t t;
+
+	if ( R_FindTable( name ) >= 0 || numTables == MAX_TABLES ) {
+		return;
+	}
+	Com_Memset( &t, 0, sizeof( t ) );
+	Q_strncpyz( t.name, name, sizeof( t.name ) );
+	t.snap = snap;
+	t.numValues = n + 1;
+	t.values = ri.Hunk_Alloc( ( n + 1 ) * sizeof( float ), h_low );
+	Com_Memcpy( t.values, values, n * sizeof( float ) );
+	t.values[n] = values[0];
+	tables[numTables++] = t;
+}
+
+// sin by its Taylor series on [-pi/2, pi/2]: plain IEEE arithmetic, so every
+// host builds the same table without the host libm
+static double DetSin( double x ) {
+	double x2, term, sum;
+	int n;
+
+	while ( x > M_PI ) {
+		x -= 2.0 * M_PI;
+	}
+	if ( x > M_PI / 2 ) {
+		x = M_PI - x;
+	} else if ( x < -M_PI / 2 ) {
+		x = -M_PI - x;
+	}
+	x2 = x * x;
+	term = x;
+	sum = x;
+	for ( n = 1; n < 12; n++ ) {
+		term *= -x2 / ( ( 2 * n ) * ( 2 * n + 1 ) );
+		sum += term;
+	}
+	return sum;
+}
+
+static void R_BuiltinTables( void ) {
+	float v[64];
+	unsigned int seed = 12345u;
+	int i;
+
+	for ( i = 0; i < 64; i++ ) {
+		v[i] = (float)DetSin( i * ( 2.0 * M_PI / 64.0 ) );
+	}
+	R_AddBuiltinTable( "oax_sin", v, 64, qfalse );
+	v[0] = 1;
+	v[1] = 0;
+	R_AddBuiltinTable( "oax_blink", v, 2, qtrue );
+	for ( i = 0; i < 64; i++ ) {
+		float r;
+
+		seed = seed * 1103515245u + 12345u;
+		r = ( ( seed >> 8 ) & 0xffff ) / 65536.0f;
+		v[i] = r < 0.5f ? 0.0f : r;
+	}
+	R_AddBuiltinTable( "oax_flicker", v, 64, qtrue );
+	for ( i = 0; i < 64; i++ ) {
+		seed = seed * 1103515245u + 12345u;
+		v[i] = ( ( seed >> 8 ) & 0xffff ) < 0x8000 ? 0.0f : 1.0f;
+	}
+	R_AddBuiltinTable( "oax_strobe", v, 64, qtrue );
+}
+
 void R_MatExprInit( void ) {
 	char **files;
 	int numFiles, i;
@@ -324,6 +404,7 @@ void R_MatExprInit( void ) {
 		}
 	}
 	ri.FS_FreeFileList( files );
+	R_BuiltinTables();
 	if ( numTables ) {
 		ri.Printf( PRINT_DEVELOPER, "%d material tables\n", numTables );
 	}
@@ -697,6 +778,16 @@ qboolean R_MatExprParseShaderKeyword( const char *token, char **text, shader_t *
 	}
 	if ( !Q_stricmp( token, "forceShadows" ) ) {
 		sh->oaxLightFlags |= ULSF_FORCESHADOWS;
+		return qtrue;
+	}
+	if ( !Q_stricmp( token, "oaxLightMask" ) ) {
+		// light-mask groups of the surfaces using this material (step 7.5 B)
+		char *t = COM_ParseExt( text, qfalse );
+
+		sh->oaxLightMask = (int)strtol( t, NULL, 0 ) & ULIGHT_MASK_ALL;
+		if ( !sh->oaxLightMask ) {
+			sh->oaxLightMask = -1;      // explicitly in no group: lit by no light
+		}
 		return qtrue;
 	}
 	return qfalse;

@@ -12,6 +12,8 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/cm_trace.c
     ${SOURCE_DIR}/qcommon/cm_terrain.c
     ${SOURCE_DIR}/qcommon/oax_terrain.c
+    ${SOURCE_DIR}/qcommon/oax_surfaces.c
+    ${SOURCE_DIR}/qcommon/cm_oaxsurf.c
     ${SOURCE_DIR}/qcommon/cm_navgeom.c
     ${SOURCE_DIR}/qcommon/cmd.c
     ${SOURCE_DIR}/qcommon/common.c
@@ -50,7 +52,7 @@ set(COMMON_SOURCES
 )
 
 # oax terrain collision: the same float results on every build
-set_source_files_properties(${SOURCE_DIR}/qcommon/cm_terrain.c ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/cm_navgeom.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+set_source_files_properties(${SOURCE_DIR}/qcommon/cm_terrain.c ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/cm_navgeom.c ${SOURCE_DIR}/qcommon/cm_oaxsurf.c ${SOURCE_DIR}/qcommon/oax_surfaces.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
 # musl sources, kept unmodified (see qcommon/detmath/README.md)
 file(GLOB DETMATH_SOURCES ${SOURCE_DIR}/qcommon/detmath/*.c)

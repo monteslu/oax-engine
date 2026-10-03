@@ -1252,7 +1252,7 @@ void R_Register( void )
 			"0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_ext_max_anisotropy = ri.Cvar_Get( "r_ext_max_anisotropy", "2", CVAR_ARCHIVE | CVAR_LATCH );
 
-	r_picmip = ri.Cvar_Get ("r_picmip", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	r_picmip = ri.Cvar_Get ("r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH );	// oax: full-resolution textures by default
 	r_roundImagesDown = ri.Cvar_Get ("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_colorMipLevels = ri.Cvar_Get ("r_colorMipLevels", "0", CVAR_LATCH );
 	ri.Cvar_CheckRange( r_picmip, 0, 16, qtrue );
@@ -1451,6 +1451,7 @@ void R_Register( void )
 	// removed in R_Shutdown
 	R_OAXRegisterCvars();
 	R_OAXTerrainRegisterCvars();
+	R_OAXSurfWorldRegisterCvars();
 
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
 	ri.Cmd_AddCommand( "shaderlist", R_ShaderList_f );
@@ -1593,6 +1594,11 @@ void R_Init( void ) {
 
 	// print info
 	GfxInfo_f();
+	// oax: what a capture is taken at (docs/test-hooks.md)
+	if ( ri.DebugSet ) {
+		ri.DebugSet( "r_capture", va( "%d %d %d", glConfig.vidWidth, glConfig.vidHeight, r_picmip->integer ) );
+	}
+
 	ri.Printf( PRINT_ALL, "----- finished R_Init -----\n" );
 }
 
@@ -1622,12 +1628,14 @@ void RE_Shutdown( qboolean destroyWindow ) {
 	if ( tr.registered ) {
 		R_IssuePendingRenderCommands();
 		R_ShutDownQueries();
+		R_OAXSurfIdShutdown();
 		if (glRefConfig.framebufferObject)
 			FBO_Shutdown();
 		R_DeleteTextures();
 		R_ShutdownVaos();
 		R_ULightShutdown();
 		R_OAXTerrainShutdown();
+		R_OAXSurfWorldShutdown();
 		GLSL_ShutdownGPUShaders();
 	}
 

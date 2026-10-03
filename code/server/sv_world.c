@@ -33,6 +33,12 @@ be returned, otherwise a custom box tree will be constructed.
 ================
 */
 clipHandle_t SV_ClipHandleForEntity( const sharedEntity_t *ent ) {
+	clipHandle_t obb;
+
+	// oax: an oriented box (vehicles), relative to r.currentOrigin
+	if ( SV_OAXEntityOBB( ent, &obb ) ) {
+		return obb;
+	}
 	if ( ent->r.bmodel ) {
 		// explicit hulls in the BSP model
 		return CM_InlineModel( ent->s.modelindex );

@@ -33,6 +33,10 @@ export const SCRIPTS = {
 // basic with the strafe reversed: the must-differ control for determinism
 SCRIPTS.basic_control = SCRIPTS.basic.map((st, k) => (k === 1 ? { ...st, pad: { axes: { ly: -1, lx: -1 } } } : st));
 
+// Level time pad scripts start at in the movement tests, on every build:
+// past the time either build needs to load the map and place the player.
+export const PADSCRIPT_MIN_START = 8000;
+
 export async function runScript(s, map, name, { seed = 1, spawn = 0 } = {}) {
   const script = SCRIPTS[name];
   await loadScene(s, map, { seed });
@@ -41,8 +45,11 @@ export async function runScript(s, map, name, { seed = 1, spawn = 0 } = {}) {
   const before = await s.read('trace_count');
   // played by the engine from tests/romdev/data/padscripts (packed into the
   // cart), the same file the native build plays
-  await s.command(`padscript padscripts/${name}.pad`);
-  await s.step(script.reduce((n, st) => n + st.frames, 0) + 30);   // + up to 25 frames waiting for the start phase
+  // the script starts at level time PADSCRIPT_MIN_START (both builds reach
+  // the map at different level times; see cl_testscript.c)
+  await s.command(`set padscript_minstart ${PADSCRIPT_MIN_START}; padscript padscripts/${name}.pad`);
+  await s.stepUntil('pad_start_time', (v) => v >= 0, 2000, 4);
+  await s.step(script.reduce((n, st) => n + st.frames, 0) + 30);
   const after = await s.read('trace_count');
   const n = after - before;
   if (n <= 0) throw new Error('no trace rows recorded (is a player state present?)');

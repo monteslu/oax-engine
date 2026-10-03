@@ -237,6 +237,9 @@ int CM_PointContents( const vec3_t p, clipHandle_t model ) {
 		return 0;
 	}
 
+	if ( CM_IS_OAX_OBB( model ) ) {
+		return CM_OAXOBBPointContents( p );
+	}
 	if ( model ) {
 		clipm = CM_ClipHandleToModel( model );
 		leaf = &clipm->leaf;
@@ -271,6 +274,7 @@ int CM_PointContents( const vec3_t p, clipHandle_t model ) {
 
 	if ( !model ) {
 		contents |= CM_OAXTerrainPointContents( p );	// oax heightmap terrain (cm_terrain.c)
+		contents |= CM_OAXCollisionPointContents( p );	// oax collision meshes (cm_oaxsurf.c)
 	}
 
 	return contents;

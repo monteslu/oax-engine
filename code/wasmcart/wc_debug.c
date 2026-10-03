@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 wasmcart platform backend: named debug state (WC_FLAG_DEBUG).
 
 The host reads this table only when a harness asks ("read player_origin"),
@@ -47,6 +66,7 @@ static struct {
 	int32_t padStartTime;       // command time the last pad script started (-1 = none)
 	char    mapname[64];
 	char    command[256];       // written by a harness; executed at the next frame
+	char    fatal[1024];        // Sys_Error text once the cart has halted ("" while running)
 	char    values[65536];      // named debug values, "name value\n" lines (Com_DebugSet)
 } dbg;
 
@@ -82,6 +102,8 @@ static wcDebugField_t dbgTable[] = {
 	FIELD( "mapname", dbg.mapname, WC_DBG_BYTES, sizeof( dbg.mapname ) ),
 	FIELD( "console_cmd", dbg.command, WC_DBG_BYTES, sizeof( dbg.command ) ),
 	FIELD( "debug_values", dbg.values, WC_DBG_BYTES, sizeof( dbg.values ) ),
+	FIELD( "debug_blob", com_debugBlob, WC_DBG_BYTES, COM_DEBUG_BLOB_SIZE ),
+	FIELD( "fatal_error", dbg.fatal, WC_DBG_BYTES, sizeof( dbg.fatal ) ),
 	FIELD( "trace_count", &dbgTraceCount, WC_DBG_I32, 1 ),
 	FIELD( "trace", dbgTrace, WC_DBG_F32, WC_TRACE_ROWS * WC_TRACE_COLS ),
 	{ 0, 0, 0, { 0, 0, 0 }, 0 }
@@ -96,8 +118,25 @@ const playerState_t *WC_Debug_ServerPlayerState( int *serverTime, int *activeEnt
 int WC_Debug_ServerStaticTime( void );
 extern int cl_padScriptStartTime;
 
+/*
+===============
+WC_Debug_SetFatal
+
+Sys_Error on the cart: keep the message where a harness reads it, since a
+halted cart renders nothing and would otherwise just look idle.
+===============
+*/
+void WC_Debug_SetFatal( const char *text ) {
+	Q_strncpyz( dbg.fatal, text && text[0] ? text : "halted", sizeof( dbg.fatal ) );
+}
+
 void WC_Debug_Init( void ) {
+	char boot[sizeof( dbg.command )];
+
+	// keep a boot command a harness wrote before the first frame
+	memcpy( boot, dbg.command, sizeof( boot ) );
 	memset( &dbg, 0, sizeof( dbg ) );
+	memcpy( dbg.command, boot, sizeof( boot ) );
 	dbg.groundEntity = -1;
 }
 
@@ -110,6 +149,16 @@ console_cmd field (NUL-terminated); it runs at the start of the next frame,
 exactly as if typed, and the field is cleared to show it was taken.
 ===============
 */
+int WC_Debug_TakeBootCommand( char *out, int size ) {
+	if ( !dbg.command[0] ) {
+		return 0;
+	}
+	dbg.command[sizeof( dbg.command ) - 1] = '\0';
+	Q_strncpyz( out, dbg.command, size );
+	memset( dbg.command, 0, sizeof( dbg.command ) );
+	return 1;
+}
+
 void WC_Debug_PollCommand( void ) {
 	if ( !dbg.command[0] ) {
 		return;

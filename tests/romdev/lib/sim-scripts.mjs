@@ -36,3 +36,26 @@ SIM_SCRIPTS.terrain_cliff = [
   { frames: 40, pad: { axes: { ly: -1, rx: 1 } } },
   fwd(60), idle(40),
 ];
+
+// oax_nav_intent (nav-intent): from in front of teleporter A, walk into it
+// (arrive on the tower inside trigger B), step off the arrival, then back
+// into B (arrive on the ground inside A) and walk out of A backwards.
+const back = (frames) => ({ frames, pad: { axes: { ly: 1 } } });
+SIM_SCRIPTS.nav_tele = [idle(10), fwd(30), idle(30), back(28), idle(50)];
+// translocator rule: throw the beacon level ahead (fire), let it land, port
+// to it (fire again), stand
+const fire = (frames) => ({ frames, pad: { axes: { rt: 1 } } });
+SIM_SCRIPTS.nav_tl = [idle(10), fire(4), idle(60), fire(4), idle(40)];
+
+// oax_surfworld (surface-world): up the ramp onto the platform and off its
+// far edge; into the arch's leg (a collision mesh), then sideways under it.
+SIM_SCRIPTS.surf_ramp = [
+  idle(10), fwd(85), jump(), fwd(50),
+  { frames: 24, pad: { axes: { ly: -1, rx: 0.3 } } },
+  fwd(50), jump(), fwd(30), idle(30),
+];
+SIM_SCRIPTS.surf_arch = [
+  idle(10), fwd(60),
+  { frames: 50, pad: { axes: { ly: -1, lx: -1 } } },
+  fwd(50), idle(20),
+];

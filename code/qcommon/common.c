@@ -302,6 +302,18 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 	if (code != ERR_DISCONNECT && code != ERR_NEED_CD)
 		Cvar_Set("com_errorMessage", com_errorMessage);
 
+	// oax: never let an error be swallowed by a return to the menu. Every
+	// error is published (debug value com_error), and with com_errorQuit 1
+	// (tests and tools) any error but a plain disconnect ends the process:
+	// native exits non-zero, a cart halts and reports it, so a harness stops
+	// at once instead of waiting for something that will never happen.
+	if (code != ERR_DISCONNECT) {
+		Com_DebugSet("com_error", com_errorMessage);
+		if (Cvar_VariableIntegerValue("com_errorQuit")) {
+			Sys_Error("%s (com_errorQuit)", com_errorMessage);
+		}
+	}
+
 	restartClient = com_gameClientRestarting && !( com_cl_running && com_cl_running->integer );
 
 	com_gameRestarting = qfalse;

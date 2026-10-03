@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 phys_main.c: Box3D worlds, bodies, shapes, joints and their bookkeeping.
 
 The physics module owns every Box3D world the engine runs. Gamecode
@@ -129,6 +148,7 @@ void Phys_Init( void ) {
 #endif
 	// override for every world's workerCount (0 = what gamecode asked for);
 	// results never depend on it, only the time a step takes
+	Phys_DropTestInit();
 	phys_workers = Cvar_Get( "phys_workers", "0", CVAR_ARCHIVE );
 	Cvar_SetDescription( phys_workers, "Box3D worker threads for every physics world, 0 = as gamecode asks (1-8)." );
 }
@@ -181,9 +201,9 @@ static int Phys_ClampWorkers( int n ) {
 	if ( n > OAX_PHYS_MAX_WORKERS ) {
 		n = OAX_PHYS_MAX_WORKERS;
 	}
-#ifdef WASMCART
+#if defined( WASMCART ) || defined( __EMSCRIPTEN__ )
 	if ( !Phys_TasksAvailable() ) {
-		n = 1;	// a cart built without threads runs one worker
+		n = 1;	// a wasm build without threads runs one worker
 	}
 #endif
 	return n;

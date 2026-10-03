@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "q_shared.h"
 #include "qcommon.h"
+#include "oax.h"
 #include "unzip.h"
 
 /*
@@ -213,6 +214,7 @@ typedef struct fileInPack_s {
 	char					*name;		// name of the file
 	unsigned long			pos;		// file info position in zip
 	unsigned long			len;		// uncompress file size
+	unsigned long			crc;		// oax: the zip entry's CRC-32 (duplicate report)
 	struct	fileInPack_s*	next;		// next file in the hash
 } fileInPack_t;
 
@@ -243,6 +245,11 @@ typedef struct searchpath_s {
 	pack_t		*pack;		// only one of pack / dir will be non NULL
 	directory_t	*dir;
 } searchpath_t;
+
+// oax content isolation (end of this file, docs/test-hooks.md)
+static searchpath_t *fs_oaxMapPack;
+static void FS_OAXReportConflicts( void );
+static void FS_OAXConflicts_f( void );
 
 static	char		fs_gamedir[MAX_OSPATH];	// this will be a single file name with no separators
 static	cvar_t		*fs_debug;
@@ -1339,6 +1346,15 @@ long FS_FOpenFileRead(const char *filename, fileHandle_t *file, qboolean uniqueF
 		Com_Error(ERR_FATAL, "Filesystem call made without initialization");
 
 	isLocalConfig = !strcmp(filename, "autoexec.cfg") || !strcmp(filename, Q3CONFIG_CFG);
+
+	// oax: the loaded map's own package supplies its assets first
+	if ( fs_oaxMapPack && !isLocalConfig )
+	{
+		len = FS_FOpenFileReadDir(filename, fs_oaxMapPack, file, uniqueFILE, qfalse);
+		if ( file == NULL ? len > 0 : ( len >= 0 && *file ) )
+			return len;
+	}
+
 	for(search = fs_searchpaths; search; search = search->next)
 	{
 		// autoexec.cfg and q3config.cfg can only be loaded outside of pk3 files.
@@ -2062,6 +2078,7 @@ static pack_t *FS_LoadZipFile(const char *zipfile, const char *basename)
 		// store the file position in the zip
 		buildBuffer[i].pos = unzGetOffset(uf);
 		buildBuffer[i].len = file_info.uncompressed_size;
+		buildBuffer[i].crc = file_info.crc;
 		buildBuffer[i].next = pack->hashTable[hash];
 		pack->hashTable[hash] = &buildBuffer[i];
 		unzGoToNextFile(uf);
@@ -3247,6 +3264,8 @@ void FS_Shutdown( qboolean closemfp ) {
 
 	// any FS_ calls will now be an error until reinitialized
 	fs_searchpaths = NULL;
+	fs_oaxMapPack = NULL;
+	Cmd_RemoveCommand( "fs_conflicts" );
 
 	Cmd_RemoveCommand( "path" );
 	Cmd_RemoveCommand( "dir" );
@@ -3454,6 +3473,11 @@ static void FS_Startup( const char *gameName )
 	FS_Path_f();
 
 	fs_gamedirvar->modified = qfalse; // We just loaded, it's not modified
+
+	// oax: packages that supply different bytes for the same path
+	fs_oaxMapPack = NULL;
+	FS_OAXReportConflicts();
+	Cmd_AddCommand( "fs_conflicts", FS_OAXConflicts_f );
 
 	Com_Printf( "----------------------\n" );
 
@@ -4337,4 +4361,240 @@ const char *FS_GetCurrentGameDir(void)
 		return fs_gamedirvar->string;
 
 	return com_basegame->string;
+}
+
+
+/*
+===========================================================================
+oax content isolation (step 7.5 D, docs/test-hooks.md)
+
+- Duplicate report: at every filesystem start, each path that more than one
+  package supplies with DIFFERENT bytes (zip CRC-32 or size differ) is a
+  conflict. Identical copies stay quiet. A conflict between two official
+  numbered packages (pak0.pk3 ... pak9*.pk3, the game's own patch chain) is
+  counted as fs_conflicts_official and not listed; any other is printed as
+  a warning and published as debug values:
+    fs_conflicts            the number of other conflicts
+    fs_conflicts_official   the number in the official patch chain
+    fs_conflict<i>          "path winner.pk3 loser.pk3" (first 16)
+  `fs_conflicts [substring]` lists them all again (official ones too).
+- Map packages: when a map loads (CM_LoadMap), the package that supplies
+  maps/<name>.bsp becomes the map package if it is a map's own package (it
+  holds exactly one .bsp and is not an official numbered pak). While that
+  map is loaded, every file the package holds is read from it, ahead of the
+  normal search order, so another package's older copy cannot replace it.
+    fs_mappack              "<package> <files it now supplies over a
+                            different winning copy>" ("-" none)
+===========================================================================
+*/
+
+typedef struct oaxSeen_s {
+	const fileInPack_t	*file;
+	const pack_t		*pack;
+	struct oaxSeen_s	*next;
+} oaxSeen_t;
+
+#define OAX_CONFLICT_LIST	16
+
+static qboolean FS_OAXOfficialPak( const pack_t *pak ) {
+	return !Q_stricmpn( pak->pakBasename, "pak", 3 ) && pak->pakBasename[3] >= '0' && pak->pakBasename[3] <= '9';
+}
+
+/*
+=================
+FS_OAXScanConflicts
+
+Walks every package in search order (the first holder of a path is the
+winner). Calls back for each conflict; returns { other, official } counts.
+=================
+*/
+static void FS_OAXScanConflicts( void ( *cb )( const char *path, const pack_t *win, const pack_t *lose, qboolean official, void *ctx ),
+		void *ctx, int *other, int *official ) {
+	searchpath_t	*sp;
+	oaxSeen_t		**table, *pool;
+	int				total = 0, used = 0, hashSize = 1 << 16;
+
+	*other = *official = 0;
+	for ( sp = fs_searchpaths; sp; sp = sp->next ) {
+		if ( sp->pack ) {
+			total += sp->pack->numfiles;
+		}
+	}
+	if ( !total ) {
+		return;
+	}
+	table = Z_Malloc( hashSize * sizeof( *table ) );
+	pool = Z_Malloc( total * sizeof( *pool ) );
+
+	for ( sp = fs_searchpaths; sp; sp = sp->next ) {
+		int i;
+
+		if ( !sp->pack ) {
+			continue;
+		}
+		for ( i = 0; i < sp->pack->numfiles; i++ ) {
+			const fileInPack_t *f = &sp->pack->buildBuffer[i];
+			long h;
+			oaxSeen_t *e;
+			int n = strlen( f->name );
+
+			if ( !n || f->name[n - 1] == '/' ) {
+				continue;	// a directory entry
+			}
+			h = FS_HashFileName( f->name, hashSize );
+			for ( e = table[h]; e; e = e->next ) {
+				if ( !FS_FilenameCompare( e->file->name, f->name ) ) {
+					break;
+				}
+			}
+			if ( !e ) {
+				e = &pool[used++];
+				e->file = f;
+				e->pack = sp->pack;
+				e->next = table[h];
+				table[h] = e;
+				continue;
+			}
+			if ( e->pack == sp->pack || ( e->file->crc == f->crc && e->file->len == f->len ) ) {
+				continue;	// the same package twice, or identical bytes
+			}
+			if ( FS_OAXOfficialPak( e->pack ) && FS_OAXOfficialPak( sp->pack ) ) {
+				( *official )++;
+				if ( cb ) {
+					cb( f->name, e->pack, sp->pack, qtrue, ctx );
+				}
+			} else {
+				( *other )++;
+				if ( cb ) {
+					cb( f->name, e->pack, sp->pack, qfalse, ctx );
+				}
+			}
+		}
+	}
+	Z_Free( pool );
+	Z_Free( table );
+}
+
+static void FS_OAXReportCb( const char *path, const pack_t *win, const pack_t *lose, qboolean official, void *ctx ) {
+	int *n = ctx;
+	char name[32];
+
+	if ( official ) {
+		return;
+	}
+	Com_Printf( S_COLOR_YELLOW "WARNING: %s: %s.pk3 and %s.pk3 supply different bytes; %s.pk3 wins\n",
+		path, win->pakBasename, lose->pakBasename, win->pakBasename );
+	if ( *n < OAX_CONFLICT_LIST ) {
+		Com_sprintf( name, sizeof( name ), "fs_conflict%d", *n );
+		Com_DebugSet( name, va( "%s %s.pk3 %s.pk3", path, win->pakBasename, lose->pakBasename ) );
+	}
+	( *n )++;
+}
+
+static void FS_OAXReportConflicts( void ) {
+	int listed = 0, other, official;
+
+	FS_OAXScanConflicts( FS_OAXReportCb, &listed, &other, &official );
+	Com_DebugSetInt( "fs_conflicts", other );
+	Com_DebugSetInt( "fs_conflicts_official", official );
+	if ( other ) {
+		Com_Printf( S_COLOR_YELLOW "WARNING: %d files are supplied with different bytes by more than one package (see above; fs_conflicts lists them)\n", other );
+	}
+	if ( official ) {
+		Com_Printf( "%d files are replaced by later official packages (fs_conflicts lists them)\n", official );
+	}
+}
+
+static void FS_OAXListCb( const char *path, const pack_t *win, const pack_t *lose, qboolean official, void *ctx ) {
+	const char *filter = ctx;
+
+	if ( filter[0] && !Q_stristr( path, filter ) ) {
+		return;
+	}
+	Com_Printf( "%s: %s.pk3 over %s.pk3%s\n", path, win->pakBasename, lose->pakBasename, official ? " (official)" : "" );
+}
+
+static void FS_OAXConflicts_f( void ) {
+	int other, official;
+
+	FS_OAXScanConflicts( FS_OAXListCb, (void *)Cmd_Argv( 1 ), &other, &official );
+	Com_Printf( "%d conflicts, %d in the official packages\n", other, official );
+}
+
+/*
+=================
+FS_OAXSetMapPack
+
+From CM_LoadMap ("maps/<name>.bsp").
+=================
+*/
+void FS_OAXSetMapPack( const char *bspPath ) {
+	searchpath_t *sp, *found = NULL;
+	int i, bsps = 0, over = 0;
+
+	fs_oaxMapPack = NULL;
+	for ( sp = fs_searchpaths; sp && !found; sp = sp->next ) {
+		if ( sp->dir ) {
+			char *netpath = FS_BuildOSPath( sp->dir->path, sp->dir->gamedir, bspPath );
+			FILE *f = Sys_FOpen( netpath, "rb" );
+
+			if ( f ) {
+				fclose( f );
+				break;	// a loose map: no package
+			}
+			continue;
+		}
+		if ( !sp->pack ) {
+			continue;
+		}
+		for ( i = 0; i < sp->pack->numfiles; i++ ) {
+			if ( !FS_FilenameCompare( sp->pack->buildBuffer[i].name, bspPath ) ) {
+				found = sp;
+				break;
+			}
+		}
+	}
+	if ( found && !FS_OAXOfficialPak( found->pack ) ) {
+		for ( i = 0; i < found->pack->numfiles; i++ ) {
+			const char *n = found->pack->buildBuffer[i].name;
+			int len = strlen( n );
+
+			if ( len > 4 && !Q_stricmp( n + len - 4, ".bsp" ) ) {
+				bsps++;
+			}
+		}
+		if ( bsps == 1 ) {
+			fs_oaxMapPack = found;
+		}
+	}
+	if ( !fs_oaxMapPack ) {
+		Com_DebugSet( "fs_mappack", "-" );
+		return;
+	}
+
+	// how many of its files a different copy elsewhere would have won
+	for ( i = 0; i < found->pack->numfiles; i++ ) {
+		const fileInPack_t *mine = &found->pack->buildBuffer[i];
+
+		for ( sp = fs_searchpaths; sp && sp != found; sp = sp->next ) {
+			fileInPack_t *f;
+
+			if ( !sp->pack ) {
+				continue;
+			}
+			for ( f = sp->pack->hashTable[FS_HashFileName( mine->name, sp->pack->hashSize )]; f; f = f->next ) {
+				if ( !FS_FilenameCompare( f->name, mine->name ) ) {
+					break;
+				}
+			}
+			if ( f ) {
+				if ( f->crc != mine->crc || f->len != mine->len ) {
+					over++;
+				}
+				break;
+			}
+		}
+	}
+	Com_Printf( "map package %s.pk3 supplies its own assets (%d over a different copy)\n", found->pack->pakBasename, over );
+	Com_DebugSet( "fs_mappack", va( "%s.pk3 %d", found->pack->pakBasename, over ) );
 }

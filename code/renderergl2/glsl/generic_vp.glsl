@@ -70,6 +70,13 @@ uniform mat4 u_BoneMatrix[MAX_GLSL_BONES];
 #endif
 
 varying vec2   var_DiffuseTex;
+
+// oax detailFade (docs/materials.md): start, 1 / (end - start), neutral,
+// mode (1 per pixel, 2 per vertex); the per-vertex fade from each vertex's
+// view depth (clip w; a vertex behind the eye counts by its distance
+// behind, so it is never "near"), interpolated
+uniform vec4   u_OaxDetailFade;
+varying float  var_OaxFade;
 varying vec4   var_Color;
 
 #if defined(USE_DEFORM_VERTEXES)
@@ -245,6 +252,7 @@ void main()
 #endif
 
 	gl_Position = u_ModelViewProjectionMatrix * vec4(position, 1.0);
+	var_OaxFade = 1.0 - clamp((abs(gl_Position.w) - u_OaxDetailFade.x) * u_OaxDetailFade.y, 0.0, 1.0);
 
 #if defined(USE_TCGEN)
 	vec2 tex = GenTexCoords(u_TCGen0, position, normal, u_TCGen0Vector0, u_TCGen0Vector1);

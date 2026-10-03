@@ -27,6 +27,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define	MAX_SUBMODELS			256
 #define	BOX_MODEL_HANDLE		255
 #define CAPSULE_MODEL_HANDLE	254
+#define OAX_OBB_MODEL_HANDLE	253		// oax oriented box (CM_OAXTempOBBModel, cm_trace.c)
+// a map with 254+ inline models keeps the number for its own model
+#define CM_IS_OAX_OBB( h )	( ( h ) == OAX_OBB_MODEL_HANDLE && cm.numSubModels <= OAX_OBB_MODEL_HANDLE )
 
 
 typedef struct {
@@ -199,5 +202,18 @@ void CM_ClearLevelPatches( void );
 void CM_OAXTerrainTrace( traceWork_t *tw );
 void CM_OAXTerrainPositionTest( traceWork_t *tw );
 int CM_OAXTerrainPointContents( const vec3_t p );
+// cm_oaxsurf.c: surface-world validation and OAX_COLLISION meshes
+void CM_OAXSurfClear( void );
+void CM_OAXSurfLoad( const void *bsp, int bspLen );
+void CM_OAXSurfValidate( void );
+void CM_OAXCollisionTrace( traceWork_t *tw );
+void CM_OAXCollisionPositionTest( traceWork_t *tw );
+int CM_OAXCollisionPointContents( const vec3_t p );
+int CM_OAXNumCollisionTris( void );
+int CM_OAXCollisionTri( int n, float v[3][3] );
 void CM_TestBoxInBrush( traceWork_t *tw, cbrush_t *brush );
 void CM_TraceThroughBrush( traceWork_t *tw, cbrush_t *brush );
+
+// oax oriented boxes (cm_trace.c)
+cmodel_t *CM_OAXOBBModel( void );
+int CM_OAXOBBPointContents( const vec3_t p );

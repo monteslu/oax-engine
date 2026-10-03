@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 tr_oax.c: renderergl2 state for the oax map features.
 
 - Light styles: tr.oaxLightStyles[], read by `rgbGen lightstyle <n>` and
@@ -31,14 +50,20 @@ extern const char *fallbackShader_oaxviewfog_fp;
 extern const char *fallbackShader_oaxproc_vp;
 extern const char *fallbackShader_oaxproc_fp;
 
+cvar_t *r_oaxSkyModelLight;
+
 void R_OAXRegisterCvars( void ) {
 	r_oaxSkyPortal = ri.Cvar_Get( "r_oaxSkyPortal", "1", CVAR_ARCHIVE );
 	ri.Cvar_SetDescription( r_oaxSkyPortal, "Draw oax sky portals (0 draws the map's fallback skybox)." );
 	r_oaxViewFog = ri.Cvar_Get( "r_oaxViewFog", "", CVAR_CHEAT );
 	ri.Cvar_SetDescription( r_oaxViewFog, "Test override for the oax view fog: \"r g b density start end\"." );
 	ri.Cmd_AddCommand( "imageprogram", R_OAXImageProgram_f );
+	R_OAXSurfIdRegisterCvars();
+	r_oaxSkyModelLight = ri.Cvar_Get( "r_oaxSkyModelLight", "1", CVAR_CHEAT );
+	ri.Cvar_SetDescription( r_oaxSkyModelLight, "Light models in a sky portal scene that have no light grid light (worldspawn oaxSkyAmbient / oaxSkyLight); 0 leaves them to the grid as Q3 does." );
 	R_OAXFxRegisterCvars();		// phase 6 effects (tr_oax_fx.c)
 	R_OAXBloomRegisterCvars();
+	R_OAXDisplayRegisterCvars();
 	R_OAXWaterReset();
 	R_OAXResetMapState();
 	R_OAXProcReset();
@@ -220,6 +245,7 @@ void R_OAXInitGLSL( void ) {
 	}
 
 	R_OAXFxInitGLSL();
+	R_OAXDisplayInitGLSL();
 }
 
 void R_OAXShutdownGLSL( void ) {
@@ -230,4 +256,5 @@ void R_OAXShutdownGLSL( void ) {
 		GLSL_DeleteGPUShader( &tr.oaxProcShader[i] );
 	}
 	R_OAXFxShutdownGLSL();
+	R_OAXDisplayShutdownGLSL();
 }

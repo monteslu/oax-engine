@@ -6,6 +6,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cartBootCommand } from './capture.mjs';
 
 const ROMDEV_URL = process.env.ROMDEV_URL || 'http://127.0.0.1:7331';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +31,9 @@ export class Session {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-romdev-session': this.id },
         body: JSON.stringify(args),
-        signal: AbortSignal.timeout(Number(process.env.ROMDEV_TIMEOUT_MS || 300000)),
+        // one romdev call should take seconds; a hang should fail fast, not
+        // sit for minutes (ROMDEV_TIMEOUT_MS raises it for a slow host)
+        signal: AbortSignal.timeout(Number(process.env.ROMDEV_TIMEOUT_MS || 60000)),
       });
     } catch (e) {
       throw new RomdevUnavailable(`romdev unreachable at ${ROMDEV_URL}: ${e.message}`);
@@ -44,20 +47,39 @@ export class Session {
     return body;
   }
 
-  async load(cart = defaultCart, seed = 1) {
+  // picmip: the boot r_picmip (capture.mjs; legacy goldens use 1)
+  async load(cart = defaultCart, seed = 1, { picmip } = {}) {
     // 16 ms frames: the engine keeps time in whole milliseconds, and the
     // native reference runs with fixedtime 16, so both see the same msec.
     const stepMs = Number(process.env.OA_STEP_MS || 16);
     const r = await this.call('loadMedia', { platform: 'wasmcart', path: cart, deterministicSeed: seed, deterministicStepMs: stepMs });
     if (!r.capabilities?.hasDeterministic) throw new RomdevError('cart did not load as a deterministic replay');
+    // boot cvars: the cart reads console_cmd before its first frame
+    const boot = cartBootCommand({ picmip });
+    if (boot) await this.command(boot);
     // the cart boots on its first frame
     await this.step(1);
     await this.refreshFields();
+    // any engine error halts the cart from here on (com_errorQuit), and
+    // step() throws with its message: errors are never swallowed. It rides
+    // on the caller's next command or step instead of a frame of its own:
+    // an extra frame here moved every later capture by 16 ms, and the
+    // console_cmd buffer holds one line, so a separate write would be
+    // overwritten by the caller's first command.
+    this.pendingCommand = 'set com_errorQuit 1';
     return r;
   }
 
+  // Steps, then checks the cart did not halt: a halted cart renders
+  // nothing and would otherwise just look idle to the caller.
   async step(frames) {
-    return this.call('frame', { op: 'step', frames });
+    if (this.pendingCommand) await this.command('');
+    const r = await this.call('frame', { op: 'step', frames });
+    if (this.fields?.has('fatal_error')) {
+      const fatal = await this.read('fatal_error');
+      if (fatal) throw new RomdevError(`cart halted: ${fatal}`);
+    }
+    return r;
   }
 
   async refreshFields() {
@@ -83,6 +105,10 @@ export class Session {
   // The field holds one line until the next frame runs it: a second write
   // before a step replaces the first, so join commands with ';'.
   async command(cmd) {
+    if (this.pendingCommand) {
+      cmd = cmd ? `${this.pendingCommand}; ${cmd}` : this.pendingCommand;
+      this.pendingCommand = null;
+    }
     const bytes = Buffer.concat([Buffer.from(cmd, 'utf8'), Buffer.from([0])]);
     await this.call('wasm', { op: 'write', name: 'console_cmd', hex: bytes.toString('hex') });
   }

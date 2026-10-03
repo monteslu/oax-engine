@@ -1,3 +1,22 @@
+/*
+===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
 // interaction_fp.glsl: unified lighting (phase 5) fragment shader, written
 // for this engine from the id Tech 4 interaction parameter list.
 //
@@ -7,7 +26,18 @@
 //   color      = (diffuse + specular) * projection * lightColor * shadow
 //
 // The 16 / 2 specular constants follow id Tech 4's specular table image.
-// Defines: ULIGHT_DEPTH (shadow map), ULIGHT_AMBIENT (diffuse * ambient),
+//
+// ULIGHT_PHYSICAL (step 7.5 B, docs/lights.md) replaces the projection with
+// a spherical light described by measurable terms, x = d / radius:
+//   v     = softcap( intensity * falloff(x) )          (zero at x >= 1)
+//   light = min( v * angular * lightColor, ceiling )   per channel
+//   color = diffuse * light + specular * v * lightColor
+// falloff: piecewise-linear points, an image (red at (x, 0.5)), inverse
+// square (m / max(x, m))^2, or 1 - smoothstep(x) (UE1); softcap: a quadratic
+// knee of half width k around the cap c; angular: N.L, or 1 on the lit side.
+//
+// Defines: ULIGHT_DEPTH (shadow map), ULIGHT_AMBIENT (diffuse * ambient;
+// with ULIGHT_ZONEAMBIENT the per-vertex zone ambient times u_AmbientLight),
 // USE_SHADOW_CUBE (point lights), USE_SHADOW_2D (projected and parallel
 // lights), SWIZZLE_NORMALMAP.
 
@@ -31,11 +61,18 @@ varying vec4      var_Tangent;
 #if defined(ULIGHT_AMBIENT)
 
 uniform vec3      u_AmbientLight;
+#if defined(ULIGHT_ZONEAMBIENT)
+varying vec4      var_Color;
+#endif
 
 void main()
 {
 	vec4 diffuse = texture(u_DiffuseMap, var_TexCoords) * u_DiffuseColor;
+#if defined(ULIGHT_ZONEAMBIENT)
+	gl_FragColor = vec4(diffuse.rgb * var_Color.rgb * u_AmbientLight, 1.0);
+#else
 	gl_FragColor = vec4(diffuse.rgb * u_AmbientLight, 1.0);
+#endif
 }
 
 #else
@@ -55,6 +92,55 @@ uniform vec3      u_ViewOrigin;
 uniform vec4      u_SpecularColor;
 uniform vec4      u_NormalScale;
 uniform vec4      u_ShadowParams;   // near (0: orthographic), far, depth bias (fraction), normal offset
+
+#if defined(ULIGHT_PHYSICAL)
+uniform vec4      u_PhysLight;      // 1 / radius, intensity, cap (0: none), knee half width
+uniform vec4      u_PhysLight2;     // falloff mode (0 table, 1 image, 2 inverse square, 3 smoothstep), inverse square clamp (x), lambert (1) or none (0), ceiling
+uniform vec2      u_PhysCurve[16];  // falloff points (x, y), x ascending
+uniform int       u_PhysCurveCount;
+
+float PhysFalloff(float x)
+{
+	if (u_PhysLight2.x > 2.5)
+		return 1.0 - smoothstep(0.0, 1.0, x);
+	if (u_PhysLight2.x > 1.5)
+	{
+		float m = u_PhysLight2.y;
+		float r = max(x, m);
+		return (m * m) / (r * r);
+	}
+	if (u_PhysLight2.x > 0.5)
+		return texture(u_LightFalloffMap, vec2(x, 0.5)).r;
+	vec2 prev = u_PhysCurve[0];
+	if (x <= prev.x)
+		return prev.y;
+	for (int i = 1; i < 16; i++)
+	{
+		if (i >= u_PhysCurveCount)
+			break;
+		vec2 p = u_PhysCurve[i];
+		if (x <= p.x)
+			return mix(prev.y, p.y, (x - prev.x) / max(p.x - prev.x, 1e-6));
+		prev = p;
+	}
+	return prev.y;
+}
+
+float PhysCap(float v)
+{
+	float c = u_PhysLight.z, k = u_PhysLight.w;
+	if (c <= 0.0)
+		return v;
+	if (k <= 0.0)
+		return min(v, c);
+	if (v <= c - k)
+		return v;
+	if (v >= c + k)
+		return c;
+	float t = v - c + k;
+	return v - t * t / (4.0 * k);
+}
+#endif
 
 #if defined(USE_SHADOW_CUBE)
 uniform samplerCubeShadow u_ShadowCube;
@@ -107,6 +193,11 @@ float Shadow(vec3 position, vec3 normal)
 
 void main()
 {
+#if defined(ULIGHT_PHYSICAL)
+	float physX = length(u_LightOriginW - var_Position) * u_PhysLight.x;
+	if (physX >= 1.0)
+		discard;
+#else
 	vec4 P = vec4(var_Position, 1.0);
 	vec4 lp = vec4(dot(P, u_LightProjS), dot(P, u_LightProjT), dot(P, u_LightProjQ), dot(P, u_LightFalloffS));
 
@@ -118,6 +209,7 @@ void main()
 		discard;
 
 	vec3 proj = texture(u_LightProjMap, st).rgb * texture(u_LightFalloffMap, vec2(lp.w, 0.5)).rgb;
+#endif
 
 	// Q3 winds front faces the other way round: same test as lightall_fp
 	vec3 surfNormal = normalize(gl_FrontFacing ? -var_Normal : var_Normal);
@@ -142,6 +234,20 @@ void main()
 	float NH = max(dot(N, H), 0.0);
 	float surfNL = dot(surfNormal, L);
 
+#if defined(ULIGHT_PHYSICAL)
+	vec4 diffuse = texture(u_DiffuseMap, var_TexCoords) * u_DiffuseColor;
+	float v = PhysCap(u_PhysLight.y * PhysFalloff(physX));
+	float ang = u_PhysLight2.z > 0.5 ? NL : step(0.0, surfNL);
+	vec3 lightRGB = min(v * ang * u_LightColor, vec3(u_PhysLight2.w));
+	vec3 color = diffuse.rgb * lightRGB;
+	color += texture(u_SpecularMap, var_TexCoords).rgb * u_SpecularColor.rgb * (pow(NH, 16.0) * 2.0 * step(0.0, surfNL)) * v * u_LightColor;
+
+	float shadow = 1.0;
+	if (surfNL > 0.0)
+		shadow = Shadow(var_Position, surfNormal);
+
+	gl_FragColor = vec4(color * shadow, 1.0);
+#else
 	vec4 diffuse = texture(u_DiffuseMap, var_TexCoords) * u_DiffuseColor;
 	vec3 color = diffuse.rgb * NL;
 	color += texture(u_SpecularMap, var_TexCoords).rgb * u_SpecularColor.rgb * (pow(NH, 16.0) * 2.0 * step(0.0, surfNL));
@@ -151,6 +257,7 @@ void main()
 		shadow = Shadow(var_Position, surfNormal);
 
 	gl_FragColor = vec4(color * proj * u_LightColor * shadow, 1.0);
+#endif
 }
 
 #endif

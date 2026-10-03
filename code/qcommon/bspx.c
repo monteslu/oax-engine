@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 bspx.c: BSPX extension lumps in Q3 BSP (v46) files.
 
 The BSPX convention (FTE, QuakeSpasm): after the last standard lump,
@@ -8,9 +27,11 @@ count entries of { char name[24]; int ofs; int len; }. Offsets are from
 the start of the file. Loaders that read lumps by offset (ours, q3map2,
 bspc) never see the block.
 
-Every extension lump is a cache or a manifest: a map without one still
-loads, and the engine recomputes or defaults whatever the lump would have
-carried. Writer: misc/tools/bspx.mjs.
+A map without extension lumps still loads exactly as a stock map. Most
+lumps are caches or manifests the engine can recompute or default; some
+carry content (OAX_TERRAIN, OAX_SURFACES, OAX_COLLISION: see
+docs/map-format.md), and a map without them simply has none of it.
+Writer: misc/tools/bspx.mjs.
 ===========================================================================
 */
 

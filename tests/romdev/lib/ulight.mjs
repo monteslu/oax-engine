@@ -9,7 +9,8 @@ import { Session } from './romdev.mjs';
 import { loadScene, CLEAN_VIEW } from './scenes.mjs';
 import { readValues, parseDebugValues } from './values.mjs';
 import { readPng, writePng } from './png.mjs';
-import { nativeHome, nativeBinary, findBaseoa } from './native.mjs';
+import { nativeHome, nativeBinary, findBaseoa, execNative } from './native.mjs';
+import { nativeCaptureArgs } from './capture.mjs';
 
 // Uncompressed (type 2) or RLE (type 10) 24/32-bit TGA, as the engine writes.
 export function readTga(file) {
@@ -79,23 +80,20 @@ export function shootNative(map, views, { name, out, pre = '', preload = '', pla
   lines.push('debugvalues values.txt', 'quit');
   fs.writeFileSync(path.join(game, 'ulight_shots.cfg'), lines.join('\n') + '\n');
   try {
-    execFileSync(nativeBinary, [
+    execNative([
       '+set', 'fs_basepath', path.dirname(findBaseoa()), '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
-      '+set', 'r_mode', '-1', '+set', 'r_customwidth', '1280', '+set', 'r_customheight', '720', '+set', 'r_fullscreen', '0',
+      ...nativeCaptureArgs(),
       '+set', 'vm_game', '1', '+set', 'vm_cgame', '1', '+set', 'vm_ui', '1', '+set', 'sv_pure', '0',
       '+set', 'bot_enable', '0', '+set', 'com_introplayed', '1', '+set', 'fixedtime', '16', '+set', 'com_maxfps', '0',
       ...preload.split(';').filter(Boolean).flatMap((c) => { const [k, ...v] = c.trim().split(/\s+/); return ['+set', k, v.join(' ')]; }),
       '+devmap', map, '+wait', '200', '+exec', 'ulight_shots.cfg',
-    ], {
-      stdio: ['ignore', fs.openSync(path.join(home, 'native.log'), 'w'), fs.openSync(path.join(home, 'native.err'), 'w')],
-      timeout: 300000, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':9' },
-    });
+    ], { home, timeout: 300000 });
   } catch (e) {
     if (e.code === 'ETIMEDOUT' || e.signal) throw new Error(`native client did not finish (${e.signal || e.code})`);
   }
   const files = views.map((_, i) => {
     const tga = path.join(game, 'screenshots', `shot_${i}.tga`);
-    if (!fs.existsSync(tga)) throw new Error(`native client wrote no screenshot ${i} (see ${home}/native.err)`);
+    if (!fs.existsSync(tga)) throw new Error(`native client wrote no screenshot ${i} (see ${home}/native.log)`);
     const file = path.join(out, `${name}_${i}.png`);
     writePng(file, readTga(tga));
     return file;

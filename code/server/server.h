@@ -497,6 +497,8 @@ void SV_Netchan_FreeQueue(client_t *client);
 // sv_game_oax.c
 qboolean SV_GameSystemCallsOAX( intptr_t *args, intptr_t *ret );
 void SV_OAXInit( void );
+void SV_OAXClearEntityOBBs( void );
+qboolean SV_OAXEntityOBB( const sharedEntity_t *ent, clipHandle_t *handle );
 void SV_OAXScriptInit( void );
 
 // sv_nav_oax.c

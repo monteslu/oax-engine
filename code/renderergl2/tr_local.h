@@ -426,6 +426,12 @@ typedef struct {
 	short			oaxColorReg[4];
 	qboolean		oaxColorExpr;
 	int			oaxLightStyle;				// CGEN_/AGEN_OAX_LIGHTSTYLE style number
+
+	// oax material keywords (docs/materials.md)
+	qboolean		oaxTinted;				// oaxTint applies to this stage
+	vec3_t			oaxTint;
+	qboolean		oaxDetailFade;			// detailFade <start> <end>
+	vec4_t			oaxDetailFadeParms;		// start, 1 / (end - start), neutral (< 0: fade alpha), 1
 } shaderStage_t;
 
 struct shaderCommands_s;
@@ -509,9 +515,13 @@ typedef struct shader_s {
 	struct image_s	*oaxLightFalloff;	// light materials: lightFalloffImage
 	int			oaxLightFlags;			// ULSF_*
 	int			oaxInteraction;			// 0 unknown, -1 none, else interaction stage + 1
+	int			oaxLightMask;			// oaxLightMask: light-mask groups, 0 = the default group (tr_ulight.h ULIGHT_MASK_*)
 	qboolean	oaxProcedural;			// a stage uses a procedural texture (tr_procedural.c)
 	qboolean	oaxSkyPortal;			// surfaceparm skyportal: sky a sky portal scene shows through
 	struct oaxWater_s *oaxWater;		// oaxWater keyword: water surface parameters (tr_oax_water.c), NULL none
+	qboolean	oaxNoShadow;		// oaxNoShadow / OSF_NOSHADOW: lit, but casts no unified-lighting shadow
+	qboolean	oaxHasTint;			// oaxTint r g b: colour multiplier of the diffuse stages
+	vec3_t		oaxTint;
 
 	struct	shader_s	*next;
 } shader_t;
@@ -732,6 +742,8 @@ typedef enum
 	UNIFORM_BONEMATRIX,
 
 	UNIFORM_GREYSCALE,
+
+	UNIFORM_OAXDETAILFADE,	// oax detailFade: start, 1 / (end - start), neutral (< 0: alpha), on
 
 	UNIFORM_COUNT
 } uniform_t;
@@ -1157,6 +1169,7 @@ typedef struct msurface_s {
 	cullinfo_t          cullinfo;
 
 	surfaceType_t		*data;			// any of srf*_t
+	unsigned			oaxLightMask;	// light-mask groups (surface world); 0: the default group 1
 } msurface_t;
 
 
@@ -1226,6 +1239,11 @@ typedef struct {
 	byte		*lightGridData;
 	uint16_t	*lightGrid16;
 
+
+	// oax: light for model entities in a sky portal scene whose light grid
+	// sample is empty (worldspawn oaxSkyAmbient / oaxSkyLight, 0-255; -1 unset)
+	vec3_t		oaxSkyAmbient;
+	vec3_t		oaxSkyLight;
 
 	int			numClusters;
 	int			clusterBytes;
@@ -1533,6 +1551,8 @@ typedef struct {
 	FBO_t		*guiTarget;	// oax: 2D draws go to this GUI target while set
 	qboolean    colorMask[4];
 	qboolean    depthFill;
+	qboolean    oaxIdFill;	// oax: the surface id pass (tr_oax_surfid.c)
+	int         oaxIdCurrent;	// draw id of the surface being added
 	float       greyscale;
 } backEndState_t;
 
@@ -1736,6 +1756,7 @@ typedef struct {
 	shaderProgram_t			oaxParticleShader;
 	shaderProgram_t			oaxWaterShader;
 	shaderProgram_t			oaxBloomShader[4];
+	shaderProgram_t			oaxDisplayShader;		// r_displayCurve (tr_oax_display.c)
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -2634,6 +2655,7 @@ int GLSL_InitGPUShader(shaderProgram_t * program, const char *name,
 	const char *fallback_vp, const char *fallback_fp);
 
 void R_OAXRegisterCvars( void );
+extern cvar_t *r_oaxSkyModelLight;	// tr_light.c: sky area models without grid light
 void R_OAXResetMapState( void );
 void RE_OAXSetLightStyle( int style, float r, float g, float b );
 void RE_OAXSetViewFog( const float *rgb, float density, float start, float end );
@@ -2647,6 +2669,16 @@ void R_OAXBeginScene( void );
 qboolean R_OAXCullEntity( const trRefEntity_t *ent );
 void R_OAXInitGLSL( void );
 void R_OAXShutdownGLSL( void );
+
+// the surface id pass (tr_oax_surfid.c, docs/test-hooks.md)
+void R_OAXSurfIdRegisterCvars( void );
+void R_OAXSurfIdBeginFrame( void );
+void R_OAXSurfIdShutdown( void );
+shaderProgram_t *RB_OAXSurfIdProgram( int genericAttribs, GLint *idLoc );
+int RB_OAXSurfIdSurface( const surfaceType_t *surface, int entityNum, const shader_t *shader );
+void RB_OAXSurfIdPass( drawSurf_t *drawSurfs, int numDrawSurfs );
+void RB_OAXSurfIdIterate( void );
+void SetViewportAndScissor( void );
 
 void RB_OAXViewFog( FBO_t *srcFbo, ivec4_t box );
 
@@ -2743,6 +2775,10 @@ qboolean RB_OAXWaterStageIterator( struct shaderCommands_s *input );
 
 // bloom
 void RB_OAXBloom( FBO_t *srcFbo, ivec4_t box );
+void R_OAXDisplayRegisterCvars( void );
+void R_OAXDisplayInitGLSL( void );
+void R_OAXDisplayShutdownGLSL( void );
+void RB_OAXDisplayCurve( FBO_t *srcFbo, ivec4_t box );
 
 // stats published once a frame (R_OAXFxPublishStats)
 typedef struct {
@@ -2754,6 +2790,19 @@ typedef struct {
 	int		sceneCopies;
 } oaxFxStats_t;
 extern oaxFxStats_t oaxFxStats;
+// tr_surfworld.c: the surface world (OAX_SURFACES)
+extern cvar_t *r_oaxSurfaces;
+void R_OAXSurfWorldRegisterCvars( void );
+dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen );
+void R_OAXSurfWorldSetup( void );
+void R_OAXSurfWorldFinishLoad( void );
+void R_OAXSurfWorldShutdown( void );
+int R_OAXSurfWorldCountView( void );
+qboolean R_OAXSurfWorldActive( void );
+const void *R_OAXSurfVariant( const char *name );
+const char *R_OAXSurfVariantMaterial( const void *variant );
+void R_OAXSurfVariantApply( const void *variant, shader_t *sh, shaderStage_t *stages );
+int R_LightForPointWorld( world_t *world, vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 // tr_terrain.c: oax heightmap terrain and instanced foliage
 void R_OAXTerrainRegisterCvars( void );
 void R_OAXTerrainLoadWorld( const void *bsp, int bspLen );

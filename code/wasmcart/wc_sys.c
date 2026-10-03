@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 wasmcart platform backend: cart entry points and the Sys_* layer.
 
 Replaces code/sys/sys_main.c + sys_unix.c for the wasmcart build. The host
@@ -254,6 +273,8 @@ static void Sys_Halt( void ) {
 	longjmp( wc_haltFrame, 1 );
 }
 
+void WC_Debug_SetFatal( const char *text );
+
 void Sys_Error( const char *error, ... ) {
 	va_list argptr;
 	char    string[1024];
@@ -265,6 +286,7 @@ void Sys_Error( const char *error, ... ) {
 	Sys_Print( "Sys_Error: " );
 	Sys_Print( string );
 	Sys_Print( "\n" );
+	WC_Debug_SetFatal( string );	// the host reads it: a halted cart must not look idle
 	Sys_Halt();
 }
 
@@ -326,13 +348,15 @@ void wc_init( void ) {
 	int w = (int)wc_host_info.preferred_width;
 	int h = (int)wc_host_info.preferred_height;
 
-	if ( w > 0 && h > 0 ) {
+	wc_deterministic = ( wc_host_info.flags & WC_HOST_FLAG_DETERMINISTIC ) != 0;
+	// a deterministic run (a test replay) always renders at the fixed
+	// default size, whatever the host prefers: captures are comparable
+	if ( w > 0 && h > 0 && !wc_deterministic ) {
 		wc_width = w > WC_MAX_WIDTH ? WC_MAX_WIDTH : w;
 		wc_height = h > WC_MAX_HEIGHT ? WC_MAX_HEIGHT : h;
 	}
 	wc_info.width = wc_width;
 	wc_info.height = wc_height;
-	wc_deterministic = ( wc_host_info.flags & WC_HOST_FLAG_DETERMINISTIC ) != 0;
 }
 
 /*
@@ -356,6 +380,30 @@ static void WC_BuildCommandLine( char *out, int size ) {
 		" +set in_joystick 1 +set in_joystickUseAnalog 1"
 		" +set com_introplayed 1",
 		wc_width, wc_height );
+
+	// boot cvars a harness wrote into console_cmd before the first frame
+	// ("set r_picmip 1;set x y"): applied before the renderer starts, so
+	// latched cvars take effect at boot
+	{
+		char boot[256];
+		char *p, *semi;
+
+		if ( WC_Debug_TakeBootCommand( boot, sizeof( boot ) ) ) {
+			for ( p = boot; p && *p; p = semi ) {
+				semi = strchr( p, ';' );
+				if ( semi ) {
+					*semi++ = 0;
+				}
+				while ( *p == ' ' ) {
+					p++;
+				}
+				if ( *p ) {
+					Q_strcat( out, size, " +" );
+					Q_strcat( out, size, p );
+				}
+			}
+		}
+	}
 }
 
 /*

@@ -19,8 +19,8 @@ export function mapPath(map, cart = defaultCart) {
   return path.join(cart, 'assets', 'baseoa', 'maps', `${map}.bsp`);
 }
 
-export async function loadScene(s, map, { seed = 1, view = CLEAN_VIEW } = {}) {
-  await s.load(defaultCart, seed);
+export async function loadScene(s, map, { seed = 1, view = CLEAN_VIEW, picmip } = {}) {
+  await s.load(defaultCart, seed, { picmip });
   await s.command(`${view};devmap ${map}`);
   const { CA_ACTIVE } = await import('./romdev.mjs');
   await s.stepUntil('conn_state', (v) => v === CA_ACTIVE, 3000, 20);

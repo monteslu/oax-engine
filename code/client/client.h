@@ -669,6 +669,12 @@ void CL_WriteDemoMessage ( msg_t *msg, int headerBytes );
 qboolean CL_CgameSystemCallsOAX( intptr_t *args, intptr_t *ret );
 void CL_OAXInit( void );
 
+// cl_oax_hooks.c (verification hooks, docs/test-hooks.md)
+void CL_OAXHooksInit( void );
+int CL_OAXFreezeTime( void );
+void CL_OAXSceneHooks( refdef_t *ref );
+void CL_OAXViewReadback( const refdef_t *ref );
+
 // cl_gui_oax.c
 void CL_OAXGuiInit( void );
 void CL_OAXGuiReset( void );

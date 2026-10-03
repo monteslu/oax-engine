@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 cl_cgame_oax.c: cgame syscalls from 1000 up (see qcommon/oax.h).
 
 Each feature block registers one handler; CL_CgameSystemCalls hands any
@@ -42,6 +61,19 @@ static qboolean CL_OAXInfraCalls( intptr_t *args, intptr_t *ret ) {
 		}
 		*ret = BSPX_ReadCurrentMap( VMA( 1 ), args[3] > 0 ? VMA( 2 ) : NULL, args[3] );
 		return qtrue;
+	case CG_OAX_CM_TEMP_OBB: {
+		// an oriented box (the server's G_OAX_ENT_SET_OBB): trace it with
+		// CM_TransformedBoxTrace at the entity origin and zero angles
+		const float *f;
+		vec3_t axis[3];
+		VM_CheckBlock( args[1], 15 * sizeof( float ), "CMOBB" );
+		f = VMA( 1 );
+		VectorCopy( f + 3, axis[0] );
+		VectorCopy( f + 6, axis[1] );
+		VectorCopy( f + 9, axis[2] );
+		*ret = CM_OAXTempOBBModel( f, (const vec3_t *)axis, f + 12, args[2] );
+		return qtrue;
+	}
 	}
 	return qfalse;
 }
@@ -84,4 +116,5 @@ void CL_OAXInit( void ) {
 	CL_OAXRenderInit();
 	CL_PhysInit();		// "physics": cosmetic Box3D worlds, ragdoll skeletons
 	CL_OAXFxInit();
+	CL_OAXHooksInit();	// cl_oaxFreezeTime, view read-back
 }

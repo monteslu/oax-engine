@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 tr_ulight.h: unified lighting (phase 5), shared by the frontend
 (tr_ulight.c), the backend (tb_ulight.c) and the material extensions
 (tr_matexpr.c).
@@ -81,9 +100,71 @@ int         R_FindTable( const char *name );
 void        R_MatExprUpdateFrame( void );
 void        R_StageExprColor( shader_t *sh, int stageNum, const float *parms, float time, vec4_t out );
 
-// ---- light definitions ----
+// ---- physical light description (step 7.5 B, docs/lights.md) ----
+//
+// A light with any physical key (`oax_profile`, `oax_falloff`, `ue1_*`, ...)
+// is a spherical light evaluated in the interaction shader:
+//   v     = softcap( intensity * falloff( d / radius ) )
+//   light = min( v * angular * color, ceiling )      (per channel)
+// with no projection or falloff image. Profiles translate a source engine's
+// keys into these terms (tr_ulight.c ULightPhysProfile*).
+
+#define ULP_PHYSICAL    0
+#define ULP_UE1         1
+#define ULP_Q3          2
+#define ULP_DOOM3       3
+
+#define ULF_TABLE       0       // piecewise-linear (x, y) points over x = d / radius
+#define ULF_IMAGE       1       // red channel of an image at (x, 0.5)
+#define ULF_INVSQ       2       // (m / max(x, m))^2, m = invsqMin
+#define ULF_SMOOTH      3       // 1 - smoothstep(x) (UE1, measured)
+
+#define ULIGHT_MAX_FALLOFF_POINTS 16
+
+// light-mask groups: 16 bits; a light lights a surface when the masks share
+// a bit. Every light and surface is in the default group unless it says
+// otherwise. OAX_SURFACES (workstream A) carries the same 16 bits.
+#define ULIGHT_MASK_DEFAULT     0x0001
+#define ULIGHT_MASK_SPECIALLIT  0x0002
+#define ULIGHT_MASK_ALL         0xffff
 
 typedef struct {
+	qboolean    physical;
+	int         profile;            // ULP_*
+	float       radius;
+	float       intensity;
+	vec3_t      color;              // unnormalised; multiplies shaderParms 0-2
+	int         falloffMode;        // ULF_*
+	int         numPoints;
+	float       points[ULIGHT_MAX_FALLOFF_POINTS][2];
+	float       invsqMin;           // ULF_INVSQ: the clamp distance as a fraction of radius
+	image_t    *falloffImage;       // ULF_IMAGE
+	float       cap;                // soft ceiling on v, 0 none
+	float       capKnee;            // half width of the quadratic knee, 0 hard
+	qboolean    lambert;            // angular term: N.L, else 1 on the lit side
+	int         mask;               // light-mask groups
+	int         effectTable;        // tr_matexpr table, -1 none
+	float       effectRate;         // table cycles per second
+	float       effectPhase;        // table offset (cycles)
+	float       effectBase, effectAmp;  // multiplier = base + amp * table(time * rate + phase)
+	qboolean    startOff;           // a profile switched it off (UE1 LT_None, brightness 0)
+	int         unsupported;        // source features with no translation (UE1 spatial effects)
+} uLightPhys_t;
+
+// one entity's keys from the entity lump
+#define MAX_LIGHT_KEYS 32
+
+typedef struct {
+	int  numKeys;
+	char keys[MAX_LIGHT_KEYS][64];
+	char values[MAX_LIGHT_KEYS][256];
+} spawnArgs_t;
+
+const char *R_ULightArg( const spawnArgs_t *a, const char *key );
+
+// ---- light definitions ----
+
+typedef struct uLightParms_s {
 	// parms (renderLight_t)
 	vec3_t      origin;
 	vec3_t      axis[3];
@@ -96,6 +177,8 @@ typedef struct {
 	qboolean    noSpecular;
 	float       shaderParms[12];
 	shader_t   *shader;
+	unsigned    lightMask;      // light-mask groups (`light_mask`, default 1): lights surfaces sharing a bit
+	uLightPhys_t phys;          // physical description (phys.physical == qfalse: none)
 } uLightParms_t;
 
 typedef struct uLight_s {
@@ -141,7 +224,7 @@ typedef struct {
 	uLight_t   *light;
 	int         index;              // light index (into the map's lights)
 	int         scissor[4];         // x, y, w, h in window coordinates
-	vec3_t      color;              // light color after the shader expressions
+	vec3_t      color;              // light color after the shader expressions (and the effect, physical lights)
 	int         firstLit, numLit;   // into the frame's surface list
 	int         firstCaster, numCaster;
 	qboolean    shadows;
@@ -173,6 +256,14 @@ typedef struct {
 	int         statShadowCacheHits;
 	int         statStencilTris;
 	char        statVisibleIds[256];
+
+	// step 7.5 B
+	float       overbright;         // worldspawn oax_overbright: per-light ceiling of physical lights, 1..2
+	float       ue1LevelBrightness; // worldspawn ue1_LevelBrightness: UE1 LevelInfo.Brightness, scales ue1 lamps
+	int         numPhysical;        // physical lights in the map
+	qboolean    zoneAmbient;        // a func_oax_zone carries `ambient`: world vertex colors hold it
+	int         numZoneAmbient;
+	int        *surfMask;           // per world surface light-mask groups (shader oaxLightMask, or set by a lump)
 } uLightWorld_t;
 
 extern uLightWorld_t ulw;
@@ -223,9 +314,21 @@ void    R_ULightUpdateDef( int index, const vec3_t origin, const vec3_t axis[3],
 int     R_ULightLightingModel( void );
 qboolean R_ULightStageIsInteraction( shader_t *sh, shaderStage_t *stage );
 int     R_ULightInteractionStage( shader_t *sh );
+qboolean    R_ULightShaderIsFullbright( const shader_t *sh );
 void    R_ULightPublishStats( int frontEndMsec, int backEndMsec );
 void    RE_OAXUpdateLight( int index, const float *origin, const float *axis, const float *rgb, const float *parms, int flags );
 void    R_ULightFrameFinished( void );
+// step 7.5 B (tr_ulight_phys.c)
+qboolean R_ULightPhysHasKeys( const spawnArgs_t *a );
+void    R_ULightPhysParse( const spawnArgs_t *a, struct uLightParms_s *p );
+void    R_ULightPhysWorldspawn( const spawnArgs_t *world );
+void    R_ULightZonesLoad( const void *header, const spawnArgs_t *ents, int numEnts );
+void    R_ULightZonesFree( void );
+void    R_ULightPhysPublish( void );
+qboolean R_ULightZoneAmbientAt( const vec3_t point, vec3_t out );     // qfalse: no zone with ambient there
+void    R_ULightSetSurfaceMask( int worldSurface, int mask );           // light-mask groups of one world surface
+int     R_ULightSurfaceMask( shader_t *sh, int worldSurface );
+float   R_ULightPhysEffect( const uLightPhys_t *phys, float time );
 
 // backend (tb_ulight.c)
 void    RB_ULightInit( void );

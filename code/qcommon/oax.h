@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 oax.h: the engine's extensions to the Quake III game interfaces.
 
 New gamecode ("oax", our OpenArena gamecode fork) reaches new engine
@@ -64,6 +83,19 @@ typedef enum {
 	                                 //   flags & 1: goal unreachable, the path ends nearest to it
 	G_OAX_NAV_NEAREST = 1092,        // ( const vec3_t point, const vec3_t halfExtents, vec3_t out ) -> 1 found
 	G_OAX_NAV_RANDOMPOINT = 1093,    // ( int seed, vec3_t out ) -> 1 found (area-weighted, deterministic)
+	// navigation from intent (step 7.5, docs/navigation.md). Flags and link kinds (server/nav_oax.h):
+	//   1 walkable, 2 hazard volume, 0x10 teleporter, 0x20 jump pad, 0x40 ladder, 0x80 jump route,
+	//   0x100 drop route, 0x1000 translocator route (rule-gated: only when the caller includes it)
+	G_OAX_NAV_ADDLINK = 1094,        // ( const vec3_t start, const vec3_t end, int kind, float radius, int bidir ) -> link index, -1 full
+	                                 //   ends on the floor (feet); queued for G_OAX_NAV_COMMIT
+	G_OAX_NAV_ADDAREA = 1095,        // ( const vec3_t mins, const vec3_t maxs, float cost ) -> index, -1 full
+	                                 //   cost multiplies walking cost inside; cost < 0 removes the surface (deadly)
+	G_OAX_NAV_COMMIT = 1096,         // ( void ) -> polygon count: rebuilds the navmesh with the queued links and volumes
+	G_OAX_NAV_FINDPATHEX = 1097,     // ( start, goal, float *points, int *links, int maxPoints, int *flags, int include, int exclude )
+	                                 //   -> points; links[i] = link index starting at point i (next point is its end) or -1
+
+	// 1100-1109 entity collision (sv_game_oax.c, token "ent_obb")
+	G_OAX_ENT_SET_OBB = 1100,        // ( int entnum, const float *obb or 0 ): center[3] (from r.currentOrigin), axis[3][3], halfExtents[3]
 
 	G_OAX_END = 1300	// 1200-1299: physics (oaxPhysImport_t below)
 } gameImportOAX_t;
@@ -106,6 +138,9 @@ typedef enum {
 	CG_OAX_ULIGHT_BASE = 1050,
 	CG_OAX_R_UPDATELIGHTDEF = 1050, // ( int lightOrdinal, const vec3_t origin, const vec3_t axis[3] or 0,
 	                                //   const vec3_t rgb, const float parms[12] or 0, int flags: 1 on )
+
+	// 1070-1079 collision (cl_cgame_oax.c, token "ent_obb")
+	CG_OAX_CM_TEMP_OBB = 1070,      // ( const float *obb, int contents ) -> clip handle: center[3], axis[3][3], halfExtents[3]
 
 	CG_OAX_END = 1300	// 1200-1299: physics (oaxPhysImport_t below)
 } cgameImportOAX_t;
@@ -156,6 +191,7 @@ typedef enum {
 	PHYS_VEHICLE_SET_INPUT = 1262,  // ( int vehicle, const oaxPhysVehicleInput_t *in ): held until changed
 	PHYS_VEHICLE_GET_STATE = 1263,  // ( int vehicle, oaxPhysVehicleState_t *out ) -> 1 valid, 0
 	PHYS_WORLD_ADD_TERRAIN = 1264,  // ( int world, const oaxPhysShapeDef_t *material or 0, int *bodies, int max ) -> static bodies made
+	PHYS_VEHICLE_SET_STATE = 1265,  // ( int vehicle, const oaxPhysVehicleState_t *in, int flags PHYS_VSS_* ) -> 1: teleport (own-vehicle prediction)
 	OAX_PHYS_END = 1300
 } oaxPhysImport_t;
 
@@ -178,6 +214,11 @@ void Com_DebugSet( const char *name, const char *value );
 void Com_DebugSetInt( const char *name, int value );
 void Com_DebugSetFloat( const char *name, float value );
 int Com_DebugValuesText( char *buf, int size );
+// one large debug blob (a whole-frame surface id dump): the wasmcart field
+// "debug_blob", NUL-terminated; truncated at COM_DEBUG_BLOB_SIZE - 1
+#define COM_DEBUG_BLOB_SIZE ( 1 << 20 )
+void Com_DebugSetBlob( const char *data, int len );
+extern char com_debugBlob[COM_DEBUG_BLOB_SIZE];
 
 // BSPX extension lumps (bspx.c)
 const void *BSPX_Find( const void *bsp, int bspLen, const char *name, int *outLen );

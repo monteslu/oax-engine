@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 tb_ulight.c: unified lighting, renderer backend (phase 5).
 
 Light-major drawing for one view, after the view's depth prepass:
@@ -35,7 +54,9 @@ uLightBackend_t ulb;
 #define UPROG_DEPTH       0
 #define UPROG_AMBIENT     1
 #define UPROG_INTERACTION 2
-#define UPROG_MODES       3
+#define UPROG_PHYSICAL    3     // step 7.5 B: physical lights (interaction_fp ULIGHT_PHYSICAL)
+#define UPROG_AMBIENTZONE 4     // step 7.5 B: ambient from the vertex color (zone ambient)
+#define UPROG_MODES       5
 
 #define UANIM_NONE   0
 #define UANIM_VERTEX 1
@@ -52,6 +73,8 @@ typedef struct {
 	GLint           lightOriginW, lightColor, diffuseColor, specularColor;
 	GLint           shadowParams, shadowMatrix;
 	GLint           texNormal, texSpecular, texProj, texFalloff, texShadowCube, texShadow2D;
+	GLint           physLight, physLight2, physCurveCount;
+	GLint           physCurve[ULIGHT_MAX_FALLOFF_POINTS];
 } uProgram_t;
 
 static uProgram_t uprogs[UPROG_MODES][3][3];
@@ -104,6 +127,11 @@ static void InitProgram( int mode, int anim, int shadow ) {
 		attribs |= ATTR_TANGENT | ATTR_TEXCOORD;
 		if ( mode == UPROG_AMBIENT ) {
 			Q_strcat( extra, sizeof( extra ), "#define ULIGHT_AMBIENT\n" );
+		} else if ( mode == UPROG_AMBIENTZONE ) {
+			Q_strcat( extra, sizeof( extra ), "#define ULIGHT_AMBIENT\n#define ULIGHT_ZONEAMBIENT\n" );
+			attribs |= ATTR_COLOR;
+		} else if ( mode == UPROG_PHYSICAL ) {
+			Q_strcat( extra, sizeof( extra ), "#define ULIGHT_PHYSICAL\n" );
 		}
 	}
 	if ( anim == UANIM_VERTEX ) {
@@ -146,6 +174,16 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	p->texFalloff = qglGetUniformLocation( prog, "u_LightFalloffMap" );
 	p->texShadowCube = qglGetUniformLocation( prog, "u_ShadowCube" );
 	p->texShadow2D = qglGetUniformLocation( prog, "u_Shadow2D" );
+	p->physLight = qglGetUniformLocation( prog, "u_PhysLight" );
+	p->physLight2 = qglGetUniformLocation( prog, "u_PhysLight2" );
+	{
+		int k;
+
+		for ( k = 0; k < ULIGHT_MAX_FALLOFF_POINTS; k++ ) {
+			p->physCurve[k] = qglGetUniformLocation( prog, va( "u_PhysCurve[%d]", k ) );
+		}
+	}
+	p->physCurveCount = qglGetUniformLocation( prog, "u_PhysCurveCount" );
 
 	GLSL_SetUniformInt( &p->sp, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP );
 	if ( p->texNormal >= 0 ) {
@@ -192,7 +230,7 @@ void RB_ULightInit( void ) {
 				continue;
 			}
 			for ( shadow = 0; shadow < 3; shadow++ ) {
-				if ( shadow && mode != UPROG_INTERACTION ) {
+				if ( shadow && mode != UPROG_INTERACTION && mode != UPROG_PHYSICAL ) {
 					continue;
 				}
 				InitProgram( mode, anim, shadow );
@@ -610,6 +648,9 @@ static void SetDiffuseColor( uProgram_t *p, shaderStage_t *pStage ) {
 	default:
 		break;
 	}
+	if ( pStage->oaxTinted ) {	// oaxTint (docs/materials.md)
+		c[0] *= pStage->oaxTint[0]; c[1] *= pStage->oaxTint[1]; c[2] *= pStage->oaxTint[2];
+	}
 	if ( p->diffuseColor >= 0 ) {
 		qglProgramUniform4fEXT( p->sp.program, p->diffuseColor, c[0], c[1], c[2], c[3] );
 	}
@@ -685,7 +726,20 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 	}
 
 	if ( ulb.mode == ULB_AMBIENT ) {
-		p = PickProgram( UPROG_AMBIENT, USHADOW_NONE );
+		// step 7.5 B: zone ambient: world vertices carry it, an entity takes
+		// the zone at its origin
+		qboolean zoneWorld = ulw.zoneAmbient && backEnd.currentEntity == &tr.worldEntity && !glState.vertexAnimation && !glState.boneAnimation;
+		vec3_t ambient;
+
+		VectorCopy( ulb.view->ambient, ambient );
+		if ( zoneWorld ) {
+			float s = tr.identityLight > 0 ? 1.0f / tr.identityLight : 1.0f;
+
+			VectorSet( ambient, s, s, s );
+		} else if ( ulw.zoneAmbient && backEnd.currentEntity && backEnd.currentEntity != &tr.worldEntity ) {
+			R_ULightZoneAmbientAt( ( backEnd.currentEntity->e.renderfx & RF_LIGHTING_ORIGIN ) ? backEnd.currentEntity->e.lightingOrigin : backEnd.currentEntity->e.origin, ambient );
+		}
+		p = PickProgram( zoneWorld ? UPROG_AMBIENTZONE : UPROG_AMBIENT, USHADOW_NONE );
 		if ( !p ) {
 			return qtrue;
 		}
@@ -705,7 +759,11 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX7, texMatrix[7] );
 		}
 		SetDiffuseColor( p, pStage );
-		GLSL_SetUniformVec3( &p->sp, UNIFORM_AMBIENTLIGHT, ulb.view->ambient );
+		// the frame convention: light 1 is identityLight in the render target,
+		// which the final exposure (2^r_cameraExposure, 2 by default, the
+		// stock overbright compensation) brings back to the texture at 1x
+		VectorScale( ambient, tr.identityLight, ambient );
+		GLSL_SetUniformVec3( &p->sp, UNIFORM_AMBIENTLIGHT, ambient );
 		R_BindAnimatedImageToTMU( &pStage->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP );
 		GL_State( GLS_DEPTHFUNC_EQUAL );
 		R_DrawElements( input->numIndexes, input->firstIndex );
@@ -722,7 +780,7 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 		qboolean hasSpec = pStage->bundle[TB_SPECULARMAP].image[0] != NULL;
 		float specScale = r_ulightSpecular->integer && !l->parms.noSpecular ? 1.0f : 0.0f;
 
-		p = PickProgram( UPROG_INTERACTION, ulb.shadowType == USHADOW_CUBE ? USHADOW_CUBE : ulb.shadowType == USHADOW_2D ? USHADOW_2D : USHADOW_NONE );
+		p = PickProgram( l->parms.phys.physical ? UPROG_PHYSICAL : UPROG_INTERACTION, ulb.shadowType == USHADOW_CUBE ? USHADOW_CUBE : ulb.shadowType == USHADOW_2D ? USHADOW_2D : USHADOW_NONE );
 		if ( !p ) {
 			return qtrue;
 		}
@@ -747,7 +805,8 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 		qglProgramUniform4fEXT( prog, p->lightProjQ, l->lightProject[2][0], l->lightProject[2][1], l->lightProject[2][2], l->lightProject[2][3] );
 		qglProgramUniform4fEXT( prog, p->lightFalloffS, l->lightProject[3][0], l->lightProject[3][1], l->lightProject[3][2], l->lightProject[3][3] );
 		qglProgramUniform3fEXT( prog, p->lightOriginW, l->globalLightOrigin[0], l->globalLightOrigin[1], l->globalLightOrigin[2] );
-		qglProgramUniform3fEXT( prog, p->lightColor, vl->color[0], vl->color[1], vl->color[2] );
+		// light 1 is identityLight in the render target (see the ambient pass)
+		qglProgramUniform3fEXT( prog, p->lightColor, vl->color[0] * tr.identityLight, vl->color[1] * tr.identityLight, vl->color[2] * tr.identityLight );
 		if ( hasSpec ) {
 			qglProgramUniform4fEXT( prog, p->specularColor, specScale, specScale, specScale, 1 );
 		} else {
@@ -773,6 +832,24 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 		}
 		GL_BindToTMU( l->projImage, UTMU_PROJ );
 		GL_BindToTMU( l->falloffImage, UTMU_FALLOFF );
+		if ( l->parms.phys.physical ) {
+			const uLightPhys_t *ph = &l->parms.phys;
+			int k;
+
+			qglProgramUniform4fEXT( prog, p->physLight, 1.0f / ph->radius, ph->intensity, ph->cap, ph->capKnee );
+			qglProgramUniform4fEXT( prog, p->physLight2, (float)ph->falloffMode, ph->invsqMin, ph->lambert ? 1.0f : 0.0f, ulw.overbright * tr.identityLight );
+			for ( k = 0; k < ph->numPoints; k++ ) {
+				if ( p->physCurve[k] >= 0 ) {
+					qglProgramUniform2fEXT( prog, p->physCurve[k], ph->points[k][0], ph->points[k][1] );
+				}
+			}
+			if ( p->physCurveCount >= 0 ) {
+				qglProgramUniform1iEXT( prog, p->physCurveCount, ph->numPoints );
+			}
+			if ( ph->falloffMode == ULF_IMAGE && ph->falloffImage ) {
+				GL_BindToTMU( ph->falloffImage, UTMU_FALLOFF );
+			}
+		}
 
 		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
 		R_DrawElements( input->numIndexes, input->firstIndex );

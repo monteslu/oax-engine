@@ -2280,6 +2280,8 @@ void R_LoadEntities( lump_t *l ) {
 	w->lightGridSize[0] = 64;
 	w->lightGridSize[1] = 64;
 	w->lightGridSize[2] = 128;
+	VectorSet( w->oaxSkyAmbient, -1, -1, -1 );
+	VectorSet( w->oaxSkyLight, -1, -1, -1 );
 
 	p = (char *)(fileBase + l->fileofs);
 
@@ -2340,6 +2342,16 @@ void R_LoadEntities( lump_t *l ) {
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
+			continue;
+		}
+
+		// oax: light for models in a sky portal scene (tr_light.c)
+		if (!Q_stricmp(keyname, "oaxSkyAmbient")) {
+			sscanf(value, "%f %f %f", &w->oaxSkyAmbient[0], &w->oaxSkyAmbient[1], &w->oaxSkyAmbient[2] );
+			continue;
+		}
+		if (!Q_stricmp(keyname, "oaxSkyLight")) {
+			sscanf(value, "%f %f %f", &w->oaxSkyLight[0], &w->oaxSkyLight[1], &w->oaxSkyLight[2] );
 			continue;
 		}
 
@@ -2775,6 +2787,11 @@ void RE_LoadWorldMap( const char *name ) {
 		((int *)header)[i] = LittleLong ( ((int *)header)[i]);
 	}
 
+	// oax surface world (OAX_SURFACES): load from a copy of the file whose
+	// lumps carry the extra surfaces (tr_surfworld.c); the same file otherwise
+	header = R_OAXSurfWorldRewrite( buffer.b, fileLen );
+	fileBase = (byte *)header;
+
 	// load into heap
 	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 	R_LoadShaders( &header->lumps[LUMP_SHADERS] );
@@ -3006,8 +3023,14 @@ void RE_LoadWorldMap( const char *name ) {
 	// only set tr.world now that we know the entire level has loaded properly
 	tr.world = &s_worldData;
 
+	// surface world: light masks and plane culling, before the light interactions
+	R_OAXSurfWorldSetup();
+
 	// unified lighting: light entities, interactions, shadow volumes
 	R_ULightLoadWorld( header );
+
+	// surface world: vertex colours
+	R_OAXSurfWorldFinishLoad();
 
 	// oax heightmap terrain and foliage (OAX_TERRAIN lump)
 	R_OAXTerrainLoadWorld( buffer.v, fileLen );

@@ -159,7 +159,9 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_AlphaTest", GLSL_INT },
 
 	{ "u_BoneMatrix", GLSL_MAT16_BONEMATRIX },
-	{ "u_Greyscale", GLSL_FLOAT }
+	{ "u_Greyscale", GLSL_FLOAT },
+
+	{ "u_OaxDetailFade", GLSL_VEC4 }
 };
 
 typedef enum
@@ -272,6 +274,16 @@ static void GLSL_GetShaderHeader( GLenum shaderType, const GLchar *extra, char *
 			// guarantees highp in fragment shaders.
 			Q_strcat(dest, size, "precision highp float;\n");
 			Q_strcat(dest, size, "precision highp sampler2DShadow;\n");
+			// oax: ES fragment shaders default to lowp sampler2D/samplerCube
+			// and mediump int, and texture() returns the sampler's precision.
+			// Mesa (radeonsi) runs those as 16-bit floats: a depth texture
+			// read through a lowp sampler keeps about 11 bits, so the sun
+			// shadow mask rebuilt world positions in screen-aligned depth
+			// bands and drew stair-stepped shadow edges. Desktop GLSL reads
+			// everything at full precision; match it.
+			Q_strcat(dest, size, "precision highp sampler2D;\n");
+			Q_strcat(dest, size, "precision highp samplerCube;\n");
+			Q_strcat(dest, size, "precision highp int;\n");
 		}
 		else if (qglesMajorVersion >= 2)
 		{

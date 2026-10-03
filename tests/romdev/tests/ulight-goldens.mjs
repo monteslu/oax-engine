@@ -1,6 +1,6 @@
 // Unified lighting goldens (DESIGN 3.8 check 1): eight cameras on the
 // oax_unified test map, the NATIVE desktop build as the reference
-// (tests/romdev/reference/ulight, written with --update), the cart within
+// (<oax-engine-testdata>/reference/ulight, written with --update), the cart within
 // tolerance of it.
 //
 // Must-fail controls, each measured where it matters:
@@ -13,14 +13,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { shootCart, shootNative, uniqueColors } from '../lib/ulight.mjs';
 import { comparePng, readPng, halfSize, writePng } from '../lib/png.mjs';
+import { referenceDir } from '../lib/testdata.mjs';
 
 export const name = 'ulight-goldens';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const refDir = path.join(here, '..', 'reference', 'ulight');
+const refDir = path.join(referenceDir, 'ulight');
 const MAP = 'oax_unified';
 const PIN = 'cg_oaxLightTime 1000';
 const TOLERANCE = 32;

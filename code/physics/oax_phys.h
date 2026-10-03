@@ -1,5 +1,24 @@
 /*
 ===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
+/*
+===========================================================================
 oax_phys.h: the physics syscall ABI (Box3D worlds for gamecode).
 
 Identical in oa-engine (code/physics/oax_phys.h) and oa-gamecode
@@ -404,5 +423,8 @@ typedef struct {
 	float   distance;           /* path length travelled since creation, units */
 	int     ticks;              /* ticks simulated */
 } oaxPhysVehicleState_t;
+
+/* PHYS_VEHICLE_SET_STATE flags */
+#define PHYS_VSS_AWAKE          0x0001  /* the chassis is awake (else put to sleep) */
 
 #endif

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Session } from '../lib/romdev.mjs';
-import { runScript } from '../lib/movement.mjs';
+import { runScript, PADSCRIPT_MIN_START } from '../lib/movement.mjs';
 import { runNative } from '../lib/native.mjs';
 import { spawns } from '../lib/scenes.mjs';
 
@@ -70,6 +70,7 @@ export async function run({ out }) {
       `setviewpos ${p.x} ${p.y} ${p.z} ${p.yaw}`, 'wait 200',
       `trace parity_${c.script}.txt`,
       // nothing may follow in the command buffer (see cl_testscript.c)
+      `set padscript_minstart ${PADSCRIPT_MIN_START}`,
       `padscript padscripts/${c.script}.pad "wait 8; trace stop; quit"`,
     ], { quit: false });
     const nfile = path.join(home, 'baseoa', `parity_${c.script}.txt`);

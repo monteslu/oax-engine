@@ -19,10 +19,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Session, CA_ACTIVE } from '../lib/romdev.mjs';
 import { readValues, parseDebugValues } from '../lib/values.mjs';
-import { nativeBinary, nativeHome, findBaseoa } from '../lib/native.mjs';
+import { nativeBinary, nativeHome, findBaseoa, execNative } from '../lib/native.mjs';
 import { mapPath } from '../lib/scenes.mjs';
 import { terrainFromBsp } from '../lib/terrain.mjs';
+import { nativeCaptureArgs } from '../lib/capture.mjs';
 
+export const timeoutSec = 2400;
 export const name = 'nav-bots';
 export const slow = true;
 
@@ -43,15 +45,17 @@ function checkpoints(v) {
 
 function runNativeMatch(seed) {
   const home = nativeHome('nav-bots');
-  // a console `wait N` lasts about N/2 native frames
-  fs.writeFileSync(path.join(home, 'baseoa', 'navbots.cfg'), ['fixedtime 16', matchLine(seed), `wait ${FRAMES * 2}`, 'debugvalues navbots_native.txt', 'quit'].join('\n') + '\n');
-  const log = fs.openSync(path.join(home, 'native.log'), 'w');
-  execFileSync(nativeBinary, [
+  // a console `wait N` lasts about N/2 native frames. The native match draws
+  // nothing (r_norefresh, a cheat cvar: set after devmap turns cheats on):
+  // the test reads only server state, and drawing 15000 frames of terrain on
+  // llvmpipe took ~13 of the 15 minutes native gets.
+  fs.writeFileSync(path.join(home, 'baseoa', 'navbots.cfg'), ['fixedtime 16', matchLine(seed), 'r_norefresh 1', `wait ${FRAMES * 2}`, 'debugvalues navbots_native.txt', 'quit'].join('\n') + '\n');
+  execNative([
     '+set', 'fs_basepath', path.dirname(findBaseoa()), '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
-    '+set', 'r_mode', '-1', '+set', 'r_customwidth', '640', '+set', 'r_customheight', '360', '+set', 'r_fullscreen', '0',
+    ...nativeCaptureArgs({ width: 640, height: 360 }),
     '+set', 'vm_game', '1', '+set', 'vm_cgame', '1', '+set', 'vm_ui', '1', '+set', 'sv_pure', '0',
     '+set', 'com_introplayed', '1', '+set', 'com_maxfps', '0', '+exec', 'navbots.cfg',
-  ], { stdio: ['ignore', log, log], timeout: 900000, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':9' } });
+  ], { home, timeout: 900000 });
   return parseDebugValues(fs.readFileSync(path.join(home, 'baseoa', 'navbots_native.txt'), 'utf8'));
 }
 

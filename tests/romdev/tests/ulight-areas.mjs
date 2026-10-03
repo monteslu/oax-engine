@@ -13,9 +13,10 @@ import { Session, repoRoot } from '../lib/romdev.mjs';
 import { loadScene } from '../lib/scenes.mjs';
 import { readValues, parseDebugValues } from '../lib/values.mjs';
 import { readEntities } from '../lib/bsp.mjs';
-import { nativeHome, nativeBinary, findBaseoa } from '../lib/native.mjs';
+import { nativeHome, nativeBinary, findBaseoa, execNative } from '../lib/native.mjs';
 import { execFileSync } from 'node:child_process';
 import { CLEAN_VIEW } from '../lib/scenes.mjs';
+import { nativeCaptureArgs } from '../lib/capture.mjs';
 
 export const name = 'ulight-areas';
 
@@ -68,13 +69,13 @@ function nativeRun() {
   STAGES.forEach(([, cmd, frames], i) => lines.push(cmd, `wait ${frames * 2}`, `debugvalues areas_${i}.txt`));
   lines.push('quit');
   fs.writeFileSync(path.join(game, 'areas.cfg'), lines.join('\n') + '\n');
-  execFileSync(nativeBinary, [
+  execNative([
     '+set', 'fs_basepath', path.dirname(findBaseoa()), '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
-    '+set', 'r_mode', '-1', '+set', 'r_customwidth', '1280', '+set', 'r_customheight', '720', '+set', 'r_fullscreen', '0',
+    ...nativeCaptureArgs(),
     '+set', 'vm_game', '1', '+set', 'vm_cgame', '1', '+set', 'vm_ui', '1', '+set', 'sv_pure', '0',
     '+set', 'bot_enable', '0', '+set', 'com_introplayed', '1', '+set', 'fixedtime', '16', '+set', 'com_maxfps', '0',
     '+devmap', MAP, '+wait', '200', '+exec', 'areas.cfg',
-  ], { stdio: ['ignore', 'ignore', 'ignore'], timeout: 300000, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':9' } });
+  ], { home, timeout: 300000 });
   return STAGES.map((_, i) => {
     const f = path.join(game, `areas_${i}.txt`);
     return fs.existsSync(f) ? parseDebugValues(fs.readFileSync(f, 'utf8')) : {};

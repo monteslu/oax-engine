@@ -817,6 +817,9 @@ void R_AddWorldSurfaces (void) {
 		if ( !tr.viewParms.isPortal && !( tr.viewParms.flags & ( VPF_DEPTHSHADOW | VPF_SHADOWMAP | VPF_ORTHOGRAPHIC ) )
 			&& !( tr.refdef.rdflags & RDF_NOWORLDMODEL ) && ri.DebugSet ) {
 			ri.DebugSet( "r_surfs_world", va( "%i", added ) );
+			if ( R_OAXSurfWorldActive() ) {
+				ri.DebugSet( "r_surfworld_drawn", va( "%i", R_OAXSurfWorldCountView() ) );
+			}
 		}
 	}
 

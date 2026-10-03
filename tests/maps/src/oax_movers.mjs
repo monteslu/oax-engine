@@ -56,8 +56,11 @@ export function build() {
     box(...around(p.origin, [128, 128, 8]), 'base_floor/diamond2c'),
     box(...around(p.origin, [8, 8, 8]), 'common/origin'),
   ]);
-  // starts the platform when the player is on it
-  map.entity('trigger_multiple', { target: 'platform', wait: 1 }, [
+  // starts the platform 1 s after the player touches it: the player spawns
+  // in the air above it, and starting at the touch raced the landing (the
+  // platform could leave before the first usercmd brought the player down)
+  map.entity('target_delay', { origin: [p.origin[0], p.origin[1], p.origin[2] + 96], targetname: 'platform_go', target: 'platform', wait: 1 });
+  map.entity('trigger_multiple', { target: 'platform_go', wait: 1 }, [
     box([p.origin[0] - 64, p.origin[1] - 64, p.origin[2] + 16], [p.origin[0] + 64, p.origin[1] + 64, p.origin[2] + 80], 'common/trigger'),
   ]);
   map.entity('info_player_deathmatch', { origin: [p.origin[0], p.origin[1], p.origin[2] + 40], angle: 90 });

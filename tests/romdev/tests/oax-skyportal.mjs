@@ -85,7 +85,7 @@ function stockQvmRun(failures, rows) {
   }
   const r = nativeShots('skyportal-stock', MAP, [{ cmd: moonView(0), name: 'stock' }], { qvmDir: dir, setup: SETUP });
   const img = r.images.stock;
-  const log = fs.readFileSync(path.join(r.home, 'native.err'), 'utf8');
+  const log = fs.readFileSync(r.log, 'utf8');
   if (!img) { failures.push('stock QVMs: no frame (map did not load?)'); return; }
   const blue = fraction(img, isFallbackBlue, SKY), moon = centroid(img, isMoon).n;
   rows.push(`stock QVMs (native): fallback-blue sky ${(blue * 100).toFixed(1)}%, moon ${moon} px, g_skyportal ${r.values.g_skyportal ?? 'absent'}`);

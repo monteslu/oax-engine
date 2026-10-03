@@ -9,9 +9,10 @@
 // can catch it). Controls: a point below the world must fail the standing
 // check, and the item count must be nonzero.
 //
-// Converted maps are local builds, never committed: OA_CONVERTED_DIR
-// (default ~/.openarena/baseoa) holds <map>.pk3 (named by OA_CONVERTED_MAPS), which the
-// gate packs into the cart (misc/ci/gate.sh).
+// Converted maps are local builds, never committed: OA_CONVERTED_MAPS names
+// them (comma separated) and OA_CONVERTED_DIR (default ~/.openarena/baseoa)
+// holds <map>.pk3, which the gate packs into the cart (misc/ci/gate.sh).
+// With no maps named the test fails: it is external, run only by name.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,11 +21,12 @@ import { Session, CA_ACTIVE, defaultCart } from '../lib/romdev.mjs';
 import { readValues } from '../lib/values.mjs';
 import { bspBuffer, entitiesFromBuffer, worldBounds, lowestModelZ } from '../lib/bsp.mjs';
 
+export const timeoutSec = 2400;
 export const name = 'converter-validation';
 export const external = true;
 
 export const convertedDir = process.env.OA_CONVERTED_DIR || path.join(os.homedir(), '.openarena', 'baseoa');
-const MAPS = (process.env.OA_CONVERTED_MAPS || '').split(',');
+const MAPS = (process.env.OA_CONVERTED_MAPS || '').split(',').filter(Boolean);
 const MATCH_FRAMES = Number(process.env.OA_VALIDATION_FRAMES || 11250);   // 3 minutes at 16 ms
 const BOTS = { red: ['Angelyss', 'Arachna', 'Major'], blue: ['Sarge', 'Grism', 'Kyonshi'] };
 
@@ -122,6 +124,7 @@ async function validate(map, rows, failures) {
 export async function run() {
   const failures = [];
   const rows = [];
+  if (!MAPS.length) failures.push('no converted maps named: set OA_CONVERTED_MAPS');
   for (const map of MAPS) await validate(map, rows, failures);
   return { ok: failures.length === 0, failures, rows };
 }

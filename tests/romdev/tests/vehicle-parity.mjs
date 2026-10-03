@@ -14,7 +14,8 @@
 //
 // Also asserted: the drive goes somewhere (distance, top speed, the ramp
 // climbed), the vehicle never sinks into the ground, one enter and one exit.
-// Driver commands are applied by command time (g_oaxVehInputDelay), and
+// Driver commands are applied by their command time with no delay (the
+// vehicle clock waits for the human player's commands), and
 // no command may arrive after the frame that uses it on either build.
 // Controls: another script on the cart must give another hash, and with the
 // vehicle rule off (g_oaxVehicles 0) the map has no vehicles at all.

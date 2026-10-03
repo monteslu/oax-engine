@@ -3343,6 +3343,7 @@ void CL_InitRef( void ) {
 	ri.Sys_LowPhysicalMemory = Sys_LowPhysicalMemory;
 
 	ri.DebugSet = Com_DebugSet;
+	ri.DebugSetBlob = Com_DebugSetBlob;
 
 	ret = GetRefAPI( REF_API_VERSION, &ri );
 

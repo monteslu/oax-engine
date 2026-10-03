@@ -1,3 +1,22 @@
+/*
+===========================================================================
+oax engine
+Copyright (C) 2026 Luis Montes
+
+This file is part of the oax engine, a fork of ioquake3.
+It is free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version. The combined engine is distributed under GPLv3 (see
+COPYING-GPLv3.txt).
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+===========================================================================
+*/
+
 // interaction_vp.glsl: unified lighting (phase 5) vertex shader, written for
 // this engine from the id Tech 4 interaction parameter list (light
 // projection S/T/Q, falloff S, bump/diffuse/specular texture coordinates).
@@ -6,7 +25,8 @@
 // texture coordinates for the fragment stage.
 //
 // Defines: ULIGHT_DEPTH (shadow map: position only), ULIGHT_VOLUME (stencil
-// shadow volume: clamped to the far plane), USE_VERTEX_ANIMATION,
+// shadow volume: clamped to the far plane), ULIGHT_ZONEAMBIENT (the vertex color
+// carries the zone ambient), USE_VERTEX_ANIMATION,
 // USE_BONE_ANIMATION (MAX_GLSL_BONES).
 
 attribute vec3 attr_Position;
@@ -50,6 +70,10 @@ varying vec2   var_TexCoords;
 varying vec3   var_Position;
 varying vec3   var_Normal;
 varying vec4   var_Tangent;     // w: bitangent sign
+#endif
+#if defined(ULIGHT_ZONEAMBIENT)
+attribute vec4 attr_Color;
+varying vec4   var_Color;       // the zone ambient of the vertex (step 7.5 B)
 #endif
 
 vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
@@ -170,5 +194,8 @@ void main()
 	var_Position = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 	var_Normal   = (u_ModelMatrix * vec4(normal,   0.0)).xyz;
 	var_Tangent  = vec4((u_ModelMatrix * vec4(tangent, 0.0)).xyz, attr_Tangent.w);
+#if defined(ULIGHT_ZONEAMBIENT)
+	var_Color    = attr_Color;
+#endif
 #endif
 }

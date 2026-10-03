@@ -225,6 +225,9 @@ qboolean	SV_EntityContact( vec3_t mins, vec3_t maxs, const sharedEntity_t *gEnt,
 	angles = gEnt->r.currentAngles;
 
 	ch = SV_ClipHandleForEntity( gEnt );
+	if ( !gEnt->r.bmodel ) {
+		angles = vec3_origin;	// oax: boxes do not rotate (an oriented box carries its own axes)
+	}
 	CM_TransformedBoxTrace ( &trace, vec3_origin, vec3_origin, mins, maxs,
 		ch, -1, origin, angles, capsule );
 
@@ -897,6 +900,7 @@ static void SV_InitGameVM( qboolean restart ) {
 	// use the current msec count for a random seed
 	// init for this gamestate
 	SV_OAXGuiReset();	// oax: the game reloads its GUIs
+	SV_OAXClearEntityOBBs();	// oax: and sets its oriented boxes again
 	Phys_FreeGameWorlds();	// oax: and rebuilds its physics worlds
 	// oax: sv_gameSeed >= 0 fixes the game's random seed, so tests can replay
 	// a match (bots, spawn picks, spread) identically on every build
@@ -1003,4 +1007,19 @@ int SV_TestLevelTime( void ) {
 		return -1;
 	}
 	return sv.time;
+}
+
+/*
+===============
+SV_TestSetResidual
+
+Test harness only (padscript): sets the time the server has accumulated
+toward its next frame, so the client's frames and the server's 50 ms frames
+keep the same phase on every build from here on.
+===============
+*/
+void SV_TestSetResidual( int residual ) {
+	if ( SV_TestLevelTime() >= 0 ) {
+		sv.timeResidual = residual;
+	}
 }

@@ -127,7 +127,29 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
+/*
+=================
+R_SetupEntityLightingGrid
+
+Returns the number of light grid samples used (0: the origin is outside the
+grid or every sample around it is in solid).
+=================
+*/
+static int R_SetupEntityLightingGridAt( trRefEntity_t *ent, world_t *world, const vec3_t at, qboolean *outside );
+
+static int R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
+	vec3_t	lightOrigin;
+	qboolean outside;
+
+	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
+		VectorCopy( ent->e.lightingOrigin, lightOrigin );
+	} else {
+		VectorCopy( ent->e.origin, lightOrigin );
+	}
+	return R_SetupEntityLightingGridAt( ent, world, lightOrigin, &outside ) && !outside;
+}
+
+static int R_SetupEntityLightingGridAt( trRefEntity_t *ent, world_t *world, const vec3_t at, qboolean *outside ) {
 	vec3_t	lightOrigin;
 	int		pos[3];
 	int		i, j;
@@ -136,17 +158,10 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 	int		gridStep[3];
 	vec3_t	direction;
 	float	totalFactor;
+	int		used = 0;
 
-	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
-		// separate lightOrigins are needed so an object that is
-		// sinking into the ground can still be lit, and so
-		// multi-part models can be lit identically
-		VectorCopy( ent->e.lightingOrigin, lightOrigin );
-	} else {
-		VectorCopy( ent->e.origin, lightOrigin );
-	}
-
-	VectorSubtract( lightOrigin, world->lightGridOrigin, lightOrigin );
+	*outside = qfalse;
+	VectorSubtract( at, world->lightGridOrigin, lightOrigin );
 	for ( i = 0 ; i < 3 ; i++ ) {
 		float	v;
 
@@ -155,8 +170,10 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 		frac[i] = v - pos[i];
 		if ( pos[i] < 0 ) {
 			pos[i] = 0;
+			*outside = qtrue;
 		} else if ( pos[i] > world->lightGridBounds[i] - 1 ) {
 			pos[i] = world->lightGridBounds[i] - 1;
+			*outside = qtrue;
 		}
 	}
 
@@ -214,6 +231,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 			}
 		}
 		totalFactor += factor;
+		used++;
 		#if idppc
 		d0 = data[0]; d1 = data[1]; d2 = data[2];
 		d3 = data[3]; d4 = data[4]; d5 = data[5];
@@ -276,6 +294,68 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 	VectorScale( ent->directedLight, r_directedScale->value, ent->directedLight );
 
 	VectorNormalize2( direction, ent->lightDir );
+	return used;
+}
+
+/*
+=================
+R_OAXSkyEntityLighting
+
+A model entity in a sky portal scene (the sky area) whose light grid sample
+is empty: the grid usually covers only the play area, or the sky room has
+no grid light. Inside the grid, the nearest grid cell with light within 8
+cells is used; otherwise the map's worldspawn oaxSkyAmbient / oaxSkyLight
+(0-255, directed light along the sun direction), defaulting to ambient 64
+and the sun's colour (or 128) directed.
+=================
+*/
+static void R_OAXSkyEntityLighting( trRefEntity_t *ent, world_t *world, const vec3_t lightOrigin, qboolean outside ) {
+	int r, dx, dy, dz;
+	qboolean o;
+
+	if ( !outside ) {
+		for ( r = 1; r <= 8; r++ ) {
+			for ( dz = -r; dz <= r; dz++ ) {
+				for ( dy = -r; dy <= r; dy++ ) {
+					for ( dx = -r; dx <= r; dx++ ) {
+						vec3_t p;
+
+						if ( abs( dx ) != r && abs( dy ) != r && abs( dz ) != r ) {
+							continue;
+						}
+						p[0] = lightOrigin[0] + dx * world->lightGridSize[0];
+						p[1] = lightOrigin[1] + dy * world->lightGridSize[1];
+						p[2] = lightOrigin[2] + dz * world->lightGridSize[2];
+						if ( R_SetupEntityLightingGridAt( ent, world, p, &o ) && !o ) {
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if ( world->oaxSkyAmbient[0] >= 0 ) {
+		VectorCopy( world->oaxSkyAmbient, ent->ambientLight );
+	} else {
+		VectorSet( ent->ambientLight, 64, 64, 64 );
+	}
+	if ( world->oaxSkyLight[0] >= 0 ) {
+		VectorCopy( world->oaxSkyLight, ent->directedLight );
+	} else if ( tr.sunLight[0] + tr.sunLight[1] + tr.sunLight[2] > 0 ) {
+		float m = MAX( MAX( tr.sunLight[0], tr.sunLight[1] ), tr.sunLight[2] );
+		VectorScale( tr.sunLight, 128.0f / m, ent->directedLight );
+	} else {
+		VectorSet( ent->directedLight, 128, 128, 128 );
+	}
+	VectorScale( ent->ambientLight, tr.identityLight, ent->ambientLight );
+	VectorScale( ent->directedLight, tr.identityLight, ent->directedLight );
+	if ( VectorLengthSquared( tr.sunDirection ) > 0 ) {
+		VectorCopy( tr.sunDirection, ent->lightDir );
+	} else {
+		VectorSet( ent->lightDir, 0.3f, 0.2f, 0.93f );
+		VectorNormalize( ent->lightDir );
+	}
 }
 
 
@@ -346,7 +426,17 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
 	if ( !(refdef->rdflags & RDF_NOWORLDMODEL ) 
 		&& tr.world->lightGridData ) {
-		R_SetupEntityLightingGrid( ent, tr.world );
+		if ( !R_SetupEntityLightingGrid( ent, tr.world ) && ( refdef->rdflags & RDF_OAX_SKYPORTAL ) && r_oaxSkyModelLight->integer ) {
+			// oax: a model in the sky area with no grid light
+			qboolean outside;
+			trRefEntity_t probe = *ent;
+
+			R_SetupEntityLightingGridAt( &probe, tr.world, lightOrigin, &outside );
+			R_OAXSkyEntityLighting( ent, tr.world, lightOrigin, outside );
+		}
+	} else if ( ( refdef->rdflags & RDF_OAX_SKYPORTAL ) && r_oaxSkyModelLight->integer ) {
+		// oax: a map without a light grid lights its sky area models too
+		R_OAXSkyEntityLighting( ent, tr.world, lightOrigin, qtrue );
 	} else {
 		ent->ambientLight[0] = ent->ambientLight[1] = 
 			ent->ambientLight[2] = tr.identityLight * 150;
@@ -454,6 +544,25 @@ int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, ve
 	Com_Memset(&ent, 0, sizeof(ent));
 	VectorCopy( point, ent.e.origin );
 	R_SetupEntityLightingGrid( &ent, tr.world );
+	VectorCopy(ent.ambientLight, ambientLight);
+	VectorCopy(ent.directedLight, directedLight);
+	VectorCopy(ent.lightDir, lightDir);
+
+	return qtrue;
+}
+
+
+// R_LightForPoint for a world that is still loading (tr_surfworld.c)
+int R_LightForPointWorld( world_t *world, vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir )
+{
+	trRefEntity_t ent;
+
+	if ( world->lightGridData == NULL )
+	  return qfalse;
+
+	Com_Memset(&ent, 0, sizeof(ent));
+	VectorCopy( point, ent.e.origin );
+	R_SetupEntityLightingGrid( &ent, world );
 	VectorCopy(ent.ambientLight, ambientLight);
 	VectorCopy(ent.directedLight, directedLight);
 	VectorCopy(ent.lightDir, lightDir);

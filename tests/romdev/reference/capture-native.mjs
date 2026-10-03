@@ -6,36 +6,26 @@
 //
 // Needs build-native/ (cmake build), an X display (Xvfb is fine), the
 // OpenArena content (OA_BASEOA) and QVMs (OA_QVM_DIR). Writes half-size PNGs
-// to tests/romdev/reference/native/<map>_<i>.png from the cameras in
-// tests/romdev/goldens/render/<map>.json.
+// to <oax-engine-testdata>/reference/native/<map>_<i>.png from the cameras in
+// <oax-engine-testdata>/goldens/render/<map>.json.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { halfSize, writePng } from '../lib/png.mjs';
 import { viewFor } from '../lib/scenes.mjs';
+import { nativeCaptureArgs } from '../lib/capture.mjs';
+import { goldensDir, referenceDir } from '../lib/testdata.mjs';
+import { findBaseoa, findQvms } from '../lib/native.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..', '..');
-const goldens = path.join(root, 'tests', 'romdev', 'goldens', 'render');
-const outDir = path.join(here, 'native');
+const goldens = path.join(goldensDir, 'render');
+const outDir = path.join(referenceDir, 'native');
 const binary = path.join(root, 'build-native', 'Release', 'ioquake3');
 
-function findBaseoa() {
-  for (const c of [process.env.OA_BASEOA, '/usr/share/games/openarena/baseoa', path.join(os.homedir(), '.openarena', 'baseoa')]) {
-    if (c && fs.existsSync(c)) return c;
-  }
-  throw new Error('OpenArena baseoa not found; set OA_BASEOA');
-}
 
-function findQvms() {
-  const dir = process.env.OA_QVM_DIR
-    || fs.readdirSync(path.join(root, '..', 'oa-gamecode', 'build')).map((d) => path.join(root, '..', 'oa-gamecode', 'build', d, 'oax'))[0];
-  if (!dir || !fs.existsSync(path.join(dir, 'vm'))) throw new Error('OA QVMs not found; set OA_QVM_DIR');
-  return dir;
-}
 
 // Uncompressed (type 2) or RLE (type 10) 24/32-bit TGA, as the engine writes.
 function readTga(file) {
@@ -81,7 +71,7 @@ function capture(map, cameras, home) {
   fs.writeFileSync(path.join(home, 'baseoa', 'refshots.cfg'), lines.join('\n') + '\n');
   execFileSync(binary, [
     '+set', 'fs_basepath', path.dirname(findBaseoa()), '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
-    '+set', 'r_mode', '-1', '+set', 'r_customwidth', '1280', '+set', 'r_customheight', '720', '+set', 'r_fullscreen', '0',
+    ...nativeCaptureArgs(),
     '+set', 'vm_game', '1', '+set', 'vm_cgame', '1', '+set', 'vm_ui', '1', '+set', 'sv_pure', '0',
     '+set', 'bot_enable', '0', '+set', 'com_introplayed', '1', '+set', 'r_renderer', 'opengl2',
     '+set', 'fixedtime', '16', '+set', 'com_maxfps', '0',
