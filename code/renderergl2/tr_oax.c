@@ -246,6 +246,7 @@ void R_OAXInitGLSL( void ) {
 
 	R_OAXFxInitGLSL();
 	R_OAXDisplayInitGLSL();
+	R_OAXEnvInitGLSL();
 }
 
 void R_OAXShutdownGLSL( void ) {
@@ -257,4 +258,5 @@ void R_OAXShutdownGLSL( void ) {
 	}
 	R_OAXFxShutdownGLSL();
 	R_OAXDisplayShutdownGLSL();
+	R_OAXEnvShutdownGLSL();
 }

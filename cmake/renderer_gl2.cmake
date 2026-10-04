@@ -35,6 +35,7 @@ set(RENDERER_GL2_SOURCES
     ${SOURCE_DIR}/renderergl2/tr_oax_decal.c
     ${SOURCE_DIR}/renderergl2/tr_oax_trail.c
     ${SOURCE_DIR}/renderergl2/tr_oax_water.c
+    ${SOURCE_DIR}/renderergl2/tr_oax_env.c
     ${SOURCE_DIR}/renderergl2/tr_oax_bloom.c
     ${SOURCE_DIR}/renderergl2/tr_oax_surfid.c
     ${SOURCE_DIR}/renderergl2/tr_postprocess.c

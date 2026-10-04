@@ -155,7 +155,9 @@ export async function buildSpec(name, spec) {
     }
     if (!c.surfaces && !spec.surfaces) throw new Error(`${name}: empty meta output: q3map2 produced no drawable surface and the map has no surface world\n${out.slice(-2000)}`);
   }
-  out = run(q3map2, [...fsArgs, '-vis', mapFile], mapsDir);
+  // vis: 'fast' (-vis -fast) for open maps, where full vis buys nothing and its
+  // portal flow can crash (FreeStackWinding: already free)
+  out = run(q3map2, [...fsArgs, '-vis', ...(spec.vis === 'fast' ? ['-fast'] : []), mapFile], mapsDir);
   checkQ3map2('vis', out, name);
   log.push(out);
   if ((spec.light || 'lightmap') !== 'none') {

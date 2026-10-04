@@ -19,6 +19,8 @@
 //   "layer0".."layer3"          shader/texture names; "layerscale0".."3" world units per repeat
 //   "foliageseed" "1234"
 //   "triplanar" "1"             steep faces take side projections of the layers (rock walls)
+//   "macro" "1"                 large-scale brightness and hue variation (hides layer tiling)
+//   "detail" "1"                close up, a finer repeat of the layers adds detail
 //   "foliage0".."foliage3"      "<grass|tree> <shader> <channel> <density/cell> <sizeMin> <sizeMax>
 //                                <fadeStart> <fadeEnd> [collideRadius collideHeight [maxSlope]]"
 //   "contents" "1"  "surfaceflags" "0"
@@ -163,7 +165,8 @@ export function terrainRecord(ent, gameDir) {
   }
   b.writeInt32LE(nf, 324);
   b.writeInt32LE(heightsOfs, 792); b.writeInt32LE(splatOfs, 796); b.writeInt32LE(densityOfs, 800);
-  b.writeInt32LE(num('triplanar', 0) ? 1 : 0, 804);   // flags: OAX_TERRAIN_TRIPLANAR
+  // flags: OAX_TERRAIN_TRIPLANAR, OAX_TERRAIN_MACRO, OAX_TERRAIN_DETAIL
+  b.writeInt32LE((num('triplanar', 0) ? 1 : 0) | (num('macro', 0) ? 2 : 0) | (num('detail', 0) ? 4 : 0), 804);
   for (let k = 0; k < cells; k++) b.writeUInt16LE(hm.data[k], heightsOfs + k * 2);
   Buffer.from(splat).copy(b, splatOfs);
   Buffer.from(density).copy(b, densityOfs);

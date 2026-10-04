@@ -3035,6 +3035,9 @@ void RE_LoadWorldMap( const char *name ) {
 	// oax heightmap terrain and foliage (OAX_TERRAIN lump)
 	R_OAXTerrainLoadWorld( buffer.v, fileLen );
 
+	// oax map environment (worldspawn keys)
+	R_OAXEnvLoadWorld();
+
 	// make sure the VAO glState entry is safe
 	R_BindNullVao();
 

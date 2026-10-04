@@ -1564,6 +1564,15 @@ typedef struct {
 ** but may read fields that aren't dynamically modified
 ** by the frontend.
 */
+// a map's outdoor environment (tr_oax_env.c): worldspawn keys, all off by default
+typedef struct {
+	qboolean	hasWind, hasAtmos, hasClouds, hasGrade, foliageA2C;
+	float		wind[3];		// strength, speed (Hz), yaw degrees
+	float		atmos[7];		// r g b, density, falloff, baseZ, sunScatter
+	float		clouds[5];		// scale, speedX, speedY, coverage, darkness
+	float		grade[6];		// saturation, contrast, r g b, vignette
+} oaxEnv_t;
+
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
 
@@ -1749,6 +1758,8 @@ typedef struct {
 	vec3_t					oaxLightStyles[OAX_MAX_LIGHTSTYLES];
 	int						oaxSkyArea;			// area of the current sky portal camera, -1 none
 	shaderProgram_t			oaxViewFogShader;
+	shaderProgram_t			oaxAtmosShader;		// tr_oax_env.c
+	shaderProgram_t			oaxGradeShader;
 	FBO_t					*oaxFogFbo;			// renderImage without depth, for the view fog pass
 	shaderProgram_t			oaxProcShader[OAX_PROC_NUM_PROGRAMS];
 
@@ -1757,6 +1768,7 @@ typedef struct {
 	shaderProgram_t			oaxWaterShader;
 	shaderProgram_t			oaxBloomShader[4];
 	shaderProgram_t			oaxDisplayShader;		// r_displayCurve (tr_oax_display.c)
+	oaxEnv_t				oaxEnv;
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -2646,6 +2658,14 @@ tr_procedural.c)
 */
 extern cvar_t	*r_oaxSkyPortal;
 extern cvar_t	*r_oaxViewFog;
+extern cvar_t	*r_oaxEnv;
+void R_OAXEnvRegisterCvars( void );
+void R_OAXEnvLoadWorld( void );
+qboolean R_OAXEnvOn( void );
+void R_OAXEnvInitGLSL( void );
+void R_OAXEnvShutdownGLSL( void );
+void RB_OAXAtmosphere( FBO_t *srcFbo, ivec4_t box );
+void RB_OAXGrade( FBO_t *srcFbo, ivec4_t box );
 
 void GLSL_InitUniforms(shaderProgram_t *program);
 void GLSL_FinishGPUShader(shaderProgram_t *program);
@@ -2807,6 +2827,7 @@ int R_LightForPointWorld( world_t *world, vec3_t point, vec3_t ambientLight, vec
 void R_OAXTerrainRegisterCvars( void );
 void R_OAXTerrainLoadWorld( const void *bsp, int bspLen );
 void R_OAXTerrainShutdown( void );
+int R_OAXTerrainTriangles( const vec3_t mins, const vec3_t maxs, void ( *tri )( void *ctx, float t[3][3] ), void *ctx );
 void R_OAXTerrainAddView( void );
 void RB_OAXTerrainDepth( void );
 void RB_OAXTerrainColor( void );

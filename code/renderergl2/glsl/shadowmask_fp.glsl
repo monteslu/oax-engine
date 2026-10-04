@@ -16,6 +16,10 @@ uniform mat4      u_ShadowMvp4;
 
 uniform vec3   u_ViewOrigin;
 uniform vec4   u_ViewInfo; // zfar / znear, zfar
+// oax cloud shadows (tr_oax_env.c, worldspawn oax_clouds): 1 / cell size,
+// coverage, darkness, on; u_FogDepth.xy: the clouds' drift
+uniform vec4   u_FogDistance;
+uniform vec4   u_FogDepth;
 
 varying vec2   var_DepthTex;
 varying vec3   var_ViewDir;
@@ -144,5 +148,25 @@ void main()
 	}
 #endif
 
+	// oax: cloud shadows, scrolling value noise over the sun-lit ground
+	if (u_FogDistance.w > 0.5 && depth < 0.999)
+	{
+		vec2 p = (biasPos.xy + u_FogDepth.xy) * u_FogDistance.x;
+		float n = 0.0, amp = 0.5;
+		for (int o = 0; o < 4; o++)
+		{
+			vec2 i = floor(p), fr = fract(p);
+			vec2 u = fr * fr * (3.0 - 2.0 * fr);
+			float a00 = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+			float a10 = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+			float a01 = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+			float a11 = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+			n += amp * mix(mix(a00, a10, u.x), mix(a01, a11, u.x), u.y);
+			p = p * 2.03 + vec2(17.3, 9.1);
+			amp *= 0.5;
+		}
+		float cover = smoothstep(1.0 - u_FogDistance.y - 0.12, 1.0 - u_FogDistance.y + 0.12, n / 0.9375);
+		result *= 1.0 - u_FogDistance.z * cover;
+	}
 	gl_FragColor = vec4(vec3(result), 1.0);
 }

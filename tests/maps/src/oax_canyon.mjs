@@ -323,6 +323,8 @@ textures/oax_canyon/water
 	oaxWaterParm reflectivity 1.0
 	oaxWaterParm fresnel 0.3
 	oaxWaterParm waves 0.15
+	oaxWaterParm foam 16 0.6
+	oaxWaterParm caustics 0.9 0.006
 	{
 		map textures/liquids/vorwater.tga
 		blendfunc filter
@@ -339,7 +341,14 @@ export function build() {
     spawnXY.push([x, center(x) + s * v]);
   }
   const t = makeTerrain([...items.map(([, x, y]) => [x, y]), ...spawnXY]);
-  const map = new MapFile({ message: 'oax canyon', _ambient: 30 });
+  const map = new MapFile({
+    message: 'oax canyon', _ambient: 30,
+    // the outdoor environment (renderergl2 tr_oax_env.c)
+    oax_wind: '0.25 0.3 30', oax_foliageaa: 1, oax_groundfx: 1, oax_underwaterfog: 1,
+    oax_atmosphere: '1.35 1.45 1.65 0.00025 0.0008 -100 1.2',
+    oax_grade: '1.08 1.06 1.03 1.0 0.96 0.35',
+    oax_clouds: '1800 50 20 0.45 0.55',
+  });
   const w = 32, sky = 'oax_canyon/sky';
   const { x0, x1, y0, y1 } = FIELD;
   const zFloor = -1100, zTop = 3600;
@@ -355,7 +364,7 @@ export function build() {
   map.entity('misc_oax_terrain', t.entityKeys({
     seed: 4242,
     bottom: -1060,
-    triplanar: true,
+    triplanar: true, macro: true, detail: true,
     layers: [
       { shader: 'textures/acc_dm3/grass', scale: 384 },
       { shader: 'textures/acc_dm3/sp_ground', scale: 448 },
@@ -415,7 +424,7 @@ export function build() {
   map.entity('info_player_intermission', { origin: [0, -2600, 1500], angles: [22, 70, 0] });
   map.entity('light', { origin: [0, 0, 3000], light: 4000 });
   return {
-    map, aas: false,
+    map, aas: false, vis: 'fast',
     manifest: { features: ['terrain', 'nav', 'vehicles'] },
     files: {
       'scripts/oax_canyon.shader': shaders, ...t.files(), ...foliageFiles(), ...vehicleFiles(),

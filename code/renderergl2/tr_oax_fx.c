@@ -93,6 +93,9 @@ ships use them, so no art is needed):
   *oaxglow    the falloff in colour and alpha (additive glows)
   *oaxspark   a thin streak along t (aimed sparks)
   *oaxribbon  a falloff across s, constant along t (ribbon trails)
+  *oaxring    white, alpha a soft thin ring (water ripples)
+  *oaxtread   white, alpha chevron tread bars across a soft-edged band
+              along t (tyre tracks)
 =================
 */
 static float Falloff( float r ) {
@@ -106,7 +109,9 @@ static void CreateSpriteImages( void ) {
 	byte *data = ri.Hunk_AllocateTempMemory( S * S * 4 );
 	int x, y, k;
 
-	for ( k = 0; k < 4; k++ ) {
+	static const char *names[6] = { "*oaxsoft", "*oaxglow", "*oaxspark", "*oaxribbon", "*oaxring", "*oaxtread" };
+
+	for ( k = 0; k < 6; k++ ) {
 		for ( y = 0; y < S; y++ ) {
 			for ( x = 0; x < S; x++ ) {
 				float u = ( x + 0.5f ) / S * 2.0f - 1.0f, v = ( y + 0.5f ) / S * 2.0f - 1.0f;
@@ -121,15 +126,25 @@ static void CreateSpriteImages( void ) {
 				case 2:
 					a = Falloff( fabs( u ) * 3.0f ) * Falloff( fabs( v ) );
 					break;
+				case 4:
+					a = Falloff( ( sqrt( u * u + v * v ) - 0.8f ) * 6.0f );
+					break;
+				case 5: {
+					float bar = v * 4.0f + fabs( u ) * 0.8f;
+
+					bar -= floor( bar );
+					a = ( bar < 0.55f ? 1.0f : 0.35f ) * Falloff( fabs( u ) * 1.05f );
+					break;
+				}
 				default:
 					a = Falloff( fabs( u ) );
 					break;
 				}
 				p[3] = (byte)( a * 255.0f + 0.5f );
-				p[0] = p[1] = p[2] = ( k == 0 ) ? 255 : p[3];
+				p[0] = p[1] = p[2] = ( k == 0 || k >= 4 ) ? 255 : p[3];
 			}
 		}
-		R_CreateImage( k == 0 ? "*oaxsoft" : k == 1 ? "*oaxglow" : k == 2 ? "*oaxspark" : "*oaxribbon", data, S, S,
+		R_CreateImage( names[k], data, S, S,
 			IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NO_COMPRESSION | IMGFLAG_NOLIGHTSCALE, GL_RGBA8 );
 	}
 	ri.Hunk_FreeTempMemory( data );

@@ -30,6 +30,8 @@ sizes) owned by the renderer:
 - every world surface and every brush-model surface inside the box is
   clipped against the box's six planes (R_ChopPolyBehindPlane, as in
   tr_marks.c), and texture coordinates come from the box projection;
+  so are the terrain's triangles (tr_terrain.c R_OAXTerrainTriangles, its
+  collision split), with the world's;
 - brush-model decals are kept in the model's own space and drawn with
   the entity, so they move with doors and movers (the model's transform
   is the last one the renderer drew it with);
@@ -332,6 +334,39 @@ static void AddSurface( oaxDecalSlot_t *slot, const decalBox_t *b, msurface_t *s
 	}
 }
 
+/*
+=============
+AddTerrainTriangle
+
+A terrain triangle from R_OAXTerrainTriangles: counter-clockwise from
+above, so reversed into Q3's winding (BSP faces are clockwise from their
+front, and decal shaders cull back faces).
+=============
+*/
+typedef struct {
+	oaxDecalSlot_t		*slot;
+	const decalBox_t	*box;
+} terrainCtx_t;
+
+#define TERRAIN_DECAL_LIFT	0.25f	// over the drawn terrain, whose LODs stitch to the same samples
+
+static void AddTerrainTriangle( void *ctx, float t[3][3] ) {
+	terrainCtx_t *c = ctx;
+	vec3_t e1, e2, n;
+
+	vec3_t p[3];
+	int i;
+
+	VectorSubtract( t[1], t[0], e1 );
+	VectorSubtract( t[2], t[0], e2 );
+	CrossProduct( e1, e2, n );
+	VectorNormalize( n );
+	for ( i = 0; i < 3; i++ ) {
+		VectorMA( t[i], TERRAIN_DECAL_LIFT, n, p[i] );
+	}
+	AddTriangle( c->slot, c->box, p[0], p[2], p[1], n );
+}
+
 static oaxDecalSlot_t *BeginSlot( const oaxDecal_t *d, int owner ) {
 	oaxDecalSlot_t *slot = &scratch;
 
@@ -444,6 +479,13 @@ int RE_OAXAddDecal( const oaxDecal_t *d ) {
 	slot = BeginSlot( d, 0 );
 	for ( i = 0; i < listLen; i++ ) {
 		AddSurface( slot, &box, list[i] );
+	}
+	{
+		terrainCtx_t ctx;
+
+		ctx.slot = slot;
+		ctx.box = &box;
+		R_OAXTerrainTriangles( mins, maxs, AddTerrainTriangle, &ctx );
 	}
 	total += KeepSlot();
 

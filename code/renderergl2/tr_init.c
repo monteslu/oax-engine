@@ -1451,6 +1451,7 @@ void R_Register( void )
 	// removed in R_Shutdown
 	R_OAXRegisterCvars();
 	R_OAXTerrainRegisterCvars();
+	R_OAXEnvRegisterCvars();
 	R_OAXSurfWorldRegisterCvars();
 
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );

@@ -63,6 +63,8 @@ engine allocation, no host libm, only exact float operations
 
 // oaxTerrainDisk_t.flags
 #define OAX_TERRAIN_TRIPLANAR		1	// steep faces take side projections of the layers
+#define OAX_TERRAIN_MACRO			2	// large-scale brightness and hue variation over the layers (hides tiling)
+#define OAX_TERRAIN_DETAIL			4	// close up, the layers at a finer repeat modulate the colour
 #define OAX_TERRAIN_MAX				4
 #define OAX_TERRAIN_MAX_LAYERS		4
 #define OAX_TERRAIN_MAX_FOLIAGE		4

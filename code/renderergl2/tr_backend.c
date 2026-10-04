@@ -1058,6 +1058,25 @@ const void	*RB_DrawSurfs( const void *data ) {
 					GLSL_SetUniformVec4(&tr.shadowmaskShader, UNIFORM_VIEWINFO, viewInfo);
 				}
 
+				// oax cloud shadows (tr_oax_env.c): off unless the map asks
+				{
+					vec4_t clouds, drift;
+					const oaxEnv_t *e = &tr.oaxEnv;
+
+					if (R_OAXEnvOn() && e->hasClouds)
+					{
+						VectorSet4(clouds, 1.0f / e->clouds[0], e->clouds[3], e->clouds[4], 1.0f);
+						VectorSet4(drift, e->clouds[1] * backEnd.refdef.floatTime, e->clouds[2] * backEnd.refdef.floatTime, 0, 0);
+					}
+					else
+					{
+						VectorSet4(clouds, 0, 0, 0, 0);
+						VectorSet4(drift, 0, 0, 0, 0);
+					}
+					GLSL_SetUniformVec4(&tr.shadowmaskShader, UNIFORM_FOGDISTANCE, clouds);
+					GLSL_SetUniformVec4(&tr.shadowmaskShader, UNIFORM_FOGDEPTH, drift);
+				}
+
 				RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
 
 				if (r_shadowBlur->integer)
@@ -1616,6 +1635,9 @@ const void *RB_PostProcess(const void *data)
 	if (backEnd.refdef.oaxViewFog[3] > 0.0f)
 		RB_OAXViewFog(srcFbo, dstBox);
 
+	// oax map atmosphere (worldspawn oax_atmosphere), also before tonemapping
+	RB_OAXAtmosphere(srcFbo, dstBox);
+
 	// oax bloom, in scene light before tonemapping (r_oaxBloom)
 	RB_OAXBloom(srcFbo, dstBox);
 
@@ -1668,6 +1690,9 @@ const void *RB_PostProcess(const void *data)
 
 	// oax: the opt-in display curve (r_displayCurve), last
 	RB_OAXDisplayCurve(srcFbo, srcBox);
+
+	// oax map colour grading (worldspawn oax_grade)
+	RB_OAXGrade(srcFbo, srcBox);
 
 	if (srcFbo != dstFbo)
 		FBO_FastBlit(srcFbo, srcBox, dstFbo, dstBox, GL_COLOR_BUFFER_BIT, GL_NEAREST);

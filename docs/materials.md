@@ -86,6 +86,36 @@ stage: a tinted modulate would move its neutral value.
 	}
 ```
 
+## `oaxWater` (shader level)
+
+Draws the shader's surfaces as water: refraction of the scene behind,
+a planar reflection, scrolling wave normals and a depth tint. The shader's
+stages stay as the fallback (`r_oaxWater 0`, other renderers). Every
+`oaxWaterParm` is listed in `code/renderergl2/tr_oax_water.c`; two are
+off unless a shader sets them:
+
+- `oaxWaterParm foam <depth> <strength>`: a broken white band where the
+  water is shallower than `depth` units (shorelines, anything standing in
+  it).
+- `oaxWaterParm caustics <strength> <repeats per unit>`: the bottom seen
+  through the surface brightens in moving lines where the waves would
+  focus sunlight, fading with depth.
+
+## Outdoor environment (worldspawn)
+
+Worldspawn keys for outdoor maps. Each is off unless set, and `r_oaxEnv 0`
+turns them all off (`code/renderergl2/tr_oax_env.c`).
+
+| Key | Value | Effect |
+| --- | --- | --- |
+| `oax_wind` | `<strength> <speed> <yaw>` | Foliage sways in gusts (`speed` Hz) toward `yaw` degrees; a plant top moves `strength * (20 + 0.06 * height)` units in a full gust (0.4 is a fair breeze). |
+| `oax_foliageaa` | `1` | Foliage alpha to coverage: cut-out edges antialias under MSAA (`r_ext_framebuffer_multisample`). |
+| `oax_atmosphere` | `<r> <g> <b> <density> <falloff> <baseZ> <sunScatter>` | Height fog thicker low down, integrated along each view ray, brighter toward the sun; distant terrain and sky take its colour (aerial perspective). |
+| `oax_clouds` | `<scale> <speedX> <speedY> <coverage> <darkness>` | Cloud shadows: scrolling noise (`scale` units per cell) darkens the sun-lit areas; needs sun shadows (`r_sunShadows 1`). |
+| `oax_grade` | `<saturation> <contrast> <r> <g> <b> <vignette>` | Colour grading after tone mapping, and darkening toward the corners. |
+| `oax_underwaterfog` | `<r> <g> <b> <density>` or `1` | With the eye in water, the view fogs to the water colour (`1`: a green-grey pond); `cg_oaxUnderwaterFog` overrides it. |
+| `oax_groundfx` | `1` | The cgame's ground effects (`cg_oaxGroundFx`): rings on the water where players wade, vehicle dust and splashes, tyre tracks. |
+
 ## Map keys for models in sky areas (worldspawn)
 
 A model entity drawn in a sky portal scene (the sky room behind a

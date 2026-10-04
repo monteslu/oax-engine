@@ -27,6 +27,8 @@ attribute vec4 attr_Normal2;     // per instance: cos yaw, sin yaw, random, kind
 uniform mat4   u_ModelViewProjectionMatrix;
 uniform vec3   u_ViewOrigin;
 uniform vec4   u_Fade;           // start, 1 / (end - start), z: fade on
+uniform vec4   u_Wind;           // direction xy, strength, gust Hz (tr_oax_env.c)
+uniform float  u_Time;
 
 varying vec2   var_Tex;
 varying float  var_Fade;
@@ -52,6 +54,18 @@ void main()
 		n0 = vec3(n0.x, n0.y * ca - n0.z * sa, n0.y * sa + n0.z * ca);
 	}
 	vec3 world = vec3(p.x * cs.x - p.y * cs.y, p.x * cs.y + p.y * cs.x, p.z) + attr_Position2.xyz;
+	// wind: the plant bends with height (quadratic, the base stays put), in
+	// gusts whose phase moves across the map so neighbours sway together
+	if (u_Wind.z > 0.0)
+	{
+		float h = clamp(attr_Position.z, 0.0, 1.0);
+		float phase = dot(attr_Position2.xy, vec2(0.0021, 0.0017)) + attr_Normal2.z * 1.3;
+		float t = u_Time * u_Wind.w * 6.2831853;
+		float gust = 0.55 + 0.3 * sin(t + phase) + 0.15 * sin(2.7 * t + 1.9 * phase);
+		// the top moves strength * (20 + 0.06 * height) units: grass a good part
+		// of its height, a tall tree a few percent
+		world.xy += u_Wind.xy * (u_Wind.z * gust * h * h * (20.0 + 0.06 * attr_Position2.w));
+	}
 	gl_Position = u_ModelViewProjectionMatrix * vec4(world, 1.0);
 	var_Tex = attr_TexCoord0.st;
 	// fade by distance to the instance root (whole instance fades together)

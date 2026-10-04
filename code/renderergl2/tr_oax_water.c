@@ -39,6 +39,8 @@ renderers, r_oaxWater 0, reflection views):
         oaxWaterParm fresnel 0.04             // reflection looking straight down
         oaxWaterParm waves 0.4                // wave normal strength
         oaxWaterParm normalMap textures/x.tga // default *oaxwaves, built in
+        oaxWaterParm foam 24 0.8              // shore foam: depth it fades out by, strength (default off)
+        oaxWaterParm caustics 0.6 0.012       // light on the bottom: strength, repeats per unit (default off)
         { map textures/liquids/clear_calm1 ... }  // fallback stages
     }
 
@@ -52,6 +54,12 @@ renderers, r_oaxWater 0, reflection views):
   minus the surface's depth) absorbs toward the tint colour.
 - Waves: two scrolling layers of a normal map, by shader time (so
   r_fixedShaderTime freezes them).
+- Foam (opt-in): a broken white band where the water is shallow, from the
+  same normal map, so shorelines and anything standing in the water get
+  an edge.
+- Caustics (opt-in): the bottom seen through the surface brightens where
+  the moving waves would focus sunlight (the divergence of the wave
+  normals at the bottom's position), fading with depth.
 ===========================================================================
 */
 
@@ -67,6 +75,8 @@ typedef struct oaxWater_s {
 	float	reflectivity;
 	float	fresnel;
 	float	waves;			// wave normal strength (0 = flat)
+	float	foam[2];		// depth it fades out by, strength (0 = none)
+	float	caustics[2];	// strength (0 = none), repeats per unit
 } oaxWater_t;
 
 static FBO_t	*reflectFbo;
@@ -149,6 +159,10 @@ qboolean R_OAXParseWaterKeyword( const char *token, char **text, oaxWater_t **wa
 		w->reflectivity = 0.8f;
 		w->fresnel = 0.04f;
 		w->waves = 0.4f;
+		w->foam[0] = 24.0f;
+		w->foam[1] = 0.0f;
+		w->caustics[0] = 0.0f;
+		w->caustics[1] = 0.012f;
 	}
 	w = *water;
 	if ( !Q_stricmp( token, "oaxWater" ) ) {
@@ -174,6 +188,15 @@ qboolean R_OAXParseWaterKeyword( const char *token, char **text, oaxWater_t **wa
 		w->reflectivity = atof( COM_ParseExt( text, qfalse ) );
 	} else if ( !Q_stricmp( name, "waves" ) ) {
 		w->waves = atof( COM_ParseExt( text, qfalse ) );
+	} else if ( !Q_stricmp( name, "foam" ) ) {
+		w->foam[0] = atof( COM_ParseExt( text, qfalse ) );
+		w->foam[1] = atof( COM_ParseExt( text, qfalse ) );
+		if ( w->foam[0] <= 0.0f ) {
+			w->foam[1] = 0.0f;
+		}
+	} else if ( !Q_stricmp( name, "caustics" ) ) {
+		w->caustics[0] = atof( COM_ParseExt( text, qfalse ) );
+		w->caustics[1] = atof( COM_ParseExt( text, qfalse ) );
 	} else if ( !Q_stricmp( name, "fresnel" ) ) {
 		w->fresnel = atof( COM_ParseExt( text, qfalse ) );
 	} else if ( !Q_stricmp( name, "normalMap" ) ) {
@@ -360,6 +383,8 @@ qboolean RB_OAXWaterStageIterator( shaderCommands_t *input ) {
 	VectorSet4( v, backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
 		1.0f / backEnd.viewParms.viewportWidth, 1.0f / backEnd.viewParms.viewportHeight );
 	GLSL_SetUniformVec4( sp, UNIFORM_CUBEMAPINFO, v );
+	VectorSet4( v, w->foam[0], w->foam[1], w->caustics[0], w->caustics[1] );
+	GLSL_SetUniformVec4( sp, UNIFORM_FOGDISTANCE, v );
 	invRes[0] = 1.0f / color->width;
 	invRes[1] = 1.0f / color->height;
 	GLSL_SetUniformVec2( sp, UNIFORM_INVTEXRES, invRes );

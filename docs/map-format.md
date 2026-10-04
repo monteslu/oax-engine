@@ -55,6 +55,13 @@ Heightmap terrain: placement, layers, foliage and the sample arrays. The
 layout is documented in `code/qcommon/oax_terrain.h`; the writer is
 `misc/tools/oax-terrain.mjs`.
 
+The terrain's `flags` turn on optional shading, each from a key on the
+terrain entity: `triplanar` (steep faces take side projections of the
+layers), `macro` (large patches a little lighter or darker and warmer or
+cooler, so a layer's repeat does not read as a grid from afar) and
+`detail` (close up, the layers again at a finer repeat modulate the
+colour). Projected decals land on the terrain's collision triangles.
+
 ## OAX_SURFACES (version 1)
 
 The surface world: render surfaces that need no volume. A surface is a

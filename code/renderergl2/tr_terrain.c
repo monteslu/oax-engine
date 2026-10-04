@@ -177,8 +177,8 @@ static int		TerrainLocs[3][16];
 static int		FoliageLocs[2][16];
 
 enum { TU_LAYERSCALE, TU_SPLATXFORM, TU_SUNDIR, TU_SUNCOLOR, TU_AMBIENT, TU_SCREEN, TU_DEBUG, TU_TRIPLANAR,
-	TU_LAYER0, TU_LAYER1, TU_LAYER2, TU_LAYER3, TU_SPLAT, TU_SHADOW, TU_NUM };
-enum { FU_FADE, FU_VIEWORIGIN, FU_SUNDIR, FU_SUNCOLOR, FU_AMBIENT, FU_SCREEN, FU_TEX, FU_SHADOW, FU_NUM };
+	TU_SURFACEFX, TU_VIEWORIGIN, TU_LAYER0, TU_LAYER1, TU_LAYER2, TU_LAYER3, TU_SPLAT, TU_SHADOW, TU_NUM };
+enum { FU_FADE, FU_VIEWORIGIN, FU_SUNDIR, FU_SUNCOLOR, FU_AMBIENT, FU_SCREEN, FU_TEX, FU_SHADOW, FU_WIND, FU_TIME, FU_A2C, FU_NUM };
 
 void R_OAXTerrainRegisterCvars( void ) {
 	r_oaxTerrain = ri.Cvar_Get( "r_oaxTerrain", "1", CVAR_CHEAT );
@@ -201,8 +201,8 @@ void R_OAXTerrainRegisterCvars( void ) {
 
 static void InitPrograms( void ) {
 	static const char *tnames[TU_NUM] = { "u_LayerScale", "u_SplatXform", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Debug", "u_Triplanar",
-		"u_Layer0", "u_Layer1", "u_Layer2", "u_Layer3", "u_Splat", "u_ScreenShadow" };
-	static const char *fnames[FU_NUM] = { "u_Fade", "u_ViewOrigin", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Tex", "u_ScreenShadow" };
+		"u_SurfaceFx", "u_ViewOrigin", "u_Layer0", "u_Layer1", "u_Layer2", "u_Layer3", "u_Splat", "u_ScreenShadow" };
+	static const char *fnames[FU_NUM] = { "u_Fade", "u_ViewOrigin", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Tex", "u_ScreenShadow", "u_Wind", "u_Time", "u_A2C" };
 	int i, k;
 
 	tw.progsOk = qfalse;
@@ -1179,6 +1179,8 @@ static void DrawTerrain( const tView_t *v, int pass ) {
 				1.0f / ( in->cellSize * in->samplesX ), 1.0f / ( in->cellSize * in->samplesY ) );
 			qglUniform1f( loc[TU_DEBUG], (float)debug );
 			qglUniform1f( loc[TU_TRIPLANAR], ( in->flags & OAX_TERRAIN_TRIPLANAR ) ? 1.0f : 0.0f );
+			qglUniform2f( loc[TU_SURFACEFX], ( in->flags & OAX_TERRAIN_MACRO ) ? 1.0f : 0.0f, ( in->flags & OAX_TERRAIN_DETAIL ) ? 1.0f : 0.0f );
+			qglUniform3f( loc[TU_VIEWORIGIN], backEnd.viewParms.or.origin[0], backEnd.viewParms.or.origin[1], backEnd.viewParms.or.origin[2] );
 		}
 		qglBindVertexArray( t->vao );
 		glState.currentVao = NULL;
@@ -1285,6 +1287,7 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 	shaderProgram_t *sp = &tw.foliageProg[pass ? 1 : 0];
 	int *loc = FoliageLocs[pass ? 1 : 0];
 	int k, i, f, instances = 0, grass = 0, trees = 0;
+	qboolean a2c;
 
 	if ( !r_oaxFoliage->integer || r_oaxTerrainDebug->integer == 1 || r_oaxTerrainDebug->integer == 2 ) {
 		return;
@@ -1298,6 +1301,21 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 	if ( pass ) {
 		qglUniform1i( loc[FU_SHADOW], 5 );
 		SetSunUniforms( loc, FU_SUNDIR, FU_SUNCOLOR, FU_AMBIENT, FU_SCREEN, qtrue );
+	}
+	// the map's wind (tr_oax_env.c), also in the shadow passes so shadows sway too
+	if ( R_OAXEnvOn() && tr.oaxEnv.hasWind ) {
+		float yaw = DEG2RAD( tr.oaxEnv.wind[2] );
+		qglUniform4f( loc[FU_WIND], cos( yaw ), sin( yaw ), tr.oaxEnv.wind[0], tr.oaxEnv.wind[1] );
+	} else {
+		qglUniform4f( loc[FU_WIND], 0, 0, 0, 0 );
+	}
+	qglUniform1f( loc[FU_TIME], backEnd.refdef.floatTime );
+	// alpha to coverage: colour pass of a multisampled view only
+	a2c = pass && !v->shadow && R_OAXEnvOn() && tr.oaxEnv.foliageA2C && !backEnd.viewParms.targetFbo
+		&& tr.msaaResolveFbo && glState.currentFBO == tr.renderFbo;
+	qglUniform1f( loc[FU_A2C], a2c ? 1.0f : 0.0f );
+	if ( a2c ) {
+		qglEnable( GL_SAMPLE_ALPHA_TO_COVERAGE );
 	}
 	for ( k = 0; k < tw.numTerrains; k++ ) {
 		tTerrain_t *t = &tw.terrains[k];
@@ -1345,6 +1363,9 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 	}
 	qglBindVertexArray( 0 );
 	qglBindBuffer( GL_ARRAY_BUFFER, 0 );
+	if ( a2c ) {
+		qglDisable( GL_SAMPLE_ALPHA_TO_COVERAGE );
+	}
 	if ( pass && v->main ) {
 		tw.statFoliage = instances;
 		tw.statGrass = grass;
@@ -1420,6 +1441,46 @@ void RB_OAXTerrainColor( void ) {
 		ri.DebugSet( "r_terrain_shadow_chunks", va( "%d", tw.statShadowChunks ) );
 		tw.statShadowViews = tw.statShadowChunks = 0;
 	}
+}
+
+/*
+=================
+R_OAXTerrainTriangles
+
+The collision triangles of every terrain cell overlapping the box (world
+xy), for projected decals; a cell's two triangles as
+OAXTerrain_CellTriangles splits it. Returns how many were passed on.
+=================
+*/
+int R_OAXTerrainTriangles( const vec3_t mins, const vec3_t maxs, void ( *tri )( void *ctx, float t[3][3] ), void *ctx ) {
+	int k, i, j, n = 0;
+
+	if ( !tw.loaded ) {
+		return 0;
+	}
+	for ( k = 0; k < tw.numTerrains; k++ ) {
+		const oaxTerrainInfo_t *in = &tw.terrains[k].info;
+		int i0 = (int)floor( ( mins[0] - in->origin[0] ) / in->cellSize );
+		int i1 = (int)floor( ( maxs[0] - in->origin[0] ) / in->cellSize );
+		int j0 = (int)floor( ( mins[1] - in->origin[1] ) / in->cellSize );
+		int j1 = (int)floor( ( maxs[1] - in->origin[1] ) / in->cellSize );
+
+		i0 = MAX( i0, 0 );
+		j0 = MAX( j0, 0 );
+		i1 = MIN( i1, in->samplesX - 2 );
+		j1 = MIN( j1, in->samplesY - 2 );
+		for ( j = j0; j <= j1; j++ ) {
+			for ( i = i0; i <= i1; i++ ) {
+				float cell[2][3][3];
+
+				OAXTerrain_CellTriangles( in, i, j, cell );
+				tri( ctx, cell[0] );
+				tri( ctx, cell[1] );
+				n += 2;
+			}
+		}
+	}
+	return n;
 }
 
 qboolean R_OAXTerrainLoaded( void ) {

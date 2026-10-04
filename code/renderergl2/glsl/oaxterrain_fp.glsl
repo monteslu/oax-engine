@@ -35,9 +35,28 @@ uniform vec3   u_Ambient;
 uniform vec4   u_ScreenInfo;    // 1 / framebuffer size (xy), w: use the shadow mask
 uniform float  u_Debug;
 uniform float  u_Triplanar;    // 1: steep faces take side projections (OAX_TERRAIN_TRIPLANAR)
+uniform vec2   u_SurfaceFx;    // x: macro variation (OAX_TERRAIN_MACRO), y: close detail (OAX_TERRAIN_DETAIL)
+uniform vec3   u_ViewOrigin;
 
 varying vec3   var_Position;
 varying vec3   var_Normal;
+
+// smooth value noise, 0..1
+float Noise(vec2 p)
+{
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+	float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+	float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+	float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float Luma(vec3 c)
+{
+	return dot(c, vec3(0.299, 0.587, 0.114));
+}
 #endif
 
 void main()
@@ -75,6 +94,37 @@ void main()
 			        + texture2D(u_Layer2, var_Position.xz * u_LayerScale.z).rgb * w.z
 			        + texture2D(u_Layer3, var_Position.xz * u_LayerScale.w).rgb * w.w;
 			albedo = albedo * bw.z + sx * bw.x + sy * bw.y;
+		}
+	}
+
+	if (u_SurfaceFx.x > 0.5)
+	{
+		// macro variation: patches a few hundred to a couple of thousand
+		// units across, a little lighter or darker and warmer or cooler, so
+		// a layer's repeat does not read as a grid from afar
+		vec2 p = var_Position.xy;
+		float m = Noise(p / 1900.0) * 0.6 + Noise(p / 640.0 + 7.3) * 0.4;
+		float k = m - 0.5;
+		albedo *= (1.0 + 0.36 * k) * vec3(1.0 + 0.10 * k, 1.0, 1.0 - 0.12 * k);
+	}
+	if (u_SurfaceFx.y > 0.5)
+	{
+		// close detail: the layers again at a finer, turned repeat; their
+		// brightness against the layer's average (a far mip) modulates the
+		// colour, fading out with distance
+		float fade = 1.0 - smoothstep(250.0, 1100.0, length(var_Position - u_ViewOrigin));
+		if (fade > 0.0)
+		{
+			vec2 q = mat2(0.8, -0.6, 0.6, 0.8) * var_Position.xy * 5.3;
+			float hi = Luma(texture2D(u_Layer0, q * u_LayerScale.x).rgb) * w.x
+			         + Luma(texture2D(u_Layer1, q * u_LayerScale.y).rgb) * w.y
+			         + Luma(texture2D(u_Layer2, q * u_LayerScale.z).rgb) * w.z
+			         + Luma(texture2D(u_Layer3, q * u_LayerScale.w).rgb) * w.w;
+			float avg = Luma(texture2D(u_Layer0, q * u_LayerScale.x, 12.0).rgb) * w.x
+			          + Luma(texture2D(u_Layer1, q * u_LayerScale.y, 12.0).rgb) * w.y
+			          + Luma(texture2D(u_Layer2, q * u_LayerScale.z, 12.0).rgb) * w.z
+			          + Luma(texture2D(u_Layer3, q * u_LayerScale.w, 12.0).rgb) * w.w;
+			albedo *= mix(1.0, clamp(hi / max(avg, 0.02), 0.55, 1.45), 0.55 * fade * smoothstep(0.45, 0.8, n.z));
 		}
 	}
 

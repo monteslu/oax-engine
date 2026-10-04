@@ -19,6 +19,7 @@ more details.
 
 // oax instanced foliage: alpha tested, distance fade as an ordered dither
 uniform sampler2D u_Tex;
+uniform float  u_A2C;            // 1: alpha to coverage (MSAA): soft-edged alpha instead of a hard cut
 #if !defined(FOLIAGE_DEPTH)
 uniform sampler2D u_ScreenShadow;
 uniform vec3   u_SunDir;
@@ -45,6 +46,18 @@ float Bayer4(vec2 fc)
 void main()
 {
 	vec4 tex = texture2D(u_Tex, var_Tex);
+	float alpha = 1.0;
+#if !defined(FOLIAGE_DEPTH)
+	if (u_A2C > 0.5)
+	{
+		// alpha to coverage: the edge a pixel wide, so thin blades keep
+		// their coverage at a distance instead of breaking up
+		alpha = clamp((tex.a - 0.5) / max(fwidth(tex.a), 0.0001) + 0.5, 0.0, 1.0);
+		if (alpha <= 0.0 || var_Fade >= Bayer4(gl_FragCoord.xy))
+			discard;
+	}
+	else
+#endif
 	if (tex.a < 0.5 || var_Fade >= Bayer4(gl_FragCoord.xy))
 		discard;
 #if defined(FOLIAGE_DEPTH)
@@ -58,6 +71,6 @@ void main()
 	// a little self-shadow toward the base
 	float ao = 0.55 + 0.45 * clamp(var_Height * 1.5, 0.0, 1.0);
 	vec3 light = (u_Ambient + u_SunColor * (ndl * shadow)) * ao;
-	gl_FragColor = vec4(tex.rgb * light, 1.0);
+	gl_FragColor = vec4(tex.rgb * light, alpha);
 #endif
 }
