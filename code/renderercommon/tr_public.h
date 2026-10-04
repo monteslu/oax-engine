@@ -133,6 +133,8 @@ typedef struct {
 	int		(*OAXAddDecal)( const oaxDecal_t *decal );
 	void	(*OAXAddTrail)( const oaxTrail_t *trail, const float *points );
 	void	(*OAXClearDecals)( void );
+	// oax frame profiler (NULL in renderers without it)
+	void	(*OAXGetProfile)( oaxProfile_t *out );
 } refexport_t;
 
 //
@@ -218,6 +220,8 @@ typedef struct {
 	// oax: named debug values for tests (Com_DebugSet); append-only
 	void	(*DebugSet)( const char *name, const char *value );
 	void	(*DebugSetBlob)( const char *data, int len );
+	// oax: a microsecond clock for profiling (wraps; take differences)
+	unsigned int	(*Microseconds)( void );
 } refimport_t;
 
 

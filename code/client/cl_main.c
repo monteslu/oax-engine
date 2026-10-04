@@ -3098,6 +3098,7 @@ void CL_Frame ( int msec ) {
 
 	// update the screen
 	SCR_UpdateScreen();
+	CL_OAXProfFrame();
 
 	// update audio
 	S_Update();
@@ -3345,6 +3346,7 @@ void CL_InitRef( void ) {
 
 	ri.DebugSet = Com_DebugSet;
 	ri.DebugSetBlob = Com_DebugSetBlob;
+	ri.Microseconds = Sys_Microseconds;
 
 	ret = GetRefAPI( REF_API_VERSION, &ri );
 
@@ -3740,6 +3742,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f);
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
+	CL_OAXProfInit();
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);

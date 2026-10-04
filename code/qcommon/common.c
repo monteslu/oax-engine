@@ -110,6 +110,7 @@ cvar_t  *con_autochat;
 
 // com_speeds times
 int		time_game;
+unsigned int	com_profServerUs, com_profCgameUs;	// oax profiler (cl_oax_prof.c)
 int		time_frontend;		// renderer frontend time
 int		time_backend;		// renderer backend time
 
@@ -3225,7 +3226,12 @@ void Com_Frame( void ) {
 		timeBeforeServer = Sys_Milliseconds ();
 	}
 
-	SV_Frame( msec );
+	{
+		unsigned int t0 = Sys_Microseconds();
+
+		SV_Frame( msec );
+		com_profServerUs = Sys_Microseconds() - t0;
+	}
 
 	// if "dedicated" has been modified, start up
 	// or shut down the client system.

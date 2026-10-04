@@ -20,6 +20,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_cin.c
     ${SOURCE_DIR}/client/cl_console.c
     ${SOURCE_DIR}/client/cl_gamepad.c
+    ${SOURCE_DIR}/client/cl_oax_prof.c
     ${SOURCE_DIR}/client/cl_testscript.c
     ${SOURCE_DIR}/client/cl_input.c
     ${SOURCE_DIR}/client/cl_keys.c

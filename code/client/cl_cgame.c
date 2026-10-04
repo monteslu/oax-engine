@@ -867,7 +867,12 @@ CL_CGameRendering
 =====================
 */
 void CL_CGameRendering( stereoFrame_t stereo ) {
-	VM_Call( cgvm, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying );
+	{
+		unsigned int t0 = Sys_Microseconds();
+
+		VM_Call( cgvm, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying );
+		com_profCgameUs = Sys_Microseconds() - t0;
+	}
 	VM_Debug( 0 );
 }
 

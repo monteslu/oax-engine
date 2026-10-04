@@ -539,6 +539,9 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 		VM_Call( uivm, UI_REFRESH, cls.realtime );
 	}
 
+	// oax: the performance overlay, under the console
+	CL_OAXProfDraw();
+
 	// console draws next
 	Con_DrawConsole ();
 

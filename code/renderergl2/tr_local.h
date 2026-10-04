@@ -2828,6 +2828,21 @@ void R_OAXTerrainRegisterCvars( void );
 void R_OAXTerrainLoadWorld( const void *bsp, int bspLen );
 void R_OAXTerrainShutdown( void );
 int R_OAXTerrainTriangles( const vec3_t mins, const vec3_t maxs, void ( *tri )( void *ctx, float t[3][3] ), void *ctx );
+void R_OAXTerrainStats( int *chunks, int *foliage );
+
+// tr_oax_prof.c: the frame profiler
+extern cvar_t	*r_oaxProfile;
+unsigned R_OAXProfNow( void );
+void RB_OAXProfZone( int zone );
+void RB_OAXProfBeginView( void );
+void RB_OAXProfEndView( void );
+void RB_OAXProfEndFrame( void );
+void R_OAXProfCount( int numIndexes );
+void R_OAXProfAddFront( unsigned us );
+void R_OAXProfAddBack( unsigned us );
+void R_OAXProfAddWait( unsigned us );
+void R_OAXProfShutdown( void );
+void RE_OAXGetProfile( oaxProfile_t *out );
 void R_OAXTerrainAddView( void );
 void RB_OAXTerrainDepth( void );
 void RB_OAXTerrainColor( void );

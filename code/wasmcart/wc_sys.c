@@ -115,6 +115,12 @@ means: Com_Frame sees one step of delta_ms.
 */
 static double wc_timeBase = -1.0;
 
+// profiling clock: cart time (a deterministic run never reads the host
+// clock), so CPU timings on a cart only mean frame steps
+unsigned int Sys_Microseconds( void ) {
+	return (unsigned int)Sys_Milliseconds() * 1000u;
+}
+
 int Sys_Milliseconds( void ) {
 	if ( wc_timeBase < 0.0 ) {
 		wc_timeBase = wc_time.time_ms;

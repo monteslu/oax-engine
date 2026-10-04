@@ -124,6 +124,24 @@ back. Weapons have no alternate fire.
 
 `joy_threshold` (0.15) and `in_mouse` (1) keep their ioquake3 defaults. A wasmcart also forces `r_mode -1` with `r_customwidth`/`r_customheight` set to the cart's display size.
 
+## Performance
+
+| Cvar / command | Default | Flags | What it does |
+|---|---|---|---|
+| `cl_oaxPerfHud` | 0 | archive | Overlay: 1 one line (fps, frame time, CPU stages, GPU total), 2 the full breakdown (GPU time per pass, draw counts). |
+| `oaxprof` | | command | Print the breakdown to the console (averages over the last 60 frames). |
+| `oaxprof csv <file> [frames]` | | command | One row a frame for the next frames (default 600) into the home's game folder. |
+| `r_oaxProfile` | 0 | | The renderer's profiler; the overlay and `oaxprof` turn it on while they need it. Debug values `r_prof_*` every 30 frames for tests. |
+
+CPU stages: server, cgame, renderer front end (culling, sorting), back end
+(issuing GL calls), and the wait at the end of the frame (glFinish and the
+swap). GPU time per pass comes from timer queries (desktop GL 3.3; not on
+GLES or the wasmcart): shadow maps, water reflection, depth prepass, sun
+shadow mask, terrain, foliage, surfaces, each post-process step (MSAA
+resolve, fog and atmosphere, bloom, tone map, grading and the final copy),
+2D, and the present. `com_maxfps` caps the frame rate (OpenArena's default
+is 85).
+
 ## Test hooks (test-only)
 
 Mostly cheat/temp cvars for tests; see [test-hooks.md](test-hooks.md). Not meant for play.

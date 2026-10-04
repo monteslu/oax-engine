@@ -589,7 +589,13 @@ void RE_RenderScene( const refdef_t *fd ) {
 		parms.flags = VPF_USESUNLIGHT;
 	}
 
-	R_RenderView( &parms );
+	{
+		unsigned t0 = r_oaxProfile->integer ? R_OAXProfNow() : 0;
+
+		R_RenderView( &parms );
+		if ( r_oaxProfile->integer )
+			R_OAXProfAddFront( R_OAXProfNow() - t0 );
+	}
 
 	if ( tr.refdef.rdflags & RDF_OAX_SKYPORTAL ) {
 		// the scene drawn over the sky portal reuses this scene's entities,

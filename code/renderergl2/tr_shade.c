@@ -40,6 +40,9 @@ R_DrawElements
 
 void R_DrawElements( int numIndexes, int firstIndex )
 {
+	if ( r_oaxProfile->integer )
+		R_OAXProfCount( numIndexes );
+
 	if (tess.useCacheVao)
 	{
 		VaoCache_DrawElements(numIndexes, firstIndex);

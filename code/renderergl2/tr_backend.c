@@ -827,6 +827,7 @@ RB_StretchPic
 =============
 */
 const void *RB_StretchPic ( const void *data ) {
+	RB_OAXProfZone( OAX_PZ_UI );
 	const stretchPicCommand_t	*cmd;
 	shader_t *shader;
 	int		numVerts, numIndexes;
@@ -932,6 +933,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 	// oax effects: no scene copy yet for this view
 	RB_OAXFxBeginView();
+	RB_OAXProfBeginView();
 
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView ();
@@ -982,6 +984,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 			if (r_sunlightMode->integer && backEnd.viewParms.flags & VPF_USESUNLIGHT)
 			{
+				RB_OAXProfZone( OAX_PZ_SHADOWMASK );
 				vec4_t quadVerts[4];
 				vec2_t texCoords[4];
 				vec4_t box;
@@ -1195,7 +1198,9 @@ const void	*RB_DrawSurfs( const void *data ) {
 	}
 	else if (!isShadowView)
 	{
+		RB_OAXProfZone( OAX_PZ_TERRAIN );
 		RB_OAXTerrainColor();	// oax terrain + foliage (tr_terrain.c)
+		RB_OAXProfZone( OAX_PZ_SURFACES );
 
 		if (backEnd.viewParms.ulightView)
 			RB_ULightDrawViewSurfs( cmd->drawSurfs, cmd->numDrawSurfs );	// unified lighting
@@ -1256,6 +1261,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 	// to 2D drawing and causing the loading screen to be culled.
 	backEnd.viewParms.isMirror = qfalse;
 	backEnd.viewParms.flags = 0;
+	RB_OAXProfEndView();
 
 	return (const void *)(cmd + 1);
 }
@@ -1535,15 +1541,23 @@ const void	*RB_SwapBuffers( const void *data ) {
 		ri.Hunk_FreeTempMemory( stencilReadback );
 	}
 
+	RB_OAXProfZone( OAX_PZ_PRESENT );
 	RB_PresentToScreen();
+	RB_OAXProfEndFrame();
 
-	if ( !glState.finishCalled ) {
-		qglFinish();
+	{
+		unsigned w = R_OAXProfNow();
+
+		if ( !glState.finishCalled ) {
+			qglFinish();
+		}
+
+		GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
+
+		GLimp_EndFrame();
+		if ( r_oaxProfile->integer )
+			R_OAXProfAddWait( R_OAXProfNow() - w );
 	}
-
-	GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
-
-	GLimp_EndFrame();
 
 	backEnd.projection2D = qfalse;
 
@@ -1618,6 +1632,7 @@ const void *RB_PostProcess(const void *data)
 	srcFbo = tr.renderFbo;
 	dstFbo = tr.renderFbo;
 
+	RB_OAXProfZone( OAX_PZ_POST_RESOLVE );
 	if (tr.msaaResolveFbo)
 	{
 		// Resolve the MSAA before anything else
@@ -1632,6 +1647,7 @@ const void *RB_PostProcess(const void *data)
 	dstBox[3] = backEnd.viewParms.viewportHeight;
 
 	// oax view fog, in scene light before tonemapping
+	RB_OAXProfZone( OAX_PZ_POST_FOG );
 	if (backEnd.refdef.oaxViewFog[3] > 0.0f)
 		RB_OAXViewFog(srcFbo, dstBox);
 
@@ -1639,7 +1655,9 @@ const void *RB_PostProcess(const void *data)
 	RB_OAXAtmosphere(srcFbo, dstBox);
 
 	// oax bloom, in scene light before tonemapping (r_oaxBloom)
+	RB_OAXProfZone( OAX_PZ_POST_BLOOM );
 	RB_OAXBloom(srcFbo, dstBox);
+	RB_OAXProfZone( OAX_PZ_POST_TONEMAP );
 
 	if (r_ssao->integer)
 	{
@@ -1680,6 +1698,7 @@ const void *RB_PostProcess(const void *data)
 		}
 	}
 
+	RB_OAXProfZone( OAX_PZ_POST_FINISH );
 	if (r_drawSunRays->integer)
 		RB_SunRays(srcFbo, srcBox, srcFbo, srcBox);
 
@@ -1898,6 +1917,7 @@ RB_ExecuteRenderCommands
 */
 void RB_ExecuteRenderCommands( const void *data ) {
 	int		t1, t2;
+	unsigned	profStart = R_OAXProfNow(), profWait = 0;
 
 	t1 = ri.Milliseconds ();
 
@@ -1933,7 +1953,12 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			data = RB_DrawBuffer( data );
 			break;
 		case RC_SWAP_BUFFERS:
-			data = RB_SwapBuffers( data );
+			{
+				unsigned w = R_OAXProfNow();
+
+				data = RB_SwapBuffers( data );
+				profWait += R_OAXProfNow() - w;	// RB_SwapBuffers counts its own wait
+			}
 			break;
 		case RC_SCREENSHOT:
 			data = RB_TakeScreenshotCmd( data );
@@ -1974,6 +1999,8 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			// stop rendering
 			t2 = ri.Milliseconds ();
 			backEnd.pc.msec = t2 - t1;
+			if ( r_oaxProfile->integer )
+				R_OAXProfAddBack( R_OAXProfNow() - profStart - profWait );
 			return;
 		}
 	}

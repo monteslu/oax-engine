@@ -160,6 +160,10 @@ export function canyonHeight(x, y) {
   return w * heightCanon(x, y) + (1 - w) * heightCanon(-x, -y);
 }
 
+// half the width of the tree-free lane along the valley's centre line, so the
+// carrier (230 units across) can drive end to end between the groves
+const LANE = 300;
+
 export function makeTerrain(clear) {
   const t = new Terrain({
     name: 'oax_canyon', origin: [FIELD.x0, FIELD.y0, -1024], cellSize: CELL,
@@ -173,6 +177,7 @@ export function makeTerrain(clear) {
     const n = fbm(sx / 600 + 3, sy / 600 - 8, 3);
     const steep = slope < 0.82, ledge = z > 250;
     const wet = z < POOL.waterZ + 12;                // in or at the edge of a pool: no foliage
+    const lane = Math.abs(y - center(x)) < LANE;     // a drivable route down the valley: no trees
     return {
       // layers: 0 grass, 1 cracked earth, 2 rock, 3 sand
       splat: [
@@ -183,7 +188,7 @@ export function makeTerrain(clear) {
       ],
       density: [
         !steep && !ledge && !wet && n > 0.05 ? 0.9 : 0,
-        slope > 0.92 && !nearBase && !nearItem && !wet && n > 0.25 && z < 400 ? 0.55 : 0,
+        slope > 0.92 && !nearBase && !nearItem && !wet && !lane && n > 0.3 && z < 400 ? 0.55 : 0,
         0, 0],
     };
   });

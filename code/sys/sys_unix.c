@@ -526,6 +526,17 @@ unsigned long sys_timeBase = 0;
      0x7fffffff ms - ~24 days
    although timeval:tv_usec is an int, I'm not sure wether it is actually used as an unsigned int
      (which would affect the wrap period) */
+/*
+Sys_Microseconds (oax): a monotonic microsecond clock for profiling
+*/
+unsigned int Sys_Microseconds( void )
+{
+	struct timespec ts;
+
+	clock_gettime( CLOCK_MONOTONIC, &ts );
+	return (unsigned int)( (unsigned long long)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 );
+}
+
 int curtime;
 int Sys_Milliseconds (void)
 {

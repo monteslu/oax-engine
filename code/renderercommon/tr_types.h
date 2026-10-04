@@ -179,6 +179,34 @@ typedef struct {
 } oaxTrail_t;
 
 
+// oax frame profiler (renderergl2 tr_oax_prof.c): GPU zones, in the order
+// the zone names come in
+enum {
+	OAX_PZ_SHADOW, OAX_PZ_REFLECT, OAX_PZ_PREPASS, OAX_PZ_SHADOWMASK, OAX_PZ_TERRAIN,
+	OAX_PZ_FOLIAGE, OAX_PZ_SURFACES,
+	OAX_PZ_POST_RESOLVE,	// MSAA resolve
+	OAX_PZ_POST_FOG,		// view fog, atmosphere
+	OAX_PZ_POST_BLOOM,
+	OAX_PZ_POST_TONEMAP,	// exposure, tone mapping and its copy back
+	OAX_PZ_POST_FINISH,		// sun rays, blur, display curve, grading, the final copy
+	OAX_PZ_UI, OAX_PZ_PRESENT, OAX_PZ_OTHER,
+	OAX_PROF_ZONES
+};
+
+// averages over the last frames profiled; frames 0 = not profiling
+typedef struct {
+	int			frames;
+	int			gpuTiming;			// 1 if gpuMs are measured (timer queries)
+	float		frameMs;			// time between frames
+	float		cpuFrontMs;			// renderer front end: culling, sorting, surface lists
+	float		cpuBackMs;			// renderer back end: issuing GL calls
+	float		cpuWaitMs;			// glFinish and swap: the CPU waiting on the GPU or the display
+	float		gpuMs[OAX_PROF_ZONES];
+	float		gpuTotalMs;
+	float		draws, tris, views, terrainChunks, foliageInstances;
+	const char	*zoneNames[OAX_PROF_ZONES];
+} oaxProfile_t;
+
 #define	MAX_RENDER_STRINGS			8
 #define	MAX_RENDER_STRING_LENGTH	32
 

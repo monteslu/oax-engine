@@ -519,6 +519,11 @@ typedef struct {
 
 void IN_GamepadReset( void );
 
+// cl_oax_prof.c: the performance overlay and oaxprof
+void CL_OAXProfInit( void );
+void CL_OAXProfFrame( void );
+void CL_OAXProfDraw( void );
+
 //
 // cl_testscript.c
 //

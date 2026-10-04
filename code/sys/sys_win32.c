@@ -255,6 +255,22 @@ char* Sys_MicrosoftStorePath(void)
 Sys_Milliseconds
 ================
 */
+/*
+================
+Sys_Microseconds (oax): a monotonic microsecond clock for profiling
+================
+*/
+unsigned int Sys_Microseconds( void )
+{
+	static LARGE_INTEGER freq;
+	LARGE_INTEGER now;
+
+	if ( !freq.QuadPart )
+		QueryPerformanceFrequency( &freq );
+	QueryPerformanceCounter( &now );
+	return (unsigned int)( now.QuadPart * 1000000 / freq.QuadPart );
+}
+
 int sys_timeBase;
 int Sys_Milliseconds (void)
 {

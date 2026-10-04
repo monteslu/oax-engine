@@ -1424,6 +1424,7 @@ void RB_OAXTerrainColor( void ) {
 		tw.statFoliage = tw.statGrass = tw.statTrees = 0;
 	}
 	DrawTerrain( v, 1 );
+	RB_OAXProfZone( OAX_PZ_FOLIAGE );
 	DrawFoliage( v, 1 );
 	GL_State( GLS_DEFAULT );
 	if ( v->main && ri.DebugSet ) {
@@ -1441,6 +1442,18 @@ void RB_OAXTerrainColor( void ) {
 		ri.DebugSet( "r_terrain_shadow_chunks", va( "%d", tw.statShadowChunks ) );
 		tw.statShadowViews = tw.statShadowChunks = 0;
 	}
+}
+
+/*
+=================
+R_OAXTerrainStats
+
+The last main view's terrain chunks drawn and foliage instances (profiler).
+=================
+*/
+void R_OAXTerrainStats( int *chunks, int *foliage ) {
+	*chunks = tw.loaded ? tw.statDrawn : 0;
+	*foliage = tw.loaded ? tw.statFoliage : 0;
 }
 
 /*

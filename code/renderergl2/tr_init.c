@@ -1452,6 +1452,8 @@ void R_Register( void )
 	R_OAXRegisterCvars();
 	R_OAXTerrainRegisterCvars();
 	R_OAXEnvRegisterCvars();
+	r_oaxProfile = ri.Cvar_Get( "r_oaxProfile", "0", 0 );
+	ri.Cvar_SetDescription( r_oaxProfile, "Frame profiler: GPU time per pass, CPU time per stage, draw counts (oaxprof, cl_oaxPerfHud)." );
 	R_OAXSurfWorldRegisterCvars();
 
 	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
@@ -1611,6 +1613,7 @@ RE_Shutdown
 void RE_Shutdown( qboolean destroyWindow ) {	
 
 	ri.Printf( PRINT_ALL, "RE_Shutdown( %i )\n", destroyWindow );
+	R_OAXProfShutdown();
 
 	ri.Cmd_RemoveCommand( "imagelist" );
 	ri.Cmd_RemoveCommand( "shaderlist" );
@@ -1758,6 +1761,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.OAXAddDecal = RE_OAXAddDecal;
 	re.OAXAddTrail = RE_OAXAddTrail;
 	re.OAXClearDecals = RE_OAXClearDecals;
+	re.OAXGetProfile = RE_OAXGetProfile;
 
 	return &re;
 }
