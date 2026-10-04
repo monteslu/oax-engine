@@ -420,6 +420,9 @@ void R_OAXAddFxSurfaces( void ) {
 Scene copy
 =================
 */
+// the part of the screen the copy holds (pixels: x0 y0 x1 y1), when valid
+static int copyRect[4];
+
 void RB_OAXFxBeginView( void ) {
 	copyValid = qfalse;
 }
@@ -428,14 +431,14 @@ void RB_OAXSceneCopyInvalidate( void ) {
 	copyValid = qfalse;
 }
 
+
 void RB_OAXRestoreViewTarget( void ) {
 	FBO_t *fbo = backEnd.viewParms.targetFbo ? backEnd.viewParms.targetFbo : tr.renderFbo;
 
 	FBO_Bind( fbo );
 	qglViewport( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
 		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
-	qglScissor( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
-		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
+	RB_OAXViewScissor();
 }
 
 /*
@@ -448,10 +451,47 @@ qfalse when there is nothing to copy from.
 =================
 */
 qboolean RB_OAXSceneCopy( void ) {
-	FBO_t *src = glState.currentFBO;
+	return RB_OAXSceneCopyRect( NULL );
+}
 
-	if ( copyValid ) {
+/*
+=================
+RB_OAXSceneCopyRect
+
+As RB_OAXSceneCopy, but only rect (pixels, x0 y0 x1 y1) needs to be in
+the copy (NULL: the whole view): a pool in a corner of the screen copies
+its corner, not the frame. A later request outside what is copied copies
+the union.
+=================
+*/
+qboolean RB_OAXSceneCopyRect( const int *rect ) {
+	FBO_t *src = glState.currentFBO;
+	int want[4], i;
+	ivec4_t box;
+
+	if ( rect ) {
+		want[0] = MAX( rect[0], backEnd.viewParms.viewportX );
+		want[1] = MAX( rect[1], backEnd.viewParms.viewportY );
+		want[2] = MIN( rect[2], backEnd.viewParms.viewportX + backEnd.viewParms.viewportWidth );
+		want[3] = MIN( rect[3], backEnd.viewParms.viewportY + backEnd.viewParms.viewportHeight );
+		if ( want[2] <= want[0] || want[3] <= want[1] ) {
+			want[0] = want[1] = 0;
+			want[2] = want[3] = 1;
+		}
+	} else {
+		want[0] = backEnd.viewParms.viewportX;
+		want[1] = backEnd.viewParms.viewportY;
+		want[2] = backEnd.viewParms.viewportX + backEnd.viewParms.viewportWidth;
+		want[3] = backEnd.viewParms.viewportY + backEnd.viewParms.viewportHeight;
+	}
+	if ( copyValid && want[0] >= copyRect[0] && want[1] >= copyRect[1] && want[2] <= copyRect[2] && want[3] <= copyRect[3] ) {
 		return qtrue;
+	}
+	if ( copyValid ) {
+		for ( i = 0; i < 2; i++ ) {
+			want[i] = MIN( want[i], copyRect[i] );
+			want[i + 2] = MAX( want[i + 2], copyRect[i + 2] );
+		}
 	}
 	if ( !glRefConfig.framebufferObject || !glRefConfig.framebufferBlit || !tr.renderFbo || src != tr.renderFbo
 		|| backEnd.viewParms.targetFbo ) {
@@ -470,7 +510,13 @@ qboolean RB_OAXSceneCopy( void ) {
 		FBO_AttachImage( copyFbo, copyDepth, depthFormat == GL_DEPTH24_STENCIL8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, 0 );
 		R_CheckFBO( copyFbo );
 	}
-	FBO_FastBlit( src, NULL, copyFbo, NULL, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST );
+	RB_OAXProfZone( OAX_PZ_SCENECOPY );
+	VectorSet4( box, want[0], want[1], want[2] - want[0], want[3] - want[1] );
+	FBO_FastBlit( src, box, copyFbo, box, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST );
+	for ( i = 0; i < 4; i++ ) {
+		copyRect[i] = want[i];
+	}
+	RB_OAXProfZone( OAX_PZ_SURFACES );
 	RB_OAXRestoreViewTarget();
 	copyValid = qtrue;
 	oaxFxStats.sceneCopies++;

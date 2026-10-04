@@ -603,6 +603,10 @@ const void *RB_TakeScreenshotCmd( const void *data ) {
 	if(tess.numIndexes)
 		RB_EndSurface();
 
+	// oax: the frame is on the screen, not in the render FBO
+	if (backEnd.oaxDirect)
+		FBO_Bind(NULL);
+
 	if (cmd->jpeg)
 		RB_TakeScreenshotJPEG( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
 	else
@@ -1453,6 +1457,8 @@ void R_Register( void )
 	R_OAXTerrainRegisterCvars();
 	R_OAXEnvRegisterCvars();
 	r_oaxProfile = ri.Cvar_Get( "r_oaxProfile", "0", 0 );
+	r_oaxDirectPost = ri.Cvar_Get( "r_oaxDirectPost", "1", CVAR_ARCHIVE );
+	ri.Cvar_SetDescription( r_oaxDirectPost, "Tone map (and grade) straight to the screen when nothing after needs the image: saves several full-screen copies. 0 keeps the copy chain." );
 	ri.Cvar_SetDescription( r_oaxProfile, "Frame profiler: GPU time per pass, CPU time per stage, draw counts (oaxprof, cl_oaxPerfHud)." );
 	R_OAXSurfWorldRegisterCvars();
 

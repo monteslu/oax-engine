@@ -135,10 +135,11 @@ static void Prof_f( void ) {
 		Com_Printf( "oaxprof: recording %d frames to %s (averages over the last frames, one row a frame)\n", csvLeft, name );
 		return;
 	}
+	// the console table leaves the profiler on (r_oaxProfile 0 stops it)
 	if ( !ProfileOn() ) {
 		Cvar_Set( "r_oaxProfile", "1" );
-		turnedOn = qtrue;
 	}
+	turnedOn = qfalse;
 	PrintTable();
 }
 

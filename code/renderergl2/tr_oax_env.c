@@ -219,6 +219,70 @@ RB_OAXGrade
 The map's colour grading and vignette, after tonemapping.
 =================
 */
+/*
+=================
+R_OAXGradeUniforms
+
+The grading parameters for a shader that applies them itself (the tone map
+when it writes straight to the screen, RB_PostProcess); off unless the map
+grades and on is set.
+=================
+*/
+void R_OAXGradeUniforms( shaderProgram_t *sp, qboolean on ) {
+	const oaxEnv_t *e = &tr.oaxEnv;
+	vec4_t v;
+	vec3_t c;
+
+	if ( on && R_OAXEnvOn() && e->hasGrade && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		VectorSet4( v, e->grade[0], e->grade[1], e->grade[5], 1 );
+		VectorSet( c, e->grade[2], e->grade[3], e->grade[4] );
+	} else {
+		VectorSet4( v, 1, 1, 0, 0 );
+		VectorSet( c, 1, 1, 1 );
+	}
+	GLSL_SetUniformVec4( sp, UNIFORM_FOGDEPTH, v );
+	GLSL_SetUniformVec3( sp, UNIFORM_DIRECTEDLIGHT, c );
+}
+
+/*
+=================
+R_OAXAtmosActive / R_OAXAtmosUniforms
+
+Whether this view gets the map's atmosphere, and its parameters for a
+shader that applies it itself (the tone map on the direct path: the same
+computation as oaxatmos_fp.glsl, without the separate blended pass).
+=================
+*/
+qboolean R_OAXAtmosActive( void ) {
+	return R_OAXEnvOn() && tr.oaxEnv.hasAtmos && tr.renderDepthImage
+		&& !( backEnd.refdef.rdflags & ( RDF_NOWORLDMODEL | RDF_OAX_SKYPORTAL ) );
+}
+
+void R_OAXAtmosUniforms( shaderProgram_t *sp, qboolean on ) {
+	const oaxEnv_t *e = &tr.oaxEnv;
+	vec4_t v;
+
+	GLSL_SetUniformFloat( sp, UNIFORM_FOGEYET, on ? 1.0f : 0.0f );
+	if ( !on ) {
+		return;
+	}
+	GL_BindToTMU( tr.renderDepthImage, TB_SHADOWMAP );
+	VectorSet4( v, r_znear->value, backEnd.viewParms.zFar, 0, 0 );
+	GLSL_SetUniformVec4( sp, UNIFORM_VIEWINFO, v );
+	VectorSet4( v, tan( backEnd.viewParms.fovX * M_PI / 360.0f ), tan( backEnd.viewParms.fovY * M_PI / 360.0f ), 0, 0 );
+	GLSL_SetUniformVec4( sp, UNIFORM_NORMALSCALE, v );
+	GLSL_SetUniformVec3( sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.or.origin );
+	GLSL_SetUniformVec3( sp, UNIFORM_VIEWFORWARD, backEnd.viewParms.or.axis[0] );
+	GLSL_SetUniformVec3( sp, UNIFORM_VIEWLEFT, backEnd.viewParms.or.axis[1] );
+	GLSL_SetUniformVec3( sp, UNIFORM_VIEWUP, backEnd.viewParms.or.axis[2] );
+	VectorSet4( v, tr.sunDirection[0], tr.sunDirection[1], tr.sunDirection[2], 0 );
+	GLSL_SetUniformVec4( sp, UNIFORM_PRIMARYLIGHTORIGIN, v );
+	VectorSet4( v, e->atmos[4], e->atmos[5], e->atmos[6], 16000.0f );
+	GLSL_SetUniformVec4( sp, UNIFORM_FOGDISTANCE, v );
+	VectorSet4( v, e->atmos[0], e->atmos[1], e->atmos[2], e->atmos[3] );
+	GLSL_SetUniformVec4( sp, UNIFORM_FOGCOLORMASK, v );
+}
+
 void RB_OAXGrade( FBO_t *srcFbo, ivec4_t box ) {
 	shaderProgram_t *sp = &tr.oaxGradeShader;
 	const oaxEnv_t *e = &tr.oaxEnv;

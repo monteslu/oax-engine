@@ -1548,6 +1548,7 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	}
 
 	// oax water: the view mirrored in a water plane, rendered first
+	R_OAXWaterScreenRect( drawSurfs, numDrawSurfs );
 	R_OAXWaterReflection( drawSurfs, numDrawSurfs );
 
 	R_AddDrawSurfCmd( drawSurfs, numDrawSurfs );

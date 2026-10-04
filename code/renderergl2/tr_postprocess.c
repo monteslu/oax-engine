@@ -40,6 +40,8 @@ void RB_ToneMap(FBO_t *hdrFbo, ivec4_t hdrBox, FBO_t *ldrFbo, ivec4_t ldrBox, in
 
 			VectorSet4(dstBox, 0, 0, size, size);
 
+			// oax: fogged here too when the tone map applies the atmosphere
+			R_OAXAtmosUniforms(&tr.calclevels4xShader[0], ldrFbo == NULL && backEnd.oaxFuseAtmos);
 			FBO_Blit(hdrFbo, hdrBox, NULL, tr.textureScratchFbo[0], dstBox, &tr.calclevels4xShader[0], NULL, 0);
 
 			srcFbo = tr.textureScratchFbo[0];
@@ -92,6 +94,9 @@ void RB_ToneMap(FBO_t *hdrFbo, ivec4_t hdrBox, FBO_t *ldrFbo, ivec4_t ldrBox, in
 
 	GLSL_BindProgram(&tr.tonemapShader);
 	GLSL_SetUniformFloat(&tr.tonemapShader, UNIFORM_GAMMA, R_GammaInShader() ? r_gamma->value : 1.0f);
+	// oax: grading fused in only when this pass writes the final image (the screen)
+	R_OAXGradeUniforms(&tr.tonemapShader, ldrFbo == NULL);
+	R_OAXAtmosUniforms(&tr.tonemapShader, ldrFbo == NULL && backEnd.oaxFuseAtmos);
 
 	FBO_Blit(hdrFbo, hdrBox, NULL, ldrFbo, ldrBox, &tr.tonemapShader, color, 0);
 }

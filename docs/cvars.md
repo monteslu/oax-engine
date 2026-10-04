@@ -15,7 +15,7 @@ Cvars flagged **cheat** only take a non-default value under `devmap` or with `sv
 | `r_vaoCache` | 0 -> **1** | archive | Surfaces without CPU deforms (not sky, not portal) are drawn through the cached vertex array object path instead of being streamed every frame. |
 | `pmove_fixed` | 0 -> **1** | systeminfo | Player movement runs in fixed `pmove_msec` steps at any frame rate, so movement is identical across builds and frame rates. The engine now creates it before the game module does. |
 | `pmove_msec` | 8 (unchanged) | systeminfo | Step length in ms for `pmove_fixed`; now created by the engine (was game-only). |
-| `vm_game`, `vm_cgame`, `vm_ui` | 2 -> **1** | archive | QVMs run on the bytecode interpreter (1) on every build, so native and wasm share one execution path; 2 (JIT) is opt-in, 0 loads a native library. |
+| `vm_game`, `vm_cgame`, `vm_ui` | 2 (1 on wasmcart) | archive | QVMs run compiled (2, the JIT) where the build has one; a wasmcart runs the interpreter (1). The tests pin 1 on every build so native and wasm share one execution path. 0 loads a native library. |
 
 ## Rendering
 

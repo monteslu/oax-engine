@@ -8,6 +8,49 @@ uniform vec2      u_AutoExposureMinMax;
 uniform vec3      u_ToneMinAvgMaxLinear;
 uniform float     u_Gamma;
 
+// oax, when the post-process writes straight to the screen (tr_oax_env.c):
+// colour grading (worldspawn oax_grade): u_FogDepth saturation, contrast,
+// vignette, on; u_DirectedLight the colour multiplier
+uniform vec4      u_FogDepth;
+uniform vec3      u_DirectedLight;
+// and the atmosphere (worldspawn oax_atmosphere), as oaxatmos_fp.glsl:
+// u_FogEyeT > 0.5 on; u_FogColorMask rgb + density; u_FogDistance falloff,
+// base z, sun scatter, sky distance
+uniform sampler2D u_ScreenDepthMap;
+uniform float     u_FogEyeT;
+uniform vec4      u_FogColorMask;
+uniform vec4      u_FogDistance;
+uniform vec4      u_ViewInfo;
+uniform vec4      u_NormalScale;
+uniform vec3      u_ViewOrigin;
+uniform vec3      u_ViewForward;
+uniform vec3      u_ViewLeft;
+uniform vec3      u_ViewUp;
+uniform vec4      u_PrimaryLightOrigin;
+
+// the atmosphere over the scene colour c at this pixel (oaxatmos_fp.glsl)
+vec3 Atmosphere(vec3 c, vec2 tc)
+{
+	float d = texture2D(u_ScreenDepthMap, tc).r;
+	vec2 ndc = tc * 2.0 - 1.0;
+	float zNear = u_ViewInfo.x;
+	float zFar = u_ViewInfo.y;
+	float zEye = d >= 0.99999 ? u_FogDistance.w
+		: 2.0 * zNear * zFar / (zFar + zNear - (d * 2.0 - 1.0) * (zFar - zNear));
+	vec3 dir = u_ViewForward - u_ViewLeft * (ndc.x * u_NormalScale.x) + u_ViewUp * (ndc.y * u_NormalScale.y);
+	vec3 P = u_ViewOrigin + dir * zEye;
+	float rayLen = zEye * length(dir);
+	float f = max(u_FogDistance.x, 1e-6);
+	float h0 = max(u_ViewOrigin.z - u_FogDistance.y, 0.0);
+	float h1 = max(P.z - u_FogDistance.y, 0.0);
+	float e0 = exp(-f * h0), e1 = exp(-f * h1);
+	float dh = h1 - h0;
+	float od = u_FogColorMask.a * rayLen * (abs(dh) > 0.5 ? (e0 - e1) / (f * dh) : e0);
+	float amount = 1.0 - exp(-od);
+	float sun = pow(max(dot(normalize(dir), u_PrimaryLightOrigin.xyz), 0.0), 8.0);
+	return mix(c, u_FogColorMask.rgb * (1.0 + u_FogDistance.z * sun), amount);
+}
+
 varying vec2      var_TexCoords;
 varying float     var_InvWhite;
 
@@ -27,7 +70,10 @@ float FilmicTonemap(float x)
 
 void main()
 {
-	vec4 color = texture2D(u_TextureMap, var_TexCoords) * u_Color;
+	vec4 color = texture2D(u_TextureMap, var_TexCoords);
+	if (u_FogEyeT > 0.5)
+		color.rgb = Atmosphere(color.rgb, var_TexCoords);
+	color *= u_Color;
 
 #if defined(USE_PBR)
 	color.rgb *= color.rgb;
@@ -53,6 +99,18 @@ void main()
 #if defined(USE_PBR)
 	color.rgb = sqrt(color.rgb);
 #endif
+
+	if (u_FogDepth.w > 0.5)
+	{
+		vec3 c = color.rgb;
+		float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+		c = mix(vec3(lum), c, u_FogDepth.x);
+		c = (c - 0.5) * u_FogDepth.y + 0.5;
+		c *= u_DirectedLight;
+		vec2 q = var_TexCoords - 0.5;
+		float v = 1.0 - u_FogDepth.z * smoothstep(0.25, 0.75, length(q) * 1.414);
+		color.rgb = clamp(c * v, 0.0, 1.0);
+	}
 
 	// add a bit of dither to reduce banding
 	color.rgb += vec3(1.0/510.0 * mod(gl_FragCoord.x + gl_FragCoord.y, 2.0) - 1.0/1020.0);

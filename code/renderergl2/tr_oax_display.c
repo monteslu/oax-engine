@@ -83,6 +83,11 @@ The curve on srcFbo's box, through the scratch FBO (an FBO cannot be read
 and written at once).
 =================
 */
+// oax: whether RB_OAXDisplayCurve would draw (the direct post path needs it off)
+qboolean R_OAXDisplayCurveOn( void ) {
+	return r_displayCurve && r_displayCurve->integer && tr.oaxDisplayShader.program;
+}
+
 void RB_OAXDisplayCurve( FBO_t *srcFbo, ivec4_t box ) {
 	vec4_t parms;
 	float B;

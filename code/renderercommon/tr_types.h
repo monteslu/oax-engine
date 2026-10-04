@@ -184,6 +184,7 @@ typedef struct {
 enum {
 	OAX_PZ_SHADOW, OAX_PZ_REFLECT, OAX_PZ_PREPASS, OAX_PZ_SHADOWMASK, OAX_PZ_TERRAIN,
 	OAX_PZ_FOLIAGE, OAX_PZ_SURFACES,
+	OAX_PZ_SCENECOPY,		// the scene's colour and depth copied for water refraction and soft particles
 	OAX_PZ_POST_RESOLVE,	// MSAA resolve
 	OAX_PZ_POST_FOG,		// view fog, atmosphere
 	OAX_PZ_POST_BLOOM,

@@ -891,6 +891,8 @@ typedef struct {
 	int			ulightView;			// unified lighting: view index + 1, 0 none
 	qboolean	oaxReflection;		// oax water: a planar reflection view (tr_oax_water.c)
 	qboolean	oaxHasReflection;	// oax water: this view's reflection was rendered first
+	int			oaxWaterRect[4];	// oax water: screen pixels its surfaces cover (x1 <= x0: unknown, the whole view)
+	int			oaxScissor[4];		// oax: x y w h drawn within the viewport (w 0: all of it); the water reflection's
 	int			oaxTerrainView;		// oax terrain: view slot + 1 (tr_terrain.c), 0 none
 } viewParms_t;
 
@@ -1554,6 +1556,8 @@ typedef struct {
 	qboolean    oaxIdFill;	// oax: the surface id pass (tr_oax_surfid.c)
 	int         oaxIdCurrent;	// draw id of the surface being added
 	float       greyscale;
+	qboolean    oaxDirect;	// oax: this frame's post-process wrote the final image to the screen (RB_PostProcess)
+	qboolean    oaxFuseAtmos;	// oax: the tone map applies the atmosphere (the direct path)
 } backEndState_t;
 
 /*
@@ -2699,6 +2703,7 @@ int RB_OAXSurfIdSurface( const surfaceType_t *surface, int entityNum, const shad
 void RB_OAXSurfIdPass( drawSurf_t *drawSurfs, int numDrawSurfs );
 void RB_OAXSurfIdIterate( void );
 void SetViewportAndScissor( void );
+void RB_OAXViewScissor( void );
 
 void RB_OAXViewFog( FBO_t *srcFbo, ivec4_t box );
 
@@ -2749,6 +2754,8 @@ srfOaxParticles_t *R_OAXPrtNewSurf( oaxSceneFx_t *sfx );
 // scene copy: the opaque scene's colour and depth, for soft particles and water
 void RB_OAXFxBeginView( void );
 qboolean RB_OAXSceneCopy( void );
+qboolean RB_OAXSceneCopyRect( const int *rect );
+void R_OAXWaterScreenRect( drawSurf_t *drawSurfs, int numDrawSurfs );
 image_t *RB_OAXSceneColor( void );
 image_t *RB_OAXSceneDepth( void );
 void RB_OAXSceneCopyInvalidate( void );
@@ -2843,6 +2850,12 @@ void R_OAXProfAddBack( unsigned us );
 void R_OAXProfAddWait( unsigned us );
 void R_OAXProfShutdown( void );
 void RE_OAXGetProfile( oaxProfile_t *out );
+extern cvar_t	*r_oaxDirectPost;
+FBO_t *RB_OAXSceneTarget( void );
+qboolean R_OAXDisplayCurveOn( void );
+void R_OAXGradeUniforms( shaderProgram_t *sp, qboolean on );
+qboolean R_OAXAtmosActive( void );
+void R_OAXAtmosUniforms( shaderProgram_t *sp, qboolean on );
 void R_OAXTerrainAddView( void );
 void RB_OAXTerrainDepth( void );
 void RB_OAXTerrainColor( void );

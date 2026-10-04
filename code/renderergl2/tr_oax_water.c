@@ -232,6 +232,68 @@ void R_OAXWaterFinishShader( shader_t *sh ) {
 
 /*
 =================
+R_OAXWaterScreenRect
+
+From R_SortDrawSurfs: the screen rectangle (pixels, x0 y0 x1 y1) the view's
+world water surfaces cover, from their bounds, so the scene copy for
+refraction (RB_OAXSceneCopyRect) copies only that part of the screen. Empty
+(x1 <= x0: copy the whole view) when water belongs to an entity or a bound
+reaches behind the eye.
+=================
+*/
+void R_OAXWaterScreenRect( drawSurf_t *drawSurfs, int numDrawSurfs ) {
+	int *r = tr.viewParms.oaxWaterRect;
+	float minx = 1e9f, miny = 1e9f, maxx = -1e9f, maxy = -1e9f;
+	mat4_t mvp;
+	int i, c, found = 0;
+
+	r[0] = r[1] = r[2] = r[3] = 0;
+	Mat4Multiply( tr.viewParms.projectionMatrix, tr.viewParms.world.modelMatrix, mvp );
+	for ( i = 0; i < numDrawSurfs; i++ ) {
+		shader_t *sh;
+		int entityNum, fogNum, dlighted, pshadowed;
+		srfBspSurface_t *bsp;
+
+		R_DecomposeSort( drawSurfs[i].sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
+		if ( !sh->oaxWater ) {
+			continue;
+		}
+		if ( entityNum != REFENTITYNUM_WORLD || ( *drawSurfs[i].surface != SF_FACE && *drawSurfs[i].surface != SF_TRIANGLES
+			&& *drawSurfs[i].surface != SF_GRID ) ) {
+			return;	// whole view
+		}
+		// the surface's own vertices (triangle soups have no cull bounds)
+		bsp = (srfBspSurface_t *)drawSurfs[i].surface;
+		for ( c = 0; c < bsp->numVerts; c++ ) {
+			vec4_t p, clip;
+
+			VectorCopy( bsp->verts[c].xyz, p );
+			p[3] = 1.0f;
+			Mat4Transform( mvp, p, clip );
+			if ( clip[3] <= 1.0f ) {
+				return;	// a corner at or behind the eye: whole view
+			}
+			minx = MIN( minx, clip[0] / clip[3] );
+			maxx = MAX( maxx, clip[0] / clip[3] );
+			miny = MIN( miny, clip[1] / clip[3] );
+			maxy = MAX( maxy, clip[1] / clip[3] );
+		}
+		found = 1;
+	}
+	if ( !found ) {
+		return;
+	}
+	r[0] = (int)floor( tr.viewParms.viewportX + ( minx * 0.5f + 0.5f ) * tr.viewParms.viewportWidth );
+	r[1] = (int)floor( tr.viewParms.viewportY + ( miny * 0.5f + 0.5f ) * tr.viewParms.viewportHeight );
+	r[2] = (int)ceil( tr.viewParms.viewportX + ( maxx * 0.5f + 0.5f ) * tr.viewParms.viewportWidth ) + 1;
+	r[3] = (int)ceil( tr.viewParms.viewportY + ( maxy * 0.5f + 0.5f ) * tr.viewParms.viewportHeight ) + 1;
+	if ( r[2] <= r[0] ) {
+		r[2] = r[0] + 1;
+	}
+}
+
+/*
+=================
 R_OAXWaterReflection
 
 From R_SortDrawSurfs: if the view sees a water surface, render the view
@@ -241,7 +303,7 @@ mirrored in its plane into the reflection target first.
 void R_OAXWaterReflection( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	viewParms_t	oldParms, newParms;
 	cplane_t	plane;
-	float		d;
+	float		d, maxDistortion = 0.05f;
 	int			i, k;
 
 	if ( r_oaxWater->integer != 1 || tr.viewParms.isPortal || tr.viewParms.oaxReflection || tr.viewParms.targetFbo
@@ -277,6 +339,7 @@ void R_OAXWaterReflection( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		}
 		d = DotProduct( tr.viewParms.or.origin, plane.normal ) - plane.dist;
 		if ( d > 0.5f ) {
+			maxDistortion = sh->oaxWater->distortion * 2.0f;	// the two wave layers add
 			break;
 		}
 	}
@@ -315,6 +378,27 @@ void R_OAXWaterReflection( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	newParms.viewportY = 0;
 	newParms.viewportWidth = reflectFbo->width;
 	newParms.viewportHeight = reflectFbo->height;
+	// only where the water is (the reflection is read nowhere else), grown
+	// by the most the waves offset a lookup; the target maps the viewport
+	Com_Memset( newParms.oaxScissor, 0, sizeof( newParms.oaxScissor ) );
+	if ( oldParms.oaxWaterRect[2] > oldParms.oaxWaterRect[0] ) {
+		const int *r = oldParms.oaxWaterRect;
+		float sx = (float)reflectFbo->width / oldParms.viewportWidth, sy = (float)reflectFbo->height / oldParms.viewportHeight;
+		int pad = (int)( maxDistortion * reflectFbo->width ) + 8;
+		int x0 = (int)( ( r[0] - oldParms.viewportX ) * sx ) - pad, y0 = (int)( ( r[1] - oldParms.viewportY ) * sy ) - pad;
+		int x1 = (int)( ( r[2] - oldParms.viewportX ) * sx ) + pad + 1, y1 = (int)( ( r[3] - oldParms.viewportY ) * sy ) + pad + 1;
+
+		x0 = MAX( x0, 0 );
+		y0 = MAX( y0, 0 );
+		x1 = MIN( x1, reflectFbo->width );
+		y1 = MIN( y1, reflectFbo->height );
+		if ( x1 > x0 && y1 > y0 ) {
+			newParms.oaxScissor[0] = x0;
+			newParms.oaxScissor[1] = y0;
+			newParms.oaxScissor[2] = x1 - x0;
+			newParms.oaxScissor[3] = y1 - y0;
+		}
+	}
 	newParms.targetFbo = reflectFbo;
 	newParms.oaxReflection = qtrue;
 	newParms.oaxHasReflection = qfalse;
@@ -351,8 +435,21 @@ qboolean RB_OAXWaterStageIterator( shaderCommands_t *input ) {
 	if ( backEnd.viewParms.isPortal || backEnd.viewParms.targetFbo ) {
 		return qfalse;
 	}
-	if ( !RB_OAXSceneCopy() ) {
-		return qfalse;
+	{
+		// only the part of the screen the water covers, grown by the most
+		// the waves can offset a refraction lookup (distortion is a fraction
+		// of the screen) plus a margin
+		int rect[4], pad = (int)( w->distortion * 4.0f * glConfig.vidWidth ) + 16;	// x2: the underside doubles the offset
+
+		const int *vr = backEnd.viewParms.oaxWaterRect;
+
+		rect[0] = vr[0] - pad;
+		rect[1] = vr[1] - pad;
+		rect[2] = vr[2] + pad;
+		rect[3] = vr[3] + pad;
+		if ( !RB_OAXSceneCopyRect( vr[2] > vr[0] ? rect : NULL ) ) {
+			return qfalse;
+		}
 	}
 	color = RB_OAXSceneColor();
 	depth = RB_OAXSceneDepth();

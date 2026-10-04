@@ -45,6 +45,7 @@ GL 3.3); without them only the CPU side is measured.
 #include "tr_local.h"
 
 cvar_t	*r_oaxProfile;
+cvar_t	*r_oaxDirectPost;
 
 #ifndef GL_TIME_ELAPSED
 #define GL_TIME_ELAPSED 0x88BF
@@ -56,7 +57,7 @@ cvar_t	*r_oaxProfile;
 
 static const char *zoneNames[OAX_PROF_ZONES] = {
 	"shadow maps", "water reflection", "depth prepass", "shadow mask", "terrain",
-	"foliage", "surfaces", "post: MSAA resolve", "post: fog, atmos", "post: bloom",
+	"foliage", "surfaces", "scene copy", "post: MSAA resolve", "post: fog, atmos", "post: bloom",
 	"post: tone map", "post: grade, final", "2D / UI", "present", "other"
 };
 

@@ -1420,6 +1420,7 @@ void GLSL_InitGPUShaders(void)
 
 	GLSL_SetUniformInt(&tr.tonemapShader, UNIFORM_TEXTUREMAP, TB_COLORMAP);
 	GLSL_SetUniformInt(&tr.tonemapShader, UNIFORM_LEVELSMAP,  TB_LEVELSMAP);
+	GLSL_SetUniformInt(&tr.tonemapShader, UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP);	// oax: the fused atmosphere
 
 	GLSL_FinishGPUShader(&tr.tonemapShader);
 
@@ -1442,6 +1443,7 @@ void GLSL_InitGPUShaders(void)
 		GLSL_InitUniforms(&tr.calclevels4xShader[i]);
 
 		GLSL_SetUniformInt(&tr.calclevels4xShader[i], UNIFORM_TEXTUREMAP, TB_DIFFUSEMAP);
+		GLSL_SetUniformInt(&tr.calclevels4xShader[i], UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP);	// oax: the fused atmosphere
 
 		GLSL_FinishGPUShader(&tr.calclevels4xShader[i]);
 

@@ -57,6 +57,20 @@ float Luma(vec3 c)
 {
 	return dot(c, vec3(0.299, 0.587, 0.114));
 }
+
+// the splat blend of the four layers at uv (each layer at its own repeat);
+// a layer with no weight here is not sampled at all. The gradients come
+// from outside the branches (passed in), so mip selection is the same as
+// sampling every layer unconditionally.
+vec3 Layers(vec2 uv, vec2 dx, vec2 dy, vec4 w)
+{
+	vec3 c = vec3(0.0);
+	if (w.x > 0.0) c += textureGrad(u_Layer0, uv * u_LayerScale.x, dx * u_LayerScale.x, dy * u_LayerScale.x).rgb * w.x;
+	if (w.y > 0.0) c += textureGrad(u_Layer1, uv * u_LayerScale.y, dx * u_LayerScale.y, dy * u_LayerScale.y).rgb * w.y;
+	if (w.z > 0.0) c += textureGrad(u_Layer2, uv * u_LayerScale.z, dx * u_LayerScale.z, dy * u_LayerScale.z).rgb * w.z;
+	if (w.w > 0.0) c += textureGrad(u_Layer3, uv * u_LayerScale.w, dx * u_LayerScale.w, dy * u_LayerScale.w).rgb * w.w;
+	return c;
+}
 #endif
 
 void main()
@@ -73,10 +87,8 @@ void main()
 	w /= max(dot(w, vec4(1.0)), 1e-3);
 
 	vec3 n = normalize(var_Normal);
-	vec3 albedo = texture2D(u_Layer0, var_Position.xy * u_LayerScale.x).rgb * w.x
-	            + texture2D(u_Layer1, var_Position.xy * u_LayerScale.y).rgb * w.y
-	            + texture2D(u_Layer2, var_Position.xy * u_LayerScale.z).rgb * w.z
-	            + texture2D(u_Layer3, var_Position.xy * u_LayerScale.w).rgb * w.w;
+	vec3 dpx = dFdx(var_Position), dpy = dFdy(var_Position);
+	vec3 albedo = Layers(var_Position.xy, dpx.xy, dpy.xy, w);
 	if (u_Triplanar > 0.5)
 	{
 		// triplanar: the top-down projection stretches on cliffs; blend in
@@ -85,14 +97,8 @@ void main()
 		bw /= (bw.x + bw.y + bw.z);
 		if (bw.z < 0.999)
 		{
-			vec3 sx = texture2D(u_Layer0, var_Position.yz * u_LayerScale.x).rgb * w.x
-			        + texture2D(u_Layer1, var_Position.yz * u_LayerScale.y).rgb * w.y
-			        + texture2D(u_Layer2, var_Position.yz * u_LayerScale.z).rgb * w.z
-			        + texture2D(u_Layer3, var_Position.yz * u_LayerScale.w).rgb * w.w;
-			vec3 sy = texture2D(u_Layer0, var_Position.xz * u_LayerScale.x).rgb * w.x
-			        + texture2D(u_Layer1, var_Position.xz * u_LayerScale.y).rgb * w.y
-			        + texture2D(u_Layer2, var_Position.xz * u_LayerScale.z).rgb * w.z
-			        + texture2D(u_Layer3, var_Position.xz * u_LayerScale.w).rgb * w.w;
+			vec3 sx = bw.x > 0.0 ? Layers(var_Position.yz, dpx.yz, dpy.yz, w) : vec3(0.0);
+			vec3 sy = bw.y > 0.0 ? Layers(var_Position.xz, dpx.xz, dpy.xz, w) : vec3(0.0);
 			albedo = albedo * bw.z + sx * bw.x + sy * bw.y;
 		}
 	}
@@ -116,14 +122,11 @@ void main()
 		if (fade > 0.0)
 		{
 			vec2 q = mat2(0.8, -0.6, 0.6, 0.8) * var_Position.xy * 5.3;
-			float hi = Luma(texture2D(u_Layer0, q * u_LayerScale.x).rgb) * w.x
-			         + Luma(texture2D(u_Layer1, q * u_LayerScale.y).rgb) * w.y
-			         + Luma(texture2D(u_Layer2, q * u_LayerScale.z).rgb) * w.z
-			         + Luma(texture2D(u_Layer3, q * u_LayerScale.w).rgb) * w.w;
-			float avg = Luma(texture2D(u_Layer0, q * u_LayerScale.x, 12.0).rgb) * w.x
-			          + Luma(texture2D(u_Layer1, q * u_LayerScale.y, 12.0).rgb) * w.y
-			          + Luma(texture2D(u_Layer2, q * u_LayerScale.z, 12.0).rgb) * w.z
-			          + Luma(texture2D(u_Layer3, q * u_LayerScale.w, 12.0).rgb) * w.w;
+			mat2 rot = mat2(0.8, -0.6, 0.6, 0.8);
+			vec2 qx = rot * dpx.xy * 5.3, qy = rot * dpy.xy * 5.3;
+			float hi = Luma(Layers(q, qx, qy, w));
+			// a layer's average: its far mip (the bias as a 2^12 larger footprint)
+			float avg = Luma(Layers(q, qx * 4096.0, qy * 4096.0, w));
 			albedo *= mix(1.0, clamp(hi / max(avg, 0.02), 0.55, 1.45), 0.55 * fade * smoothstep(0.45, 0.8, n.z));
 		}
 	}

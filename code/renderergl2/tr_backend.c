@@ -310,8 +310,26 @@ void SetViewportAndScissor( void ) {
 	// set the window clipping
 	qglViewport( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY, 
 		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
-	qglScissor( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY, 
-		backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
+	RB_OAXViewScissor();
+}
+
+/*
+=================
+RB_OAXViewScissor
+
+oax: the view's scissor: its viewport, or the part of it the view needs
+(viewParms.oaxScissor: a water reflection only where the water is).
+=================
+*/
+void RB_OAXViewScissor( void ) {
+	const int *s = backEnd.viewParms.oaxScissor;
+
+	if ( s[2] > 0 && s[3] > 0 ) {
+		qglScissor( s[0], s[1], s[2], s[3] );
+	} else {
+		qglScissor( backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
+			backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
+	}
 }
 
 /*
@@ -343,7 +361,7 @@ void RB_BeginDrawingView (void) {
 		FBO_t *fbo = backEnd.viewParms.targetFbo;
 
 		if (fbo == NULL)
-			fbo = tr.renderFbo;
+			fbo = RB_OAXSceneTarget();
 
 		if (tr.renderCubeFbo && fbo == tr.renderCubeFbo)
 		{
@@ -728,7 +746,7 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 
 	if (glRefConfig.framebufferObject)
 	{
-		FBO_Bind(tr.renderFbo);
+		FBO_Bind(RB_OAXSceneTarget());
 	}
 
 	RB_SetGL2D();
@@ -835,7 +853,7 @@ const void *RB_StretchPic ( const void *data ) {
 	cmd = (const stretchPicCommand_t *)data;
 
 	if (glRefConfig.framebufferObject)
-		FBO_Bind(backEnd.guiTarget ? backEnd.guiTarget : tr.renderFbo);	// oax: GUI targets
+		FBO_Bind(backEnd.guiTarget ? backEnd.guiTarget : RB_OAXSceneTarget());	// oax: GUI targets; the screen after a direct post-process
 
 	RB_SetGL2D();
 
@@ -1407,7 +1425,7 @@ const void *RB_ClearDepth(const void *data)
 
 	if (glRefConfig.framebufferObject)
 	{
-		FBO_Bind(tr.renderFbo);
+		FBO_Bind(RB_OAXSceneTarget());
 	}
 
 	qglClear(GL_DEPTH_BUFFER_BIT);
@@ -1462,9 +1480,26 @@ RB_PresentToScreen
 
 =============
 */
+/*
+=============
+RB_OAXSceneTarget
+
+oax: where the scene and 2D draw: the render FBO, or the screen once this
+frame's post-process has written the final image there (RB_PostProcess).
+=============
+*/
+FBO_t *RB_OAXSceneTarget( void )
+{
+	return backEnd.oaxDirect ? NULL : tr.renderFbo;
+}
+
 static void RB_PresentToScreen(void)
 {
 	if (!glRefConfig.framebufferObject)
+		return;
+
+	// oax: the post-process already wrote the frame to the screen
+	if (backEnd.oaxDirect)
 		return;
 
 	const FBO_t *src = NULL;
@@ -1543,6 +1578,7 @@ const void	*RB_SwapBuffers( const void *data ) {
 
 	RB_OAXProfZone( OAX_PZ_PRESENT );
 	RB_PresentToScreen();
+	backEnd.oaxDirect = qfalse;
 	RB_OAXProfEndFrame();
 
 	{
@@ -1611,7 +1647,7 @@ const void *RB_PostProcess(const void *data)
 	const postProcessCommand_t *cmd = data;
 	FBO_t *srcFbo, *dstFbo;
 	ivec4_t srcBox, dstBox;
-	qboolean autoExposure;
+	qboolean autoExposure, direct;
 
 	// finish any 2D drawing if needed
 	if(tess.numIndexes)
@@ -1646,13 +1682,26 @@ const void *RB_PostProcess(const void *data)
 	dstBox[2] = backEnd.viewParms.viewportWidth;
 	dstBox[3] = backEnd.viewParms.viewportHeight;
 
+	// oax: the direct path (below) when nothing after the tone map needs the
+	// image in a texture and this view covers the screen
+	direct = srcFbo && r_oaxDirectPost->integer && !backEnd.oaxDirect
+		&& r_hdr->integer && (r_toneMap->integer || r_forceToneMap->integer)
+		&& !r_drawSunRays->integer && backEnd.refdef.blurFactor < 0.004f
+		&& !R_OAXDisplayCurveOn() && backEnd.greyscale <= 0.0f
+		&& !backEnd.viewParms.targetFbo
+		&& dstBox[0] == 0 && dstBox[1] == 0 && dstBox[2] == glConfig.vidWidth && dstBox[3] == glConfig.vidHeight;
+	// on it, the tone map applies the atmosphere too, when nothing between
+	// them (bloom, SSAO) needs the fogged image first
+	backEnd.oaxFuseAtmos = direct && !r_oaxBloom->integer && !r_ssao->integer && R_OAXAtmosActive();
+
 	// oax view fog, in scene light before tonemapping
 	RB_OAXProfZone( OAX_PZ_POST_FOG );
 	if (backEnd.refdef.oaxViewFog[3] > 0.0f)
 		RB_OAXViewFog(srcFbo, dstBox);
 
 	// oax map atmosphere (worldspawn oax_atmosphere), also before tonemapping
-	RB_OAXAtmosphere(srcFbo, dstBox);
+	if (!backEnd.oaxFuseAtmos)
+		RB_OAXAtmosphere(srcFbo, dstBox);
 
 	// oax bloom, in scene light before tonemapping (r_oaxBloom)
 	RB_OAXProfZone( OAX_PZ_POST_BLOOM );
@@ -1673,6 +1722,21 @@ const void *RB_PostProcess(const void *data)
 	srcBox[1] = backEnd.viewParms.viewportY;
 	srcBox[2] = backEnd.viewParms.viewportWidth;
 	srcBox[3] = backEnd.viewParms.viewportHeight;
+
+	// oax: the direct path. When nothing after the tone map needs the image
+	// in a texture (no sun rays, blur, display curve or greyscale) and this
+	// view covers the screen, the tone map (with the map's grading fused in)
+	// writes straight to the screen: no copy back, no grading copies, no
+	// copy into the render FBO and no present. 2D and any later view draw
+	// on the screen after it (RB_OAXSceneTarget).
+	if (direct)
+	{
+		autoExposure = r_autoExposure->integer || r_forceAutoExposure->integer;
+		RB_ToneMap(srcFbo, srcBox, NULL, dstBox, autoExposure);
+		backEnd.oaxDirect = qtrue;
+		backEnd.oaxFuseAtmos = qfalse;
+		return (const void *)(cmd + 1);
+	}
 
 	if (srcFbo)
 	{
