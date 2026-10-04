@@ -95,7 +95,12 @@ tooling). Worth playing:
 | `oax_phys` | physics debris and ragdolls (fire a rocket) | |
 | `oax_gui`, `oax_movers`, `oax_portal`, `oax_zones`, `oax_skyportal`, `oax_warp`, `oax_terrain` | one feature each | |
 
-Building them needs Node.js 20 or later and two map compilers on your `PATH`
+**Prebuilt:** download the latest `oax-testmaps-*.zip` from the
+[releases](https://github.com/monteslu/oax-engine/releases) (tagged
+`testmaps-<commit>`), unzip it and copy `oax-testmaps/baseoa/.` into
+`HOME_DIR/baseoa/`. Then skip to starting a map below.
+
+**From source:** building them needs Node.js 20 or later and two map compilers on your `PATH`
 (or named by the `Q3MAP2` and `BSPC` environment variables):
 
 - `q3map2` from [NetRadiant](https://gitlab.com/xonotic/netradiant) (the maps
