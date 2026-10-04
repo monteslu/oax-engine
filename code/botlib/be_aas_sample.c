@@ -44,6 +44,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "be_aas_funcs.h"
 #include "be_aas_def.h"
 
+// oax: depth of the BSP walk stacks in the traces and entity linking; very
+// large maps (UT99 ports) overflowed the stock 127
+#define AAS_STACK_DEPTH 1024
+
 
 //#define AAS_SAMPLE_DEBUG
 
@@ -451,7 +455,7 @@ aas_trace_t AAS_TraceClientBBox(vec3_t start, vec3_t end, int presencetype,
 	int side, nodenum, tmpplanenum;
 	float front, back, frac;
 	vec3_t cur_start, cur_end, cur_mid, v1, v2;
-	aas_tracestack_t tracestack[127];
+	static aas_tracestack_t tracestack[AAS_STACK_DEPTH];	// oax: static and deeper (huge maps overflowed 127)
 	aas_tracestack_t *tstack_p;
 	aas_node_t *aasnode;
 	aas_plane_t *plane;
@@ -642,7 +646,7 @@ aas_trace_t AAS_TraceClientBBox(vec3_t start, vec3_t end, int presencetype,
 			//and go down the tree with the front child
 			tstack_p->nodenum = aasnode->children[0];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceBoundingBox: stack overflow\n");
 				return trace;
@@ -656,7 +660,7 @@ aas_trace_t AAS_TraceClientBBox(vec3_t start, vec3_t end, int presencetype,
 			//and go down the tree with the back child
 			tstack_p->nodenum = aasnode->children[1];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceBoundingBox: stack overflow\n");
 				return trace;
@@ -693,7 +697,7 @@ aas_trace_t AAS_TraceClientBBox(vec3_t start, vec3_t end, int presencetype,
 			tstack_p->planenum = aasnode->planenum;
 			tstack_p->nodenum = aasnode->children[!side];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceBoundingBox: stack overflow\n");
 				return trace;
@@ -706,7 +710,7 @@ aas_trace_t AAS_TraceClientBBox(vec3_t start, vec3_t end, int presencetype,
 			tstack_p->planenum = tmpplanenum;
 			tstack_p->nodenum = aasnode->children[side];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceBoundingBox: stack overflow\n");
 				return trace;
@@ -728,7 +732,7 @@ int AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int max
 	int numareas;
 	float front, back, frac;
 	vec3_t cur_start, cur_end, cur_mid;
-	aas_tracestack_t tracestack[127];
+	static aas_tracestack_t tracestack[AAS_STACK_DEPTH];	// oax: static and deeper (huge maps overflowed 127)
 	aas_tracestack_t *tstack_p;
 	aas_node_t *aasnode;
 	aas_plane_t *plane;
@@ -833,7 +837,7 @@ int AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int max
 			//and go down the tree with the front child
 			tstack_p->nodenum = aasnode->children[0];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceAreas: stack overflow\n");
 				return numareas;
@@ -847,7 +851,7 @@ int AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int max
 			//and go down the tree with the back child
 			tstack_p->nodenum = aasnode->children[1];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceAreas: stack overflow\n");
 				return numareas;
@@ -879,7 +883,7 @@ int AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int max
 			tstack_p->planenum = aasnode->planenum;
 			tstack_p->nodenum = aasnode->children[!side];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceAreas: stack overflow\n");
 				return numareas;
@@ -892,7 +896,7 @@ int AAS_TraceAreas(vec3_t start, vec3_t end, int *areas, vec3_t *points, int max
 			tstack_p->planenum = tmpplanenum;
 			tstack_p->nodenum = aasnode->children[side];
 			tstack_p++;
-			if (tstack_p >= &tracestack[127])
+			if (tstack_p >= &tracestack[AAS_STACK_DEPTH - 1])
 			{
 				botimport.Print(PRT_ERROR, "AAS_TraceAreas: stack overflow\n");
 				return numareas;
@@ -1222,7 +1226,7 @@ typedef struct
 aas_link_t *AAS_AASLinkEntity(vec3_t absmins, vec3_t absmaxs, int entnum)
 {
 	int side, nodenum;
-	aas_linkstack_t linkstack[128];
+	static aas_linkstack_t linkstack[AAS_STACK_DEPTH];	// oax: static and deeper (huge maps overflowed 128)
 	aas_linkstack_t *lstack_p;
 	aas_node_t *aasnode;
 	aas_plane_t *plane;
@@ -1294,7 +1298,7 @@ aas_link_t *AAS_AASLinkEntity(vec3_t absmins, vec3_t absmaxs, int entnum)
 			lstack_p->nodenum = aasnode->children[0];
 			lstack_p++;
 		} //end if
-		if (lstack_p >= &linkstack[127])
+		if (lstack_p >= &linkstack[AAS_STACK_DEPTH - 1])
 		{
 			botimport.Print(PRT_ERROR, "AAS_LinkEntity: stack overflow\n");
 			break;
@@ -1305,7 +1309,7 @@ aas_link_t *AAS_AASLinkEntity(vec3_t absmins, vec3_t absmaxs, int entnum)
 			lstack_p->nodenum = aasnode->children[1];
 			lstack_p++;
 		} //end if
-		if (lstack_p >= &linkstack[127])
+		if (lstack_p >= &linkstack[AAS_STACK_DEPTH - 1])
 		{
 			botimport.Print(PRT_ERROR, "AAS_LinkEntity: stack overflow\n");
 			break;
