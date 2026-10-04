@@ -1593,7 +1593,9 @@ static void R_AddEntitySurface (int entityNum)
 		// self blood sprites, talk balloons, etc should not be drawn in the primary
 		// view.  We can't just do this check for all entities, because md3
 		// entities may still want to cast shadows from them
-		if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+		// the viewer's own body: in mirrors and portals, but not in water
+		// reflections (it showed at the wrong size far from the water)
+		if ( (ent->e.renderfx & RF_THIRD_PERSON) && ( !tr.viewParms.isPortal || tr.viewParms.oaxReflection ) ) {
 			return;
 		}
 		shader = R_GetShaderByHandle( ent->e.customShader );
@@ -1622,7 +1624,9 @@ static void R_AddEntitySurface (int entityNum)
 				R_AddBrushModelSurfaces( ent );
 				break;
 			case MOD_BAD:		// null model axis
-				if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+				// the viewer's own body: in mirrors and portals, but not in water
+		// reflections (it showed at the wrong size far from the water)
+		if ( (ent->e.renderfx & RF_THIRD_PERSON) && ( !tr.viewParms.isPortal || tr.viewParms.oaxReflection ) ) {
 					break;
 				}
 				R_AddDrawSurf( &entitySurface, tr.defaultShader, 0, 0, 0, 0 );

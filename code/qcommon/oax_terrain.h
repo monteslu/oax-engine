@@ -60,6 +60,9 @@ engine allocation, no host libm, only exact float operations
 #define OAX_TERRAIN_LUMP			"OAX_TERRAIN"
 #define OAX_TERRAIN_IDENT			"OTRN"
 #define OAX_TERRAIN_VERSION			1
+
+// oaxTerrainDisk_t.flags
+#define OAX_TERRAIN_TRIPLANAR		1	// steep faces take side projections of the layers
 #define OAX_TERRAIN_MAX				4
 #define OAX_TERRAIN_MAX_LAYERS		4
 #define OAX_TERRAIN_MAX_FOLIAGE		4
@@ -69,6 +72,7 @@ engine allocation, no host libm, only exact float operations
 // foliage kinds
 #define OAX_FOLIAGE_GRASS			0		// crossed alpha-tested blades, no collision
 #define OAX_FOLIAGE_TREE			1		// trunk + canopy mesh; may collide (collideRadius)
+#define OAX_FOLIAGE_MODEL			2		// an MD3 (the shader field names it), drawn instanced; may collide
 
 // at most this many instances of one foliage type in one cell
 #define OAX_FOLIAGE_MAX_PER_CELL	16
@@ -90,7 +94,8 @@ typedef struct {
 	float	collideRadius;			// > 0: a solid square trunk of this half-width
 	float	collideHeight;			// trunk height above the ground
 	float	maxSlope;				// no instance where the surface normal z is below this
-	float	reserved[3];
+	float	variants;				// OAX_FOLIAGE_MODEL: models <name>_1..<name>_N.md3 (0 or 1: <name> itself)
+	float	reserved[2];
 } oaxFoliageDisk_t;
 
 typedef struct {
@@ -109,7 +114,8 @@ typedef struct {
 	int		numFoliage;
 	oaxFoliageDisk_t foliage[OAX_TERRAIN_MAX_FOLIAGE];
 	int		heightsOfs, splatOfs, densityOfs;	// from the start of this record
-	int		reserved[4];
+	int		flags;					// OAX_TERRAIN_*; 0 in maps written before flags existed
+	int		reserved[3];
 } oaxTerrainDisk_t;
 
 // a parsed terrain: the header fields plus pointers into the lump
@@ -129,6 +135,7 @@ typedef struct {
 	const unsigned char	*heights;	// samplesX * samplesY little-endian uint16
 	const unsigned char	*splat;		// samplesX * samplesY * 4
 	const unsigned char	*density;	// samplesX * samplesY * 4
+	int		flags;				// OAX_TERRAIN_*
 } oaxTerrainInfo_t;
 
 // one foliage instance

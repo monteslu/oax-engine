@@ -246,6 +246,12 @@ void R_OAXWaterReflection( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				plane.dist = -plane.dist;
 			}
 		}
+		// only a level surface the viewer is above: a water volume's side
+		// faces would mirror the scene across a vertical plane (the viewer's
+		// own body, life size, where the water should show the sky)
+		if ( plane.normal[2] < 0.7f ) {
+			continue;
+		}
 		d = DotProduct( tr.viewParms.or.origin, plane.normal ) - plane.dist;
 		if ( d > 0.5f ) {
 			break;

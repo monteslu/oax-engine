@@ -68,6 +68,21 @@ void main()
 	vec2 screen = gl_FragCoord.xy * u_InvTexRes;
 	float surfZ = dot(var_Position - u_ViewOrigin, u_ViewForward);
 
+	// seen from below (a two-sided water shader): the world above shows
+	// through a window overhead, refracted and wobbling; past the critical
+	// angle (about 49 degrees from straight up) total internal reflection
+	// leaves the water's own colour
+	if (dot(u_ViewOrigin - var_Position, N) < 0.0)
+	{
+		vec3 Vu = normalize(u_ViewOrigin - var_Position);
+		float cosU = clamp(dot(-Nw, Vu), 0.0, 1.0);
+		vec3 above = texture2D(u_LightMap, screen + offs * 2.0).rgb;
+		vec3 deep = u_SpecularScale.rgb * 0.7;
+		float window = smoothstep(0.58, 0.72, cosU);
+		gl_FragColor = vec4(mix(deep, mix(u_SpecularScale.rgb, above, 0.7), window), 1.0);
+		return;
+	}
+
 	// refraction: offset only where what is seen there is behind the surface
 	vec2 refrUV = screen + offs;
 	float sceneZ = EyeDepth(texture2D(u_ScreenDepthMap, refrUV).r);

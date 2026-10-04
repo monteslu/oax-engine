@@ -82,6 +82,15 @@ cvar_t *r_oaxOcclusionMargin;
 cvar_t *r_oaxFoliage;
 cvar_t *r_oaxShadowOffset;
 
+#define TFOL_MAX_PARTS		32		// surfaces over all variants of a foliage model
+#define TFOL_MAX_VARIANTS	8
+
+typedef struct {
+	int			first, count;		// indexes (GL_UNSIGNED_INT) in modelIbo
+	int			variant;
+	image_t		*image;
+} tFoliagePart_t;
+
 typedef struct {
 	int			terrain;
 	int			ci, cj;
@@ -89,6 +98,7 @@ typedef struct {
 	int			vertBase;			// first vertex in the terrain buffer
 	int			instFirst[OAX_TERRAIN_MAX_FOLIAGE];
 	int			instCount[OAX_TERRAIN_MAX_FOLIAGE];
+	int			varCount[OAX_TERRAIN_MAX_FOLIAGE][TFOL_MAX_VARIANTS];	// model foliage: instances per variant, in order
 	int			lod, lodFrame;
 	// occlusion
 	int			query;				// index + 1 into tw.queries, 0 none
@@ -98,6 +108,8 @@ typedef struct {
 	vec3_t		resultEye;
 	qboolean	frozen;				// r_oaxOcclusion 2 (control): first result kept forever
 } tChunk_t;
+
+
 
 typedef struct {
 	oaxTerrainInfo_t info;
@@ -111,6 +123,11 @@ typedef struct {
 	GLuint		instVbo;
 	int			numInstances;
 	GLuint		folVao;
+	// model foliage (OAX_FOLIAGE_MODEL): every model's surfaces in one buffer,
+	// normalised to unit height with the base at z 0 (instance scale = height)
+	GLuint		modelVbo, modelIbo, modelVao;
+	int			numParts[OAX_TERRAIN_MAX_FOLIAGE];
+	tFoliagePart_t parts[OAX_TERRAIN_MAX_FOLIAGE][TFOL_MAX_PARTS];
 } tTerrain_t;
 
 typedef struct {
@@ -159,7 +176,7 @@ static struct {
 static int		TerrainLocs[3][16];
 static int		FoliageLocs[2][16];
 
-enum { TU_LAYERSCALE, TU_SPLATXFORM, TU_SUNDIR, TU_SUNCOLOR, TU_AMBIENT, TU_SCREEN, TU_DEBUG,
+enum { TU_LAYERSCALE, TU_SPLATXFORM, TU_SUNDIR, TU_SUNCOLOR, TU_AMBIENT, TU_SCREEN, TU_DEBUG, TU_TRIPLANAR,
 	TU_LAYER0, TU_LAYER1, TU_LAYER2, TU_LAYER3, TU_SPLAT, TU_SHADOW, TU_NUM };
 enum { FU_FADE, FU_VIEWORIGIN, FU_SUNDIR, FU_SUNCOLOR, FU_AMBIENT, FU_SCREEN, FU_TEX, FU_SHADOW, FU_NUM };
 
@@ -183,7 +200,7 @@ void R_OAXTerrainRegisterCvars( void ) {
 // ---- programs -------------------------------------------------------------------------
 
 static void InitPrograms( void ) {
-	static const char *tnames[TU_NUM] = { "u_LayerScale", "u_SplatXform", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Debug",
+	static const char *tnames[TU_NUM] = { "u_LayerScale", "u_SplatXform", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Debug", "u_Triplanar",
 		"u_Layer0", "u_Layer1", "u_Layer2", "u_Layer3", "u_Splat", "u_ScreenShadow" };
 	static const char *fnames[FU_NUM] = { "u_Fade", "u_ViewOrigin", "u_SunDir", "u_SunColor", "u_Ambient", "u_ScreenInfo", "u_Tex", "u_ScreenShadow" };
 	int i, k;
@@ -427,6 +444,150 @@ static image_t *ShaderImage( const char *name ) {
 	return tr.whiteImage;
 }
 
+/*
+FoliageVariants: how many models an OAX_FOLIAGE_MODEL type draws; an
+instance's variant comes from its position, so every build picks the same.
+*/
+static int FoliageVariants( const oaxFoliageDisk_t *fd ) {
+	int n = (int)fd->variants;
+	if ( fd->kind != OAX_FOLIAGE_MODEL || n < 1 ) {
+		return 1;
+	}
+	return n > TFOL_MAX_VARIANTS ? TFOL_MAX_VARIANTS : n;
+}
+
+static int FoliageVariantOf( const oaxFoliageInstance_t *fi, int numVariants ) {
+	unsigned h = (unsigned)(int)fi->origin[0] * 73856093U ^ (unsigned)(int)fi->origin[1] * 19349663U;
+	h ^= h >> 13;
+	h *= 0x5bd1e995U;
+	h ^= h >> 15;
+	return numVariants > 1 ? (int)( h % (unsigned)numVariants ) : 0;
+}
+
+/*
+FoliageModelName: variant v of a foliage model: the name itself for one
+variant, else <name>_<v + 1>.md3 ("models/x/pine.md3" -> "models/x/pine_2.md3").
+*/
+static void FoliageModelName( const oaxFoliageDisk_t *fd, int v, char *out, int size ) {
+	char base[MAX_QPATH];
+	if ( FoliageVariants( fd ) <= 1 ) {
+		Q_strncpyz( out, fd->shader, size );
+		return;
+	}
+	COM_StripExtension( fd->shader, base, sizeof( base ) );
+	Com_sprintf( out, size, "%s_%d.md3", base, v + 1 );
+}
+
+/*
+LoadFoliageModels: the surfaces of every variant of every OAX_FOLIAGE_MODEL
+type, from LOD 0, frame 0 of each MD3, into one vertex/index buffer per
+terrain with a VAO that reads the per-instance data from instVbo like folVao
+does. Each variant is scaled to unit height with its base at z 0, so an
+instance's scale is its height in world units.
+*/
+static void LoadFoliageModels( tTerrain_t *t ) {
+	const oaxTerrainInfo_t *in = &t->info;
+	int f, s, v, vv, totalVerts = 0, totalIdx = 0, nv = 0, ni = 0;
+	float *verts;
+	unsigned int *idx;
+	mdvModel_t *mdv[OAX_TERRAIN_MAX_FOLIAGE][TFOL_MAX_VARIANTS];
+
+	Com_Memset( mdv, 0, sizeof( mdv ) );
+	for ( f = 0; f < in->numFoliage; f++ ) {
+		if ( in->foliage[f].kind != OAX_FOLIAGE_MODEL ) {
+			continue;
+		}
+		for ( vv = 0; vv < FoliageVariants( &in->foliage[f] ); vv++ ) {
+			char name[MAX_QPATH];
+			model_t *mod;
+			FoliageModelName( &in->foliage[f], vv, name, sizeof( name ) );
+			mod = R_GetModelByHandle( RE_RegisterModel( name ) );
+			if ( !mod || mod->type != MOD_MESH || !mod->mdv[0] ) {
+				ri.Printf( PRINT_WARNING, "terrain: foliage model %s not loaded\n", name );
+				continue;
+			}
+			mdv[f][vv] = mod->mdv[0];
+			for ( s = 0; s < mdv[f][vv]->numSurfaces; s++ ) {
+				totalVerts += mdv[f][vv]->surfaces[s].numVerts;
+				totalIdx += mdv[f][vv]->surfaces[s].numIndexes;
+			}
+		}
+	}
+	if ( !totalVerts ) {
+		return;
+	}
+	verts = ri.Hunk_AllocateTempMemory( totalVerts * FVERT_STRIDE );
+	idx = ri.Hunk_AllocateTempMemory( totalIdx * sizeof( unsigned int ) );
+	for ( f = 0; f < in->numFoliage; f++ ) {
+		for ( vv = 0; vv < TFOL_MAX_VARIANTS; vv++ ) {
+			const mdvModel_t *m = mdv[f][vv];
+			float zmin = 1e30f, zmax = -1e30f, h;
+			if ( !m ) {
+				continue;
+			}
+			for ( s = 0; s < m->numSurfaces; s++ ) {
+				for ( v = 0; v < m->surfaces[s].numVerts; v++ ) {
+					zmin = MIN( zmin, m->surfaces[s].verts[v].xyz[2] );
+					zmax = MAX( zmax, m->surfaces[s].verts[v].xyz[2] );
+				}
+			}
+			h = zmax > zmin ? zmax - zmin : 1.0f;
+			for ( s = 0; s < m->numSurfaces && t->numParts[f] < TFOL_MAX_PARTS; s++ ) {
+				const mdvSurface_t *surf = &m->surfaces[s];
+				tFoliagePart_t *p = &t->parts[f][t->numParts[f]++];
+				shader_t *sh = surf->numShaderIndexes ? R_GetShaderByHandle( surf->shaderIndexes[0] ) : tr.defaultShader;
+				int base = nv;
+				p->image = sh && !sh->defaultShader && sh->stages[0] && sh->stages[0]->bundle[0].image[0] ? sh->stages[0]->bundle[0].image[0] : tr.whiteImage;
+				p->variant = vv;
+				p->first = ni;
+				p->count = surf->numIndexes;
+				for ( v = 0; v < surf->numVerts; v++ ) {
+					float *o = verts + nv * ( FVERT_STRIDE / 4 );
+					const mdvVertex_t *mv = &surf->verts[v];
+					o[0] = mv->xyz[0] / h;
+					o[1] = mv->xyz[1] / h;
+					o[2] = ( mv->xyz[2] - zmin ) / h;
+					o[3] = mv->normal[0] / 32767.0f;
+					o[4] = mv->normal[1] / 32767.0f;
+					o[5] = mv->normal[2] / 32767.0f;
+					o[6] = surf->st[v].st[0];
+					o[7] = surf->st[v].st[1];
+					nv++;
+				}
+				for ( v = 0; v < surf->numIndexes; v++ ) {
+					idx[ni++] = base + surf->indexes[v];
+				}
+			}
+		}
+	}
+	qglGenBuffers( 1, &t->modelVbo );
+	qglBindBuffer( GL_ARRAY_BUFFER, t->modelVbo );
+	qglBufferData( GL_ARRAY_BUFFER, nv * FVERT_STRIDE, verts, GL_STATIC_DRAW );
+	qglGenBuffers( 1, &t->modelIbo );
+	qglGenVertexArrays( 1, &t->modelVao );
+	qglBindVertexArray( t->modelVao );
+	qglBindBuffer( GL_ELEMENT_ARRAY_BUFFER, t->modelIbo );
+	qglBufferData( GL_ELEMENT_ARRAY_BUFFER, ni * sizeof( unsigned int ), idx, GL_STATIC_DRAW );
+	qglEnableVertexAttribArray( ATTR_INDEX_POSITION );
+	qglEnableVertexAttribArray( ATTR_INDEX_NORMAL );
+	qglEnableVertexAttribArray( ATTR_INDEX_TEXCOORD );
+	qglVertexAttribPointer( ATTR_INDEX_POSITION, 3, GL_FLOAT, GL_FALSE, FVERT_STRIDE, BUFFER_OFFSET( 0 ) );
+	qglVertexAttribPointer( ATTR_INDEX_NORMAL, 3, GL_FLOAT, GL_FALSE, FVERT_STRIDE, BUFFER_OFFSET( 12 ) );
+	qglVertexAttribPointer( ATTR_INDEX_TEXCOORD, 2, GL_FLOAT, GL_FALSE, FVERT_STRIDE, BUFFER_OFFSET( 24 ) );
+	qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
+	qglEnableVertexAttribArray( ATTR_INDEX_POSITION2 );
+	qglEnableVertexAttribArray( ATTR_INDEX_NORMAL2 );
+	qglVertexAttribPointer( ATTR_INDEX_POSITION2, 4, GL_FLOAT, GL_FALSE, FINST_STRIDE, BUFFER_OFFSET( 0 ) );
+	qglVertexAttribPointer( ATTR_INDEX_NORMAL2, 4, GL_FLOAT, GL_FALSE, FINST_STRIDE, BUFFER_OFFSET( 16 ) );
+	qglVertexAttribDivisor( ATTR_INDEX_POSITION2, 1 );
+	qglVertexAttribDivisor( ATTR_INDEX_NORMAL2, 1 );
+	qglBindVertexArray( 0 );
+	qglBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	qglBindBuffer( GL_ARRAY_BUFFER, 0 );
+	ri.Hunk_FreeTempMemory( idx );
+	ri.Hunk_FreeTempMemory( verts );
+}
+
 static void LoadTerrain( tTerrain_t *t ) {
 	const oaxTerrainInfo_t *in = &t->info;
 	int sx = in->samplesX, sy = in->samplesY, ci, cj, f, k;
@@ -499,15 +660,32 @@ static void LoadTerrain( tTerrain_t *t ) {
 	// foliage instances, chunk-major then type
 	for ( f = 0; f < in->numFoliage; f++ ) {
 		t->folImage[f] = ShaderImage( in->foliage[f].shader );
-		maxInst += ( sx - 1 ) * ( sy - 1 ) * OAX_FOLIAGE_MAX_PER_CELL;
+	}
+	// count the instances first: sizing for every cell at full density is
+	// 160 MB on a 512 x 320 cell terrain, far over the hunk
+	for ( cj = 0; cj < t->chunksY; cj++ ) {
+		for ( ci = 0; ci < t->chunksX; ci++ ) {
+			for ( f = 0; f < in->numFoliage; f++ ) {
+				int x, y;
+				for ( y = 0; y < TCHUNK; y++ ) {
+					for ( x = 0; x < TCHUNK; x++ ) {
+						oaxFoliageInstance_t fi[OAX_FOLIAGE_MAX_PER_CELL];
+						maxInst += OAXTerrain_CellFoliage( in, f, ci * TCHUNK + x, cj * TCHUNK + y, fi );
+					}
+				}
+			}
+		}
 	}
 	inst = maxInst ? ri.Hunk_AllocateTempMemory( maxInst * FINST_STRIDE ) : NULL;
 	for ( cj = 0; cj < t->chunksY; cj++ ) {
 		for ( ci = 0; ci < t->chunksX; ci++ ) {
 			tChunk_t *c = &t->chunks[cj * t->chunksX + ci];
 			for ( f = 0; f < in->numFoliage; f++ ) {
-				int x, y;
+				int x, y, vv, nvar = FoliageVariants( &in->foliage[f] );
 				c->instFirst[f] = numInst;
+				// model foliage: instances grouped by variant, one draw each
+				for ( vv = 0; vv < nvar; vv++ ) {
+				int before = numInst;
 				for ( y = 0; y < TCHUNK; y++ ) {
 					for ( x = 0; x < TCHUNK; x++ ) {
 						oaxFoliageInstance_t fi[OAX_FOLIAGE_MAX_PER_CELL];
@@ -515,6 +693,9 @@ static void LoadTerrain( tTerrain_t *t ) {
 						for ( m = 0; m < n; m++ ) {
 							float *p = inst + numInst * 8;
 							vec3_t top;
+							if ( nvar > 1 && FoliageVariantOf( &fi[m], nvar ) != vv ) {
+								continue;
+							}
 							p[0] = fi[m].origin[0];
 							p[1] = fi[m].origin[1];
 							p[2] = fi[m].origin[2];
@@ -529,6 +710,8 @@ static void LoadTerrain( tTerrain_t *t ) {
 							numInst++;
 						}
 					}
+				}
+				c->varCount[f][vv] = numInst - before;
 				}
 				c->instCount[f] = numInst - c->instFirst[f];
 			}
@@ -565,6 +748,9 @@ static void LoadTerrain( tTerrain_t *t ) {
 	if ( inst ) {
 		ri.Hunk_FreeTempMemory( inst );
 	}
+	if ( numInst ) {
+		LoadFoliageModels( t );
+	}
 }
 
 static void FreeGL( void ) {
@@ -576,6 +762,9 @@ static void FreeGL( void ) {
 		if ( t->instVbo ) qglDeleteBuffers( 1, &t->instVbo );
 		if ( t->vao ) qglDeleteVertexArrays( 1, &t->vao );
 		if ( t->folVao ) qglDeleteVertexArrays( 1, &t->folVao );
+		if ( t->modelVbo ) qglDeleteBuffers( 1, &t->modelVbo );
+		if ( t->modelIbo ) qglDeleteBuffers( 1, &t->modelIbo );
+		if ( t->modelVao ) qglDeleteVertexArrays( 1, &t->modelVao );
 	}
 	if ( tw.numQueries ) qglDeleteQueries( tw.numQueries, tw.queries );
 	if ( tw.progsOk ) {
@@ -989,6 +1178,7 @@ static void DrawTerrain( const tView_t *v, int pass ) {
 			qglUniform4f( loc[TU_SPLATXFORM], in->origin[0] - 0.5f * in->cellSize, in->origin[1] - 0.5f * in->cellSize,
 				1.0f / ( in->cellSize * in->samplesX ), 1.0f / ( in->cellSize * in->samplesY ) );
 			qglUniform1f( loc[TU_DEBUG], (float)debug );
+			qglUniform1f( loc[TU_TRIPLANAR], ( in->flags & OAX_TERRAIN_TRIPLANAR ) ? 1.0f : 0.0f );
 		}
 		qglBindVertexArray( t->vao );
 		glState.currentVao = NULL;
@@ -1044,6 +1234,53 @@ static void DrawTerrain( const tView_t *v, int pass ) {
 	}
 }
 
+/*
+DrawModelFoliage: one OAX_FOLIAGE_MODEL type on the visible chunks: per model
+surface (part), one instanced draw per chunk over that part's variant.
+Returns the instances drawn (counted once per instance, not per part).
+*/
+static int DrawModelFoliage( tTerrain_t *t, int k, int f, const tView_t *v, int *loc ) {
+	const oaxFoliageDisk_t *fd = &t->info.foliage[f];
+	int i, pi, drawn = 0;
+
+	if ( !t->modelVao || !t->numParts[f] ) {
+		return 0;
+	}
+	qglBindVertexArray( t->modelVao );
+	glState.currentVao = NULL;
+	qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
+	qglUniform4f( loc[FU_FADE], fd->fadeStart, fd->fadeEnd > fd->fadeStart ? 1.0f / ( fd->fadeEnd - fd->fadeStart ) : 0.0f, v->shadow ? 0.0f : 1.0f, 0 );
+	for ( pi = 0; pi < t->numParts[f]; pi++ ) {
+		const tFoliagePart_t *p = &t->parts[f][pi];
+		GL_BindToTMU( p->image, 0 );
+		for ( i = 0; i < v->num; i++ ) {
+			tChunk_t *c = v->list[i].chunk;
+			int first, w, count;
+			if ( c->terrain != k || !c->instCount[f] || ChunkOccluded( v, c ) ) {
+				continue;
+			}
+			if ( !v->shadow && BoxDistance( v->eye, c->bounds ) > fd->fadeEnd ) {
+				continue;
+			}
+			first = c->instFirst[f];
+			for ( w = 0; w < p->variant; w++ ) {
+				first += c->varCount[f][w];
+			}
+			count = c->varCount[f][p->variant];
+			if ( !count ) {
+				continue;
+			}
+			qglVertexAttribPointer( ATTR_INDEX_POSITION2, 4, GL_FLOAT, GL_FALSE, FINST_STRIDE, BUFFER_OFFSET( first * FINST_STRIDE ) );
+			qglVertexAttribPointer( ATTR_INDEX_NORMAL2, 4, GL_FLOAT, GL_FALSE, FINST_STRIDE, BUFFER_OFFSET( first * FINST_STRIDE + 16 ) );
+			qglDrawElementsInstanced( GL_TRIANGLES, p->count, GL_UNSIGNED_INT, BUFFER_OFFSET( p->first * sizeof( unsigned int ) ), count );
+			if ( pi == 0 || t->parts[f][pi - 1].variant != p->variant ) {
+				drawn += count;
+			}
+		}
+	}
+	return drawn;
+}
+
 static void DrawFoliage( const tView_t *v, int pass ) {
 	shaderProgram_t *sp = &tw.foliageProg[pass ? 1 : 0];
 	int *loc = FoliageLocs[pass ? 1 : 0];
@@ -1073,6 +1310,16 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 		for ( f = 0; f < t->info.numFoliage; f++ ) {
 			const oaxFoliageDisk_t *fd = &t->info.foliage[f];
 			int mesh = fd->kind == OAX_FOLIAGE_TREE ? 1 : 0;
+			if ( fd->kind == OAX_FOLIAGE_MODEL ) {
+				{
+					int n = DrawModelFoliage( t, k, f, v, loc );
+					instances += n;
+					trees += n;
+				}
+				qglBindVertexArray( t->folVao );
+				qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
+				continue;
+			}
 			// grass does not cast sun shadows (cheap, and too fine for the maps)
 			if ( v->shadow && mesh == 0 ) {
 				continue;

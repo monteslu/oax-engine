@@ -18,6 +18,7 @@
 //   "densitymap" "maps/x_d.pam" PAM (P7) 4 x 8 bit: foliage density channels
 //   "layer0".."layer3"          shader/texture names; "layerscale0".."3" world units per repeat
 //   "foliageseed" "1234"
+//   "triplanar" "1"             steep faces take side projections of the layers (rock walls)
 //   "foliage0".."foliage3"      "<grass|tree> <shader> <channel> <density/cell> <sizeMin> <sizeMax>
 //                                <fadeStart> <fadeEnd> [collideRadius collideHeight [maxSlope]]"
 //   "contents" "1"  "surfaceflags" "0"
@@ -149,18 +150,20 @@ export function terrainRecord(ent, gameDir) {
     if (!ent[`foliage${f}`]) continue;
     const p = ent[`foliage${f}`].trim().split(/\s+/);
     const at = 328 + nf * FOLIAGE_SIZE;
-    const kind = { grass: 0, tree: 1 }[p[0]];
+    const kind = { grass: 0, tree: 1, model: 2 }[p[0]];
     if (kind === undefined) throw new Error(`foliage kind ${p[0]}`);
     b.writeInt32LE(kind, at);
     writeName(b, at + 4, p[1]);
     const v = p.slice(2).map(Number);
-    const vals = [v[1] ?? 1, v[2] ?? 1, v[3] ?? 1, v[4] ?? 1000, v[5] ?? 2000, v[6] ?? 0, v[7] ?? 0, v[8] ?? 0.7];
+    // density, sizeMin, sizeMax, fadeStart, fadeEnd, collideRadius, collideHeight, maxSlope, variants
+    const vals = [v[1] ?? 1, v[2] ?? 1, v[3] ?? 1, v[4] ?? 1000, v[5] ?? 2000, v[6] ?? 0, v[7] ?? 0, v[8] ?? 0.7, v[9] ?? 0];
     b.writeInt32LE(v[0] | 0, at + 68);
     vals.forEach((x, k) => b.writeFloatLE(x, at + 72 + k * 4));
     nf++;
   }
   b.writeInt32LE(nf, 324);
   b.writeInt32LE(heightsOfs, 792); b.writeInt32LE(splatOfs, 796); b.writeInt32LE(densityOfs, 800);
+  b.writeInt32LE(num('triplanar', 0) ? 1 : 0, 804);   // flags: OAX_TERRAIN_TRIPLANAR
   for (let k = 0; k < cells; k++) b.writeUInt16LE(hm.data[k], heightsOfs + k * 2);
   Buffer.from(splat).copy(b, splatOfs);
   Buffer.from(density).copy(b, densityOfs);

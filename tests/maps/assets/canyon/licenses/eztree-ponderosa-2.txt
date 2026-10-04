@@ -1,0 +1,43 @@
+eztree-ponderosa-2: procedurally generated tree (ponderosa pine, younger/smaller variant (fuller, lower crown))
+Generated 2026-10-04 with trees/tools/eztree/gen.mjs.
+
+GEOMETRY / GENERATOR
+  Generator: EZ-Tree 1.1.0 by Daniel Greenheck, MIT License (Copyright (c) 2024 Daniel Greenheck)
+    https://github.com/dgreenheck/ez-tree  https://www.npmjs.com/package/@dgreenheck/ez-tree
+    The generated mesh is program output; MIT places no restriction on it. The EZ-Tree MIT notice is
+    reproduced below anyway. src/gen.mjs and src/cards.mjs are the oax wrapper scripts (same terms as the oax repo).
+  three.js (MIT) used as the math/geometry library: https://github.com/mrdoob/three.js
+  EZ-Tree's OWN bundled bark/leaf textures are NOT used (leaf textures have unclear provenance,
+    see https://github.com/dgreenheck/ez-tree/issues/30).
+
+TEXTURES (all CC0 1.0 public domain, https://creativecommons.org/publicdomain/zero/1.0/)
+  Bark: ambientCG Bark014 (CC0) https://ambientcg.com/view?id=Bark014 ; ambientCG licence https://docs.ambientcg.com/license/
+  Needle twigs: Poly Haven 'Pine Tree 01' twig_diff + twig_alpha (CC0) https://polyhaven.com/a/pine_tree_01 by Rob Tuytel (photography) + Rico Cilliers (modeling); Poly Haven licence https://polyhaven.com/license
+  The leaves PNG is a new composite built by cards.mjs from the CC0 sprites above (cut out, rotated,
+  colour graded); the bark JPG is a colour-graded resize of the CC0 bark above.
+
+ATTRIBUTION LINE (courtesy, not legally required):
+  "eztree-ponderosa-2" tree generated with EZ-Tree by Daniel Greenheck (MIT); textures CC0 from ambientCG and Poly Haven.
+
+EZ-Tree MIT License text:
+MIT License
+
+Copyright (c) 2024 Daniel Greenheck
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

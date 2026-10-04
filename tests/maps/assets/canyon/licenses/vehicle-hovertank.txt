@@ -1,0 +1,8 @@
+Name: Futuristic Hover Tanks (Aegis medium class, Lightning light class), from the game "Sledge"
+Source: https://opengameart.org/content/futuristic-hover-tanks
+Author: KillGorack (https://www.killgorack.com/)
+Licence: CC0 (OGA licence field). Page: "All materials, and associated textures created by me (KillGorack)".
+  HDRI "The Barn" is from https://opengameart.org/content/hdri-environment-maps (environment only, not needed). Hex paver floor is "not really a part of the asset" (excluded).
+Fetched: 2026-10-04
+Files are Blender 5.0 format (need Blender >= 5.0 to open). GLB exports here were made with Blender 5.0.1 (floor plane removed).
+Attribution line (optional): Hover tanks by KillGorack (CC0), via OpenGameArt.org

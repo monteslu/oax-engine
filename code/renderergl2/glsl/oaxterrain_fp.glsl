@@ -34,6 +34,7 @@ uniform vec3   u_SunColor;
 uniform vec3   u_Ambient;
 uniform vec4   u_ScreenInfo;    // 1 / framebuffer size (xy), w: use the shadow mask
 uniform float  u_Debug;
+uniform float  u_Triplanar;    // 1: steep faces take side projections (OAX_TERRAIN_TRIPLANAR)
 
 varying vec3   var_Position;
 varying vec3   var_Normal;
@@ -52,12 +53,31 @@ void main()
 	w *= step(vec4(1e-6), u_LayerScale);
 	w /= max(dot(w, vec4(1.0)), 1e-3);
 
+	vec3 n = normalize(var_Normal);
 	vec3 albedo = texture2D(u_Layer0, var_Position.xy * u_LayerScale.x).rgb * w.x
 	            + texture2D(u_Layer1, var_Position.xy * u_LayerScale.y).rgb * w.y
 	            + texture2D(u_Layer2, var_Position.xy * u_LayerScale.z).rgb * w.z
 	            + texture2D(u_Layer3, var_Position.xy * u_LayerScale.w).rgb * w.w;
+	if (u_Triplanar > 0.5)
+	{
+		// triplanar: the top-down projection stretches on cliffs; blend in
+		// the two side projections by how much the face looks along x and y
+		vec3 bw = pow(abs(n), vec3(4.0));
+		bw /= (bw.x + bw.y + bw.z);
+		if (bw.z < 0.999)
+		{
+			vec3 sx = texture2D(u_Layer0, var_Position.yz * u_LayerScale.x).rgb * w.x
+			        + texture2D(u_Layer1, var_Position.yz * u_LayerScale.y).rgb * w.y
+			        + texture2D(u_Layer2, var_Position.yz * u_LayerScale.z).rgb * w.z
+			        + texture2D(u_Layer3, var_Position.yz * u_LayerScale.w).rgb * w.w;
+			vec3 sy = texture2D(u_Layer0, var_Position.xz * u_LayerScale.x).rgb * w.x
+			        + texture2D(u_Layer1, var_Position.xz * u_LayerScale.y).rgb * w.y
+			        + texture2D(u_Layer2, var_Position.xz * u_LayerScale.z).rgb * w.z
+			        + texture2D(u_Layer3, var_Position.xz * u_LayerScale.w).rgb * w.w;
+			albedo = albedo * bw.z + sx * bw.x + sy * bw.y;
+		}
+	}
 
-	vec3 n = normalize(var_Normal);
 	float ndl = max(dot(n, u_SunDir), 0.0);
 	float shadow = 1.0;
 	if (u_ScreenInfo.w > 0.5)

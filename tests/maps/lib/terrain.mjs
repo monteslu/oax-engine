@@ -94,13 +94,14 @@ export class Terrain {
     };
   }
 
-  entityKeys({ layers = [], foliage = [], seed = 1, bottom } = {}) {
+  entityKeys({ layers = [], foliage = [], seed = 1, bottom, triplanar = false } = {}) {
     const k = {
       origin: this.origin, cellsize: this.cellSize, heightscale: String(this.heightScale),   // full precision (numbers are written with 3 decimals)
       heightmap: `maps/${this.name}_h.pgm`, splatmap: `maps/${this.name}_s.pam`, densitymap: `maps/${this.name}_d.pam`,
       foliageseed: seed,
     };
     if (bottom !== undefined) k.bottom = bottom;
+    if (triplanar) k.triplanar = 1;
     layers.forEach((l, i) => { k[`layer${i}`] = l.shader; k[`layerscale${i}`] = l.scale; });
     foliage.forEach((f, i) => { k[`foliage${i}`] = f; });
     return k;

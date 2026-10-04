@@ -41,13 +41,23 @@ void main()
 {
 	vec2 cs = attr_Normal2.xy;
 	vec3 p = attr_Position * attr_Position2.w;
+	vec3 n0 = attr_Normal;
+	// model foliage (kind 2) leans a little, up to about 4 degrees, in a
+	// direction the instance's random value and yaw pick
+	if (attr_Normal2.w > 1.5)
+	{
+		float a = (attr_Normal2.z - 0.5) * 0.14;
+		float ca = cos(a), sa = sin(a);
+		p = vec3(p.x, p.y * ca - p.z * sa, p.y * sa + p.z * ca);
+		n0 = vec3(n0.x, n0.y * ca - n0.z * sa, n0.y * sa + n0.z * ca);
+	}
 	vec3 world = vec3(p.x * cs.x - p.y * cs.y, p.x * cs.y + p.y * cs.x, p.z) + attr_Position2.xyz;
 	gl_Position = u_ModelViewProjectionMatrix * vec4(world, 1.0);
 	var_Tex = attr_TexCoord0.st;
 	// fade by distance to the instance root (whole instance fades together)
 	var_Fade = u_Fade.z * clamp((distance(attr_Position2.xyz, u_ViewOrigin) - u_Fade.x) * u_Fade.y, 0.0, 1.0);
 #if !defined(FOLIAGE_DEPTH)
-	vec3 n = attr_Normal;
+	vec3 n = n0;
 	var_Normal = vec3(n.x * cs.x - n.y * cs.y, n.x * cs.y + n.y * cs.x, n.z);
 	var_Height = attr_Position.z;
 #endif

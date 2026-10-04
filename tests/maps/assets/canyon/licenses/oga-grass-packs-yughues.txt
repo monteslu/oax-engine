@@ -1,0 +1,7 @@
+Title: Grass Pack #01, #02, #03
+Author: Yughues (Nobiax)
+Licence: CC0 1.0 (page) ; readme CC0
+URLs: https://opengameart.org/content/grass-pack-01 https://opengameart.org/content/grass-pack-02 https://opengameart.org/content/grass-pack-03
+Note: *_rgba.png in this dir = diffus.tga RGB + opacity.tga as alpha (made by us).
+Attribution line (optional): Grass textures by Yughues/Nobiax (CC0)
+Date accessed: 2026-10-04

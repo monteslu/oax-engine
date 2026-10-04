@@ -1,0 +1,15 @@
+Name: APC textured (6-wheeled armoured personnel carrier)
+Source: https://opengameart.org/content/apc-textured
+Author (texturing, UVs, part grouping): pflat
+Original mesh: Daniel Wray, https://opengameart.org/content/apc (CC-BY-SA 3.0)
+Licence: CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+Fetched: 2026-10-04
+Texture sources used by pflat (all verified on OGA 2026-10-04):
+  Camouflage by Skorpio, https://opengameart.org/content/camouflage (CC-BY-SA 3.0 / GPL 3.0)
+  Unnamed texture pack by Unnamed, https://opengameart.org/content/unnamed-texture-pack (CC-BY-SA 3.0)
+  RC Car Model by brightretro (tyres), https://opengameart.org/content/rc-car-model (CC-BY 3.0)
+  Muscle Car 3D Model by brightretro (rim), https://opengameart.org/content/muscle-car-3d-model (CC-BY 3.0)
+  Sci-fi environment pack by Irondust (side tanks), https://opengameart.org/content/sci-fi-environment-pack (CC0)
+Attribution line:
+  "APC" model by Daniel Wray, textured by pflat (CC-BY-SA 3.0), textures by Skorpio, Unnamed, brightretro, Irondust; via OpenGameArt.org
+Notes: Share-alike. Modified versions must stay CC-BY-SA 3.0 (or later BY-SA). BY-SA 3.0 is not itself on the GPLv3-compatible list (only BY-SA 4.0 is, one-way), so ship it as separately licensed data in the pk3 with its credits, not relicensed as GPL. Original author asks to be credited for any mesh changes.

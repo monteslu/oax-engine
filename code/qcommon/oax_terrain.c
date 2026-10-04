@@ -154,6 +154,7 @@ int OAXTerrain_Parse( const void *lump, int len, oaxTerrainInfo_t *out, int maxO
 			t->layerTexScale[f] = RdFloat( (const unsigned char *)&d->layerTexScale[f] );
 		}
 		t->foliageSeed = RdInt( (const unsigned char *)&d->foliageSeed );
+		t->flags = RdInt( (const unsigned char *)&d->flags );
 		t->numFoliage = RdInt( (const unsigned char *)&d->numFoliage );
 		if ( t->numFoliage < 0 || t->numFoliage > OAX_TERRAIN_MAX_FOLIAGE ) {
 			Err( err, errSize, "bad foliage count" );
@@ -175,6 +176,7 @@ int OAXTerrain_Parse( const void *lump, int len, oaxTerrainInfo_t *out, int maxO
 			o->collideRadius = RdFloat( fp + 24 );
 			o->collideHeight = RdFloat( fp + 28 );
 			o->maxSlope = RdFloat( fp + 32 );
+			o->variants = RdFloat( fp + 36 );
 		}
 		{
 			int ho = RdInt( (const unsigned char *)&d->heightsOfs );
