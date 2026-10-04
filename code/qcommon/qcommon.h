@@ -977,6 +977,7 @@ CLIENT / SERVER SYSTEMS
 // client interface
 //
 void CL_InitKeyCommands( void );
+void CL_GamepadDefaults( void );	// oax: modern gamepad binds, after the configs
 // the keyboard binding interface must be setup before execing
 // config files, but the rest of client startup will happen later
 

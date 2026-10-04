@@ -100,14 +100,27 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 
 See also `pmove_fixed`, `pmove_msec`, and `vm_*` under Changed defaults.
 
-## Input (wasmcart build)
+## Input (gamepad)
 
-The native SDL build keeps the ioquake3 input defaults. The wasmcart build registers its own:
+Both builds read a gamepad by default with modern twin-stick controls
+(`code/client/cl_gamepad.c`):
 
 | Cvar | Default | Flags | What it does |
 |---|---|---|---|
-| `in_joystick` | 0 -> **1** | archive, latch | The cart's gamepad is read by default. |
-| `in_joystickUseAnalog` | 0 -> **1** | archive | Sticks drive analog movement and look by default instead of key presses. |
+| `in_joystick` | 0 -> **1** | archive, latch | The gamepad is read by default. |
+| `in_joystickUseAnalog` | 0 -> **1** | archive | Sticks drive analog movement and look instead of key presses. |
+| `j_forward` / `j_side` | -0.25 / 0.25 -> **-0.0045 / 0.0045** | archive | Movement in proportion to the left stick (the old values reached full speed at a touch). |
+| `j_yaw` / `j_pitch` | -0.022 / 0.022 -> **-0.008 / 0.0055** | archive | Look speed at full tilt: about 260 degrees a second across, 180 up and down (was 720). |
+| `j_lookCurve` | **2** (new) | archive | Look response: the stick's deflection to this power, so small movements aim finely; 1 = linear. |
+| `in_gamepadBinds` | **1** (new) | archive | At startup, bind the default layout to every pad button the player has not bound; 0 leaves the pad alone. |
+| `in_gamepadVersion` | (new) | archive | Configs older than the modern stick values get them once. |
+
+The default layout (Xbox 360 names): left stick move, right stick look,
+RT fire, LT zoom, A jump, B crouch, X use (vehicles and holdable items),
+Y / RB / d-pad up and right next weapon, LB / d-pad down and left previous
+weapon, Back scores, Start menu, left stick click walk, right stick click
+centre view. In menus the d-pad and left stick move, A accepts and B goes
+back. Weapons have no alternate fire.
 
 `joy_threshold` (0.15) and `in_mouse` (1) keep their ioquake3 defaults. A wasmcart also forces `r_mode -1` with `r_customwidth`/`r_customheight` set to the cart's display size.
 

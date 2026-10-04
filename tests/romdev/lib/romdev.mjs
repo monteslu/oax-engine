@@ -13,6 +13,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(here, '..', '..', '..');
 export const defaultCart = process.env.OA_CART || path.join(repoRoot, 'build-cart', 'cart');
 
+export const PAD_TUNING = 'j_forward -0.25;j_side 0.25;j_yaw -0.022;j_pitch 0.022;j_lookCurve 1';
+
 export class RomdevError extends Error {}
 
 // Infrastructure failure (server down), distinct from a test failure.
@@ -66,7 +68,11 @@ export class Session {
     // an extra frame here moved every later capture by 16 ms, and the
     // console_cmd buffer holds one line, so a separate write would be
     // overwritten by the caller's first command.
-    this.pendingCommand = 'set com_errorQuit 1';
+    // The stick tuning the pad-driven goldens were recorded with rides along
+    // (the engine's defaults are the modern ones now, cl_gamepad.c
+    // CL_GamepadDefaults; tests measure movement, not tuning). native.mjs
+    // sets the same values.
+    this.pendingCommand = `set com_errorQuit 1;${PAD_TUNING}`;
     return r;
   }
 

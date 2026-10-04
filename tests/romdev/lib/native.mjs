@@ -120,6 +120,8 @@ export function runNative(name, map, lines, { timeoutMs = 300000, quit = true, s
     // early frames ran on the wall clock, which left the server's 50 ms frame
     // phase against the client different from run to run (native-parity flake)
     '+set', 'bot_enable', '0', '+set', 'com_introplayed', '1', '+set', 'com_maxfps', '0', '+set', 'fixedtime', '16',
+    // the stick tuning the pad goldens were recorded with (romdev.mjs PAD_TUNING)
+    '+set', 'j_forward', '-0.25', '+set', 'j_side', '0.25', '+set', 'j_yaw', '-0.022', '+set', 'j_pitch', '0.022', '+set', 'j_lookCurve', '1',
     ...Object.entries(set).flatMap(([k, v]) => ['+set', k, String(v)]),
     '+devmap', map, '+wait', '200', '+exec', 'native_test.cfg',
   ], { home, timeout: timeoutMs });

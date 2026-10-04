@@ -34,6 +34,7 @@ typedef struct {
 } in_gamepadEdge_t;
 
 static in_gamepadEdge_t gamepadOld;
+static keyNum_t stickSentPos[IN_GAMEPAD_AXES], stickSentNeg[IN_GAMEPAD_AXES];	// the key a stick press produced
 
 static const keyNum_t gamepadButtonKeys[IN_GAMEPAD_BUTTONS] = {
 	K_PAD0_A, K_PAD0_B, K_PAD0_X, K_PAD0_Y,
@@ -80,12 +81,101 @@ static keyNum_t GamepadKeyFor( int button )
 
 /*
 ===============
+StickKeyFor
+
+The left stick steers menus like the d-pad.
+===============
+*/
+static keyNum_t StickKeyFor( int key )
+{
+	if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CONSOLE | KEYCATCH_MESSAGE))
+	{
+		switch (key)
+		{
+			case K_PAD0_LEFTSTICK_UP:    return K_UPARROW;
+			case K_PAD0_LEFTSTICK_DOWN:  return K_DOWNARROW;
+			case K_PAD0_LEFTSTICK_LEFT:  return K_LEFTARROW;
+			case K_PAD0_LEFTSTICK_RIGHT: return K_RIGHTARROW;
+			default:                     break;
+		}
+	}
+	return key;
+}
+
+/*
+===============
+CL_GamepadDefaults
+
+After the config files: modern twin-stick controls (Xbox 360 layout) on
+every pad button the player has not bound, and, once per config, modern
+stick tuning. in_gamepadBinds 0 leaves the pad unbound.
+
+  left stick   move                  right stick  look
+  A            jump                  B            crouch
+  X            use (vehicles, items) Y            next weapon
+  LB / RB      previous / next weapon
+  LT           zoom                  RT           fire
+  left click   walk                  right click  centre view
+  d-pad        up / right next weapon, down / left previous
+  Back         scores                Start        menu
+(The same layout the cart has always had; Q3 weapons have no alternate fire.)
+===============
+*/
+#define GAMEPAD_DEFAULTS_VERSION 1
+
+void CL_GamepadDefaults( void )
+{
+	static const struct { int key; const char *bind; } binds[] = {
+		{ K_PAD0_LEFTSTICK_UP, "+forward" }, { K_PAD0_LEFTSTICK_DOWN, "+back" },
+		{ K_PAD0_LEFTSTICK_LEFT, "+moveleft" }, { K_PAD0_LEFTSTICK_RIGHT, "+moveright" },
+		{ K_PAD0_RIGHTSTICK_UP, "+lookup" }, { K_PAD0_RIGHTSTICK_DOWN, "+lookdown" },
+		{ K_PAD0_RIGHTSTICK_LEFT, "+left" }, { K_PAD0_RIGHTSTICK_RIGHT, "+right" },
+		{ K_PAD0_A, "+moveup" }, { K_PAD0_B, "+movedown" },
+		{ K_PAD0_X, "+button2" }, { K_PAD0_Y, "weapnext" },
+		{ K_PAD0_LEFTSHOULDER, "weapprev" }, { K_PAD0_RIGHTSHOULDER, "weapnext" },
+		{ K_PAD0_LEFTTRIGGER, "+zoom" }, { K_PAD0_RIGHTTRIGGER, "+attack" },
+		{ K_PAD0_LEFTSTICK_CLICK, "+speed" }, { K_PAD0_RIGHTSTICK_CLICK, "centerview" },
+		{ K_PAD0_DPAD_UP, "weapnext" }, { K_PAD0_DPAD_DOWN, "weapprev" },
+		{ K_PAD0_DPAD_LEFT, "weapprev" }, { K_PAD0_DPAD_RIGHT, "weapnext" },
+		{ K_PAD0_BACK, "+scores" },
+	};
+	cvar_t *on = Cvar_Get( "in_gamepadBinds", "1", CVAR_ARCHIVE );
+	cvar_t *version = Cvar_Get( "in_gamepadVersion", "0", CVAR_ARCHIVE );
+	int i;
+
+	Cvar_SetDescription( on, "Bind modern twin-stick gamepad controls (Xbox 360 layout) to unbound pad buttons at startup." );
+	if ( !on->integer )
+		return;
+	for ( i = 0; i < ARRAY_LEN( binds ); i++ ) {
+		const char *b = Key_GetBinding( binds[i].key );
+
+		if ( !b || !b[0] )
+			Key_SetBinding( binds[i].key, binds[i].bind );
+	}
+	// configs written before these defaults hold the old stick values
+	// (digital-feeling movement, 720 degrees a second of look)
+	if ( version->integer < GAMEPAD_DEFAULTS_VERSION ) {
+		Cvar_Set( "in_joystick", "1" );
+		Cvar_Set( "in_joystickUseAnalog", "1" );
+		Cvar_Set( "j_forward", "-0.0045" );
+		Cvar_Set( "j_side", "0.0045" );
+		Cvar_Set( "j_yaw", "-0.008" );
+		Cvar_Set( "j_pitch", "0.0055" );
+		Cvar_Set( "j_lookCurve", "2" );
+		Cvar_SetValue( "in_gamepadVersion", GAMEPAD_DEFAULTS_VERSION );
+	}
+}
+
+/*
+===============
 IN_GamepadReset
 ===============
 */
 void IN_GamepadReset( void )
 {
 	Com_Memset( &gamepadOld, 0, sizeof( gamepadOld ) );
+	Com_Memset( stickSentPos, 0, sizeof( stickSentPos ) );
+	Com_Memset( stickSentNeg, 0, sizeof( stickSentNeg ) );
 }
 
 /*
@@ -261,20 +351,41 @@ void IN_GamepadFrame( const in_gamepad_t *pad, int eventTime, float threshold, q
 			// keyups first so they get overridden by keydowns later
 
 			// positive to negative/neutral -> keyup
-			if (!posAnalog && posKey && oldAxis > 0 && axis <= 0)
-				Com_QueueEvent(eventTime, SE_KEY, posKey, qfalse, 0, NULL);
+			if (stickSentPos[i] && oldAxis > 0 && axis <= 0)
+			{
+				Com_QueueEvent(eventTime, SE_KEY, stickSentPos[i], qfalse, 0, NULL);
+				stickSentPos[i] = 0;
+			}
 
 			// negative to positive/neutral -> keyup
-			if (!negAnalog && negKey && oldAxis < 0 && axis >= 0)
-				Com_QueueEvent(eventTime, SE_KEY, negKey, qfalse, 0, NULL);
+			if (stickSentNeg[i] && oldAxis < 0 && axis >= 0)
+			{
+				Com_QueueEvent(eventTime, SE_KEY, stickSentNeg[i], qfalse, 0, NULL);
+				stickSentNeg[i] = 0;
+			}
 
-			// negative/neutral to positive -> keydown
-			if (!posAnalog && posKey && oldAxis <= 0 && axis > 0)
-				Com_QueueEvent(eventTime, SE_KEY, posKey, qtrue, 0, NULL);
+			// negative/neutral to positive -> keydown (in menus the left
+			// stick is the arrow keys, even when it moves analog in game)
+			if (posKey && oldAxis <= 0 && axis > 0)
+			{
+				keyNum_t k = StickKeyFor(posKey);
+				if (!posAnalog || k != posKey)
+				{
+					stickSentPos[i] = k;
+					Com_QueueEvent(eventTime, SE_KEY, k, qtrue, 0, NULL);
+				}
+			}
 
 			// positive/neutral to negative -> keydown
-			if (!negAnalog && negKey && oldAxis >= 0 && axis < 0)
-				Com_QueueEvent(eventTime, SE_KEY, negKey, qtrue, 0, NULL);
+			if (negKey && oldAxis >= 0 && axis < 0)
+			{
+				keyNum_t k = StickKeyFor(negKey);
+				if (!negAnalog || k != negKey)
+				{
+					stickSentNeg[i] = k;
+					Com_QueueEvent(eventTime, SE_KEY, k, qtrue, 0, NULL);
+				}
+			}
 
 			gamepadOld.axes[i] = axis;
 		}

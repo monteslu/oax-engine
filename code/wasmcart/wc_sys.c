@@ -406,34 +406,6 @@ static void WC_BuildCommandLine( char *out, int size ) {
 	}
 }
 
-/*
-Default gamepad bindings, applied when the player has none (first boot, or a
-deterministic replay, which starts with no saved config). Sticks are analog
-(in_joystickUseAnalog): left moves, right looks.
-*/
-static const char *wcPadBinds =
-	"bind PAD0_LEFTSTICK_UP +forward\n"
-	"bind PAD0_LEFTSTICK_DOWN +back\n"
-	"bind PAD0_LEFTSTICK_LEFT +moveleft\n"
-	"bind PAD0_LEFTSTICK_RIGHT +moveright\n"
-	"bind PAD0_RIGHTSTICK_UP +lookup\n"
-	"bind PAD0_RIGHTSTICK_DOWN +lookdown\n"
-	"bind PAD0_RIGHTSTICK_LEFT +left\n"
-	"bind PAD0_RIGHTSTICK_RIGHT +right\n"
-	"bind PAD0_RIGHTTRIGGER +attack\n"
-	"bind PAD0_LEFTTRIGGER +zoom\n"
-	"bind PAD0_A +moveup\n"
-	"bind PAD0_B +movedown\n"
-	"bind PAD0_X +button2\n"
-	"bind PAD0_Y weapnext\n"
-	"bind PAD0_RIGHTSHOULDER weapnext\n"
-	"bind PAD0_LEFTSHOULDER weapprev\n"
-	"bind PAD0_BACK +scores\n"
-	"bind PAD0_DPAD_UP weapnext\n"
-	"bind PAD0_DPAD_DOWN weapprev\n"
-	"bind PAD0_LEFTSTICK_CLICK +speed\n"
-	"bind PAD0_RIGHTSTICK_CLICK centerview\n";
-
 static void WC_Start( void ) {
 	static char cmdline[MAX_STRING_CHARS];
 
@@ -446,10 +418,7 @@ static void WC_Start( void ) {
 	WC_BuildCommandLine( cmdline, sizeof( cmdline ) );
 	Com_Init( cmdline );
 	NET_Init();
-
-	if ( !Key_GetBinding( K_PAD0_A ) || !Key_GetBinding( K_PAD0_A )[0] ) {
-		Cbuf_AddText( wcPadBinds );
-	}
+	// default gamepad bindings: CL_GamepadDefaults (cl_gamepad.c), from Com_Init
 }
 
 __attribute__((export_name("wc_render")))

@@ -65,7 +65,7 @@ static struct {
 	int32_t svsTime;            // svs.time (-1 = no local server)
 	int32_t padStartTime;       // command time the last pad script started (-1 = none)
 	char    mapname[64];
-	char    command[256];       // written by a harness; executed at the next frame
+	char    command[1024];      // written by a harness; executed at the next frame
 	char    fatal[1024];        // Sys_Error text once the cart has halted ("" while running)
 	char    values[65536];      // named debug values, "name value\n" lines (Com_DebugSet)
 } dbg;

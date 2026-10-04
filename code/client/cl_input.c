@@ -389,13 +389,31 @@ void CL_JoystickEvent( int axis, int value, int time ) {
 CL_JoystickMove
 =================
 */
+/*
+=================
+CL_JoystickLookCurve
+
+oax: a look axis shaped by j_lookCurve: small deflections turn slowly for
+aiming, full tilt keeps its speed.
+=================
+*/
+static float CL_JoystickLookCurve( int axis ) {
+	float f = axis / 32767.0f, c = j_lookCurve->value;
+
+	if ( c <= 0.0f || c == 1.0f ) {
+		return (float)axis;
+	}
+	f = f < 0 ? -pow( -f, c ) : pow( f, c );
+	return f * 32767.0f;
+}
+
 void CL_JoystickMove( usercmd_t *cmd ) {
 	float	anglespeed;
 
-	float yaw     = j_yaw->value     * cl.joystickAxis[j_yaw_axis->integer];
+	float yaw     = j_yaw->value     * CL_JoystickLookCurve( cl.joystickAxis[j_yaw_axis->integer] );
 	float right   = j_side->value    * cl.joystickAxis[j_side_axis->integer];
 	float forward = j_forward->value * cl.joystickAxis[j_forward_axis->integer];
-	float pitch   = j_pitch->value   * cl.joystickAxis[j_pitch_axis->integer];
+	float pitch   = j_pitch->value   * CL_JoystickLookCurve( cl.joystickAxis[j_pitch_axis->integer] );
 	float up      = j_up->value      * cl.joystickAxis[j_up_axis->integer];
 
 	if ( !(in_speed.active ^ cl_run->integer) ) {

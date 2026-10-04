@@ -2393,6 +2393,10 @@ void Com_ExecuteCfg(void)
 		Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
 		Cbuf_Execute();
 	}
+#ifndef DEDICATED
+	// oax: modern gamepad controls on whatever the configs left unbound
+	CL_GamepadDefaults();
+#endif
 }
 
 /*
