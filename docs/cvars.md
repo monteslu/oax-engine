@@ -131,6 +131,7 @@ back. Weapons have no alternate fire.
 | `cl_oaxPerfHud` | 0 | archive | Overlay: 1 one line (fps, frame time, CPU stages, GPU total), 2 the full breakdown (GPU time per pass, draw counts). |
 | `oaxprof` | | command | Print the breakdown to the console (averages over the last 60 frames). |
 | `oaxprof csv <file> [frames]` | | command | One row a frame for the next frames (default 600) into the home's game folder. |
+| `r_oaxDirectPost` | 1 | archive | Tone map (with the map's grading and atmosphere) straight to the screen when nothing after needs the image in a texture: saves several full-screen copies. 0 keeps the copy chain (for comparisons). |
 | `r_oaxProfile` | 0 | | The renderer's profiler; the overlay and `oaxprof` turn it on while they need it. Debug values `r_prof_*` every 30 frames for tests. |
 
 CPU stages: server, cgame, renderer front end (culling, sorting), back end
