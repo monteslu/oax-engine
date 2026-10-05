@@ -384,6 +384,18 @@ void GLimp_InitExtraExtensions(void)
 
 done:
 
+	// oax: sync objects (OpenGL 3.2, OpenGL ES 3.0): terrain occlusion results
+	if (qglesMajorVersion >= 3 || QGL_VERSION_ATLEAST(3, 2))
+	{
+		qglFenceSyncOAX = SDL_GL_GetProcAddress("glFenceSync");
+		qglGetSyncivOAX = SDL_GL_GetProcAddress("glGetSynciv");
+		qglDeleteSyncOAX = SDL_GL_GetProcAddress("glDeleteSync");
+	}
+
+	// oax: multisample textures (OpenGL 3.2), for r_oaxMsaaTextures
+	if (!qglesMajorVersion && QGL_VERSION_ATLEAST(3, 2))
+		qglTexImage2DMultisampleOAX = SDL_GL_GetProcAddress("glTexImage2DMultisample");
+
 	// instancing (oax terrain foliage): core in OpenGL 3.3 and OpenGL ES 3.0
 	if (qglesMajorVersion >= 3 || QGL_VERSION_ATLEAST(3, 3))
 	{

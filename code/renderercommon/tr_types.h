@@ -204,6 +204,7 @@ typedef struct {
 	float		cpuWaitMs;			// glFinish and swap: the CPU waiting on the GPU or the display
 	float		gpuMs[OAX_PROF_ZONES];
 	float		gpuTotalMs;
+	float		cpuZoneMs[OAX_PROF_ZONES];	// renderer back end CPU time spent issuing each zone
 	float		draws, tris, views, terrainChunks, foliageInstances;
 	const char	*zoneNames[OAX_PROF_ZONES];
 } oaxProfile_t;

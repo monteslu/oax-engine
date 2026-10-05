@@ -83,7 +83,7 @@ static void PrintTable( void ) {
 	if ( p.gpuTiming ) {
 		Com_Printf( "GPU   %.2f ms total\n", p.gpuTotalMs );
 		for ( i = 0; i < OAX_PROF_ZONES; i++ ) {
-			Com_Printf( "      %-17s %6.2f ms  %4.1f%%\n", p.zoneNames[i], p.gpuMs[i], p.gpuTotalMs > 0 ? 100.0f * p.gpuMs[i] / p.gpuTotalMs : 0 );
+			Com_Printf( "      %-17s %6.2f ms  %4.1f%%   cpu %5.2f ms\n", p.zoneNames[i], p.gpuMs[i], p.gpuTotalMs > 0 ? 100.0f * p.gpuMs[i] / p.gpuTotalMs : 0, p.cpuZoneMs[i] );
 		}
 	} else {
 		Com_Printf( "GPU   per-pass timing unavailable (needs timer queries)\n" );

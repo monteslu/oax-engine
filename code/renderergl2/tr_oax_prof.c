@@ -46,6 +46,11 @@ GL 3.3); without them only the CPU side is measured.
 
 cvar_t	*r_oaxProfile;
 cvar_t	*r_oaxDirectPost;
+cvar_t	*r_oaxMsaaTextures;
+GLsync ( APIENTRY *qglFenceSyncOAX )( GLenum condition, GLbitfield flags );
+void ( APIENTRY *qglGetSyncivOAX )( GLsync sync, GLenum pname, GLsizei bufSize, GLsizei *length, GLint *values );
+void ( APIENTRY *qglDeleteSyncOAX )( GLsync sync );
+void ( APIENTRY *qglTexImage2DMultisampleOAX )( GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations );
 
 #ifndef GL_TIME_ELAPSED
 #define GL_TIME_ELAPSED 0x88BF
@@ -63,6 +68,7 @@ static const char *zoneNames[OAX_PROF_ZONES] = {
 
 typedef struct {
 	float	gpuMs[OAX_PROF_ZONES];
+	float	cpuZoneMs[OAX_PROF_ZONES];
 	float	frontMs, backMs, waitMs, frameMs;
 	float	draws, tris, views, chunks, foliage;
 } profFrame_t;
@@ -77,6 +83,8 @@ static struct {
 	qboolean	recording;				// qFrame was free: this frame records queries
 	int			zone, viewZone;
 	qboolean	open;
+	int			cpuZone;				// the zone the back end is issuing (CPU side)
+	unsigned	cpuZoneStart, cpuZoneUs[OAX_PROF_ZONES];
 
 	// this frame's CPU side
 	unsigned	frontUs, backUs, waitUs, lastSwapUs;
@@ -107,7 +115,7 @@ static void ProfInit( void ) {
 			qglGenQueries( OAX_PROF_QUERIES, prof.queries[f] );
 		}
 	}
-	prof.zone = prof.viewZone = -1;
+	prof.zone = prof.viewZone = prof.cpuZone = -1;
 	prof.recording = qtrue;
 	ri.Printf( PRINT_ALL, "oax profiler: CPU timing on, GPU zone timing %s\n", prof.gpuOk ? "on" : "unavailable (no timer queries)" );
 }
@@ -151,14 +159,24 @@ void RB_OAXProfZone( int zone ) {
 	if ( !prof.inited ) {
 		ProfInit();
 	}
+	if ( zone >= 0 && prof.viewZone >= 0 ) {
+		zone = prof.viewZone;
+	}
+	// CPU: the time since the last zone change goes to that zone
+	{
+		unsigned now = R_OAXProfNow();
+
+		if ( prof.cpuZone >= 0 && prof.cpuZone < OAX_PROF_ZONES ) {
+			prof.cpuZoneUs[prof.cpuZone] += now - prof.cpuZoneStart;
+		}
+		prof.cpuZone = zone;
+		prof.cpuZoneStart = now;
+	}
 	if ( !prof.gpuOk ) {
 		return;
 	}
 	if ( !prof.recording && !prof.open ) {
 		return;
-	}
-	if ( zone >= 0 && prof.viewZone >= 0 ) {
-		zone = prof.viewZone;
 	}
 	if ( prof.open && zone == prof.zone ) {
 		return;
@@ -288,6 +306,10 @@ void RB_OAXProfEndFrame( void ) {
 	h->backMs = prof.backUs * 0.001f;
 	h->waitMs = prof.waitUs * 0.001f;
 	h->frameMs = prof.lastSwapUs ? ( now - prof.lastSwapUs ) * 0.001f : 0.0f;
+	for ( i = 0; i < OAX_PROF_ZONES; i++ ) {
+		h->cpuZoneMs[i] = prof.cpuZoneUs[i] * 0.001f;
+		prof.cpuZoneUs[i] = 0;
+	}
 	h->draws = prof.draws;
 	h->tris = prof.tris;
 	h->views = prof.views;
@@ -372,6 +394,9 @@ void RE_OAXGetProfile( oaxProfile_t *out ) {
 		out->views += h->views;
 		out->terrainChunks += h->chunks;
 		out->foliageInstances += h->foliage;
+		for ( z = 0; z < OAX_PROF_ZONES; z++ ) {
+			out->cpuZoneMs[z] += h->cpuZoneMs[z] / n;
+		}
 		if ( prof.gpuValid[i] ) {
 			gpuFrames++;
 			for ( z = 0; z < OAX_PROF_ZONES; z++ ) {

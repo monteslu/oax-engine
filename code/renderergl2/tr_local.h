@@ -1558,6 +1558,8 @@ typedef struct {
 	float       greyscale;
 	qboolean    oaxDirect;	// oax: this frame's post-process wrote the final image to the screen (RB_PostProcess)
 	qboolean    oaxFuseAtmos;	// oax: the tone map applies the atmosphere (the direct path)
+	qboolean    oaxToneMapMS;	// oax: the tone map reads the multisample target (no resolve this frame)
+	qboolean    oaxPrevDirect;	// oax: the last frame ended on the screen (a screenshot at the start of this one reads it there)
 } backEndState_t;
 
 /*
@@ -1687,6 +1689,9 @@ typedef struct {
 	shaderProgram_t down4xShader;
 	shaderProgram_t bokehShader;
 	shaderProgram_t tonemapShader;
+	shaderProgram_t tonemapMSShader;	// oax: reads the multisample render target itself (tr_oax_prof.c r_oaxMsaaTextures)
+	GLuint			oaxMsColor, oaxMsDepth;	// oax: the render FBO's multisample textures (0: renderbuffers)
+	int				oaxMsSamples;
 	shaderProgram_t calclevels4xShader[2];
 	shaderProgram_t shadowmaskShader;
 	shaderProgram_t ssaoShader;
@@ -2851,6 +2856,14 @@ void R_OAXProfAddWait( unsigned us );
 void R_OAXProfShutdown( void );
 void RE_OAXGetProfile( oaxProfile_t *out );
 extern cvar_t	*r_oaxDirectPost;
+extern cvar_t	*r_oaxMsaaTextures;
+extern void ( APIENTRY *qglTexImage2DMultisampleOAX )( GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations );
+qboolean RB_ToneMapLevelsDue( void );
+// oax: sync objects (OpenGL 3.2 / ES 3.0): ask whether the GPU has passed a
+// point without the flush an availability query costs on some GL stacks
+extern GLsync ( APIENTRY *qglFenceSyncOAX )( GLenum condition, GLbitfield flags );
+extern void ( APIENTRY *qglGetSyncivOAX )( GLsync sync, GLenum pname, GLsizei bufSize, GLsizei *length, GLint *values );
+extern void ( APIENTRY *qglDeleteSyncOAX )( GLsync sync );
 FBO_t *RB_OAXSceneTarget( void );
 qboolean R_OAXDisplayCurveOn( void );
 void R_OAXGradeUniforms( shaderProgram_t *sp, qboolean on );

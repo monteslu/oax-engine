@@ -1,4 +1,10 @@
+#if defined(OAX_MSAA_SAMPLES)
+// oax: the multisample render target itself, resolved here (the average of
+// its samples, as the resolve blit), so the frame needs no resolve pass
+uniform sampler2DMS u_TextureMap;
+#else
 uniform sampler2D u_TextureMap;
+#endif
 uniform sampler2D u_LevelsMap;
 
 uniform vec4      u_Color;
@@ -16,7 +22,11 @@ uniform vec3      u_DirectedLight;
 // and the atmosphere (worldspawn oax_atmosphere), as oaxatmos_fp.glsl:
 // u_FogEyeT > 0.5 on; u_FogColorMask rgb + density; u_FogDistance falloff,
 // base z, sun scatter, sky distance
+#if defined(OAX_MSAA_SAMPLES)
+uniform sampler2DMS u_ScreenDepthMap;
+#else
 uniform sampler2D u_ScreenDepthMap;
+#endif
 uniform float     u_FogEyeT;
 uniform vec4      u_FogColorMask;
 uniform vec4      u_FogDistance;
@@ -31,7 +41,11 @@ uniform vec4      u_PrimaryLightOrigin;
 // the atmosphere over the scene colour c at this pixel (oaxatmos_fp.glsl)
 vec3 Atmosphere(vec3 c, vec2 tc)
 {
+#if defined(OAX_MSAA_SAMPLES)
+	float d = texelFetch(u_ScreenDepthMap, ivec2(gl_FragCoord.xy), 0).r;	// sample 0, as a nearest depth resolve
+#else
 	float d = texture2D(u_ScreenDepthMap, tc).r;
+#endif
 	vec2 ndc = tc * 2.0 - 1.0;
 	float zNear = u_ViewInfo.x;
 	float zFar = u_ViewInfo.y;
@@ -70,7 +84,14 @@ float FilmicTonemap(float x)
 
 void main()
 {
+#if defined(OAX_MSAA_SAMPLES)
+	vec4 color = vec4(0.0);
+	for (int i = 0; i < OAX_MSAA_SAMPLES; i++)
+		color += texelFetch(u_TextureMap, ivec2(gl_FragCoord.xy), i);
+	color /= float(OAX_MSAA_SAMPLES);
+#else
 	vec4 color = texture2D(u_TextureMap, var_TexCoords);
+#endif
 	if (u_FogEyeT > 0.5)
 		color.rgb = Atmosphere(color.rgb, var_TexCoords);
 	color *= u_Color;

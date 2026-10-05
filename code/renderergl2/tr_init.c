@@ -603,9 +603,14 @@ const void *RB_TakeScreenshotCmd( const void *data ) {
 	if(tess.numIndexes)
 		RB_EndSurface();
 
-	// oax: the frame is on the screen, not in the render FBO
-	if (backEnd.oaxDirect)
+	// oax: the frame is on the screen, not in the render FBO: read the
+	// default framebuffer explicitly (blits leave the read binding where
+	// they set it, which the FBO cache does not track)
+	if (backEnd.oaxDirect || backEnd.oaxPrevDirect)
+	{
 		FBO_Bind(NULL);
+		qglBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	}
 
 	if (cmd->jpeg)
 		RB_TakeScreenshotJPEG( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
@@ -1458,6 +1463,8 @@ void R_Register( void )
 	R_OAXEnvRegisterCvars();
 	r_oaxProfile = ri.Cvar_Get( "r_oaxProfile", "0", 0 );
 	r_oaxDirectPost = ri.Cvar_Get( "r_oaxDirectPost", "1", CVAR_ARCHIVE );
+	r_oaxMsaaTextures = ri.Cvar_Get( "r_oaxMsaaTextures", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	ri.Cvar_SetDescription( r_oaxMsaaTextures, "Desktop GL: render MSAA into multisample textures so the direct post path tone maps straight from them, skipping the resolve on frames that do not measure exposure. 0 uses renderbuffers." );
 	ri.Cvar_SetDescription( r_oaxDirectPost, "Tone map (and grade) straight to the screen when nothing after needs the image: saves several full-screen copies. 0 keeps the copy chain." );
 	ri.Cvar_SetDescription( r_oaxProfile, "Frame profiler: GPU time per pass, CPU time per stage, draw counts (oaxprof, cl_oaxPerfHud)." );
 	R_OAXSurfWorldRegisterCvars();

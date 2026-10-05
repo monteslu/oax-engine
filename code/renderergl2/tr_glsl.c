@@ -1426,6 +1426,21 @@ void GLSL_InitGPUShaders(void)
 
 	numEtcShaders++;
 
+	// oax: the tone map reading the multisample render target itself
+	if (tr.oaxMsSamples)
+	{
+		Com_sprintf(extradefines, sizeof(extradefines), "#define OAX_MSAA_SAMPLES %d\n", tr.oaxMsSamples);
+		if (GLSL_InitGPUShader(&tr.tonemapMSShader, "tonemap", attribs, qtrue, extradefines, qtrue, fallbackShader_tonemap_vp, fallbackShader_tonemap_fp))
+		{
+			GLSL_InitUniforms(&tr.tonemapMSShader);
+			GLSL_SetUniformInt(&tr.tonemapMSShader, UNIFORM_TEXTUREMAP, TB_COLORMAP);
+			GLSL_SetUniformInt(&tr.tonemapMSShader, UNIFORM_LEVELSMAP,  TB_LEVELSMAP);
+			GLSL_SetUniformInt(&tr.tonemapMSShader, UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP);
+			GLSL_FinishGPUShader(&tr.tonemapMSShader);
+			numEtcShaders++;
+		}
+	}
+
 
 	for (i = 0; i < 2; i++)
 	{
@@ -1627,6 +1642,7 @@ void GLSL_ShutdownGPUShaders(void)
 	GLSL_DeleteGPUShader(&tr.down4xShader);
 	GLSL_DeleteGPUShader(&tr.bokehShader);
 	GLSL_DeleteGPUShader(&tr.tonemapShader);
+	GLSL_DeleteGPUShader(&tr.tonemapMSShader);
 
 	for ( i = 0; i < 2; i++)
 		GLSL_DeleteGPUShader(&tr.calclevels4xShader[i]);

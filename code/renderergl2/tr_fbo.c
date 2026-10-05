@@ -288,8 +288,32 @@ void FBO_Init(void)
 	if (multisample && glRefConfig.framebufferMultisample)
 	{
 		tr.renderFbo = FBO_Create("_render", tr.renderDepthImage->width, tr.renderDepthImage->height);
-		FBO_CreateBuffer(tr.renderFbo, hdrFormat, 0, multisample);
-		FBO_CreateBuffer(tr.renderFbo, R_ULightDepthFormat(), 0, multisample);
+		if (r_oaxMsaaTextures->integer && qglTexImage2DMultisampleOAX && !qglesMajorVersion)
+		{
+			// oax: multisample textures the tone map can read directly
+			// (RB_PostProcess skips the resolve when it can)
+			int depthFormat = R_ULightDepthFormat();
+			int w = tr.renderFbo->width, h = tr.renderFbo->height;
+
+			qglGenTextures(1, &tr.oaxMsColor);
+			qglBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsColor);
+			qglTexImage2DMultisampleOAX(GL_TEXTURE_2D_MULTISAMPLE, multisample, hdrFormat, w, h, GL_TRUE);
+			qglGenTextures(1, &tr.oaxMsDepth);
+			qglBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsDepth);
+			qglTexImage2DMultisampleOAX(GL_TEXTURE_2D_MULTISAMPLE, multisample, depthFormat, w, h, GL_TRUE);
+			qglBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+			qglNamedFramebufferTexture2DEXT(tr.renderFbo->frameBuffer, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsColor, 0);
+			qglNamedFramebufferTexture2DEXT(tr.renderFbo->frameBuffer,
+				depthFormat == GL_DEPTH24_STENCIL8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsDepth, 0);
+			tr.renderFbo->colorFormat = hdrFormat;
+			tr.renderFbo->multisample = multisample;
+			tr.oaxMsSamples = multisample;
+		}
+		else
+		{
+			FBO_CreateBuffer(tr.renderFbo, hdrFormat, 0, multisample);
+			FBO_CreateBuffer(tr.renderFbo, R_ULightDepthFormat(), 0, multisample);
+		}
 		R_CheckFBO(tr.renderFbo);
 
 		tr.msaaResolveFbo = FBO_Create("_msaaResolve", tr.renderDepthImage->width, tr.renderDepthImage->height);
@@ -439,6 +463,14 @@ void FBO_Shutdown(void)
 		return;
 
 	FBO_Bind(NULL);
+
+	// oax: the render FBO's multisample textures
+	if (tr.oaxMsColor)
+		qglDeleteTextures(1, &tr.oaxMsColor);
+	if (tr.oaxMsDepth)
+		qglDeleteTextures(1, &tr.oaxMsDepth);
+	tr.oaxMsColor = tr.oaxMsDepth = 0;
+	tr.oaxMsSamples = 0;
 
 	for(i = 0; i < tr.numFBOs; i++)
 	{

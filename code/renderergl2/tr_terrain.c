@@ -165,6 +165,8 @@ static struct {
 	// query objects (outside the hunk, so they can be freed after it is cleared)
 	GLuint		queries[4096];
 	int			numQueries;
+	int			lastQuery;			// the last query issued (1-based; 0: none)
+	GLsync		queryFence;			// after the last batch of queries (when sync objects exist)
 	// stats of the last main view
 	int			statVisible, statDrawn, statOccluded, statQueries, statFoliage, statTris;
 	int			statLods, statStitched, statGrass, statTrees;
@@ -767,6 +769,7 @@ static void FreeGL( void ) {
 		if ( t->modelVao ) qglDeleteVertexArrays( 1, &t->modelVao );
 	}
 	if ( tw.numQueries ) qglDeleteQueries( tw.numQueries, tw.queries );
+	if ( tw.queryFence && qglDeleteSyncOAX ) qglDeleteSyncOAX( tw.queryFence );
 	if ( tw.progsOk ) {
 		for ( c = 0; c < 3; c++ ) GLSL_DeleteGPUShader( &tw.terrainProg[c] );
 		for ( c = 0; c < 2; c++ ) GLSL_DeleteGPUShader( &tw.foliageProg[c] );
@@ -1029,17 +1032,38 @@ static qboolean QueryBox( const tChunk_t *c, float margin, vec3_t out[8] ) {
 
 static void PollQueries( void ) {
 	int k, i;
+	GLuint lastAvail = 0;
+
+	// queries finish in the order they were issued: when the last one is in,
+	// every earlier one is, and asking each for availability (a driver flush
+	// on some GL stacks) is avoided
+	if ( !tw.lastQuery ) {
+		return;
+	}
+	if ( tw.queryFence ) {
+		// a fence the GPU passed after the queries: no flush to ask it
+		GLint status = GL_UNSIGNALED;
+
+		qglGetSyncivOAX( tw.queryFence, GL_SYNC_STATUS, 1, NULL, &status );
+		if ( status != GL_SIGNALED ) {
+			return;
+		}
+		qglDeleteSyncOAX( tw.queryFence );
+		tw.queryFence = NULL;
+	} else {
+		qglGetQueryObjectuiv( tw.queries[tw.lastQuery - 1], GL_QUERY_RESULT_AVAILABLE, &lastAvail );
+		if ( !lastAvail ) {
+			return;
+		}
+	}
+	tw.lastQuery = 0;
 
 	for ( k = 0; k < tw.numTerrains; k++ ) {
 		tTerrain_t *t = &tw.terrains[k];
 		for ( i = 0; i < t->chunksX * t->chunksY; i++ ) {
 			tChunk_t *c = &t->chunks[i];
-			GLuint avail = 0, samples = 0;
+			GLuint samples = 0;
 			if ( !c->pending ) {
-				continue;
-			}
-			qglGetQueryObjectuiv( tw.queries[c->query - 1], GL_QUERY_RESULT_AVAILABLE, &avail );
-			if ( !avail ) {
 				continue;
 			}
 			qglGetQueryObjectuiv( tw.queries[c->query - 1], GL_QUERY_RESULT, &samples );
@@ -1100,12 +1124,20 @@ static void IssueQueries( const tView_t *v ) {
 			qglDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, BUFFER_OFFSET( 0 ) );
 			qglEndQuery( target );
 			c->pending = qtrue;
+			tw.lastQuery = c->query;
 			VectorCopy( v->eye, c->queryEye );
 		}
 		qglBindVertexArray( 0 );
 		qglBindBuffer( GL_ARRAY_BUFFER, 0 );
 	}
 	tw.statQueries = n;
+	// a fence after this batch: PollQueries asks it instead of the queries
+	if ( tw.lastQuery && qglFenceSyncOAX && qglGetSyncivOAX && qglDeleteSyncOAX ) {
+		if ( tw.queryFence ) {
+			qglDeleteSyncOAX( tw.queryFence );
+		}
+		tw.queryFence = qglFenceSyncOAX( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+	}
 	ri.Hunk_FreeTempMemory( who );
 	ri.Hunk_FreeTempMemory( boxes );
 }

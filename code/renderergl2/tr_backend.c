@@ -1578,6 +1578,7 @@ const void	*RB_SwapBuffers( const void *data ) {
 
 	RB_OAXProfZone( OAX_PZ_PRESENT );
 	RB_PresentToScreen();
+	backEnd.oaxPrevDirect = backEnd.oaxDirect;
 	backEnd.oaxDirect = qfalse;
 	RB_OAXProfEndFrame();
 
@@ -1669,13 +1670,32 @@ const void *RB_PostProcess(const void *data)
 	dstFbo = tr.renderFbo;
 
 	RB_OAXProfZone( OAX_PZ_POST_RESOLVE );
-	if (tr.msaaResolveFbo)
+	// oax: the direct path can tone map straight from the multisample
+	// target (r_oaxMsaaTextures) when nothing before the tone map needs the
+	// resolved image: no view fog, bloom or SSAO, and not a frame that
+	// measures the exposure. Then this frame needs no resolve at all.
+	{
+		qboolean directLikely = tr.renderFbo && r_oaxDirectPost->integer && !backEnd.oaxDirect
+			&& r_hdr->integer && (r_toneMap->integer || r_forceToneMap->integer)
+			&& !r_drawSunRays->integer && backEnd.refdef.blurFactor < 0.004f
+			&& !R_OAXDisplayCurveOn() && backEnd.greyscale <= 0.0f && !backEnd.viewParms.targetFbo
+			&& backEnd.viewParms.viewportX == 0 && backEnd.viewParms.viewportY == 0
+			&& backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
+
+		backEnd.oaxToneMapMS = directLikely && tr.oaxMsSamples && tr.tonemapMSShader.program && tr.msaaResolveFbo
+			&& backEnd.refdef.oaxViewFog[3] <= 0.0f && !r_oaxBloom->integer && !r_ssao->integer
+			&& !( ( r_autoExposure->integer || r_forceAutoExposure->integer ) && RB_ToneMapLevelsDue() );
+	}
+
+	if (tr.msaaResolveFbo && !backEnd.oaxToneMapMS)
 	{
 		// Resolve the MSAA before anything else
 		// Can't resolve just part of the MSAA FBO, so multiple views will suffer a performance hit here
 		FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 		srcFbo = tr.msaaResolveFbo;
 	}
+	else if (backEnd.oaxToneMapMS)
+		srcFbo = tr.msaaResolveFbo;	// not resolved: the tone map reads the multisample target itself
 
 	dstBox[0] = backEnd.viewParms.viewportX;
 	dstBox[1] = backEnd.viewParms.viewportY;
@@ -1693,6 +1713,12 @@ const void *RB_PostProcess(const void *data)
 	// on it, the tone map applies the atmosphere too, when nothing between
 	// them (bloom, SSAO) needs the fogged image first
 	backEnd.oaxFuseAtmos = direct && !r_oaxBloom->integer && !r_ssao->integer && R_OAXAtmosActive();
+	if (!direct && backEnd.oaxToneMapMS)
+	{
+		// not the direct path after all: resolve as usual
+		FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		backEnd.oaxToneMapMS = qfalse;
+	}
 
 	// oax view fog, in scene light before tonemapping
 	RB_OAXProfZone( OAX_PZ_POST_FOG );
@@ -1735,6 +1761,7 @@ const void *RB_PostProcess(const void *data)
 		RB_ToneMap(srcFbo, srcBox, NULL, dstBox, autoExposure);
 		backEnd.oaxDirect = qtrue;
 		backEnd.oaxFuseAtmos = qfalse;
+		backEnd.oaxToneMapMS = qfalse;
 		return (const void *)(cmd + 1);
 	}
 

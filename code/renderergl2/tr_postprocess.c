@@ -22,15 +22,27 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+// the frame the auto exposure last measured the image (every few frames)
+static int lastFrameCount = 0;
+
+/*
+oax: whether this frame's tone map measures the exposure (it then needs
+the resolved image; RB_PostProcess resolves for it)
+*/
+qboolean RB_ToneMapLevelsDue( void )
+{
+	return lastFrameCount == 0 || tr.frameCount < lastFrameCount || tr.frameCount - lastFrameCount > 5;
+}
+
 void RB_ToneMap(FBO_t *hdrFbo, ivec4_t hdrBox, FBO_t *ldrFbo, ivec4_t ldrBox, int autoExposure)
 {
 	ivec4_t srcBox, dstBox;
 	vec4_t color;
-	static int lastFrameCount = 0;
+	shaderProgram_t *sp = backEnd.oaxToneMapMS ? &tr.tonemapMSShader : &tr.tonemapShader;
 
 	if (autoExposure)
 	{
-		if (lastFrameCount == 0 || tr.frameCount < lastFrameCount || tr.frameCount - lastFrameCount > 5)
+		if (RB_ToneMapLevelsDue() && !backEnd.oaxToneMapMS)
 		{
 			// determine average log luminance
 			FBO_t *srcFbo, *dstFbo, *tmp;
@@ -92,13 +104,19 @@ void RB_ToneMap(FBO_t *hdrFbo, ivec4_t hdrBox, FBO_t *ldrFbo, ivec4_t ldrBox, in
 	else
 		GL_BindToTMU(tr.fixedLevelsImage, TB_LEVELSMAP);
 
-	GLSL_BindProgram(&tr.tonemapShader);
-	GLSL_SetUniformFloat(&tr.tonemapShader, UNIFORM_GAMMA, R_GammaInShader() ? r_gamma->value : 1.0f);
+	GLSL_BindProgram(sp);
+	GLSL_SetUniformFloat(sp, UNIFORM_GAMMA, R_GammaInShader() ? r_gamma->value : 1.0f);
 	// oax: grading fused in only when this pass writes the final image (the screen)
-	R_OAXGradeUniforms(&tr.tonemapShader, ldrFbo == NULL);
-	R_OAXAtmosUniforms(&tr.tonemapShader, ldrFbo == NULL && backEnd.oaxFuseAtmos);
+	R_OAXGradeUniforms(sp, ldrFbo == NULL);
+	R_OAXAtmosUniforms(sp, ldrFbo == NULL && backEnd.oaxFuseAtmos);
+	if (backEnd.oaxToneMapMS)
+	{
+		// the multisample colour and depth themselves (the shader resolves)
+		qglBindMultiTextureEXT(GL_TEXTURE0 + TB_COLORMAP, GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsColor);
+		qglBindMultiTextureEXT(GL_TEXTURE0 + TB_SHADOWMAP, GL_TEXTURE_2D_MULTISAMPLE, tr.oaxMsDepth);
+	}
 
-	FBO_Blit(hdrFbo, hdrBox, NULL, ldrFbo, ldrBox, &tr.tonemapShader, color, 0);
+	FBO_Blit(hdrFbo, hdrBox, NULL, ldrFbo, ldrBox, sp, color, 0);
 }
 
 /*
