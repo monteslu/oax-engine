@@ -62,12 +62,14 @@ settings, logs and the oax files, for example `~/oax-home`.
 
     ./build/Release/ioquake3 \
       +set fs_basepath OA +set com_basegame baseoa +set fs_homepath HOME_DIR \
-      +set sv_pure 0 +set vm_game 1 +set vm_cgame 1 +set vm_ui 1
+      +set sv_pure 0
 
 `com_basegame baseoa` makes the engine run OpenArena (its built-in default is
-Quake 3's `baseq3`). `sv_pure 0` lets the loose pk3 in your home folder load,
-and the `vm_*` settings run the game code as QVMs. The pk3's name starts with
-`zzz` so it loads after OpenArena's own game code and replaces it.
+Quake 3's `baseq3`). `sv_pure 0` lets the loose pk3 in your home folder load.
+The game code runs as QVMs, compiled to native code where the platform has a
+compiler (`vm_game`, `vm_cgame`, `vm_ui` 2; 1 runs the slower interpreter).
+The pk3's name starts with `zzz` so it loads after OpenArena's own game code
+and replaces it.
 
 To check the oax game code is the one running: the console log shows
 `File "vm/qagame.qvm" found in ".../zzz-oax-game.pk3"`, and once a map is
@@ -86,6 +88,7 @@ tooling). Worth playing:
 
 | Map | What is in it | Settings |
 | --- | --- | --- |
+| `oax_canyon` | a large canyon: heightmap terrain with rock walls, trees and grass that move in the wind, shallow pools with reflections and caustics, height fog, cloud shadows, colour grading; an armoured carrier and hover tanks | `g_gametype 4`, `g_oaxVehicles 1` |
 | `oax_showcase` | every map feature in one place: surfaces, lights, zones, teleporters, navigation links, GUIs, scripts | |
 | `oax_outdoor_ctf` | a heightmap valley with two forts, foliage, sun shadows; navmesh bots play CTF | `g_gametype 4` |
 | `oax_outdoor_vctf` | the same valley with buggies and hover craft | `g_gametype 4`, `g_oaxVehicles 1` |
@@ -120,13 +123,44 @@ and start a map with bots, for example:
 
     ./build/Release/ioquake3 \
       +set fs_basepath OA +set com_basegame baseoa +set fs_homepath HOME_DIR \
-      +set sv_pure 0 +set vm_game 1 +set vm_cgame 1 +set vm_ui 1 \
-      +set g_gametype 4 +set g_oaxVehicles 1 +set bot_enable 1 +map oax_outdoor_vctf
+      +set sv_pure 0 +set g_gametype 4 +set g_oaxVehicles 1 +set bot_enable 1 \
+      +map oax_canyon
 
 then `addbot Sarge 3 blue` and so on in the console. Team games start you as
 a spectator: `team red` (or ESC and the JOIN menu) puts you in, and on the
-vehicle map the use-item key (`+button2`, Enter by default) enters and leaves
-a vehicle.
+vehicle maps the use-item key (`+button2`: Enter on the keyboard, X on a
+gamepad) enters and leaves a vehicle.
+
+### Controls
+
+Keyboard and mouse work as in OpenArena. A gamepad works out of the box with
+an Xbox 360 style layout (SDL maps most pads to it):
+
+| Control | Action |
+| --- | --- |
+| left stick / right stick | move / look |
+| RT / LT | fire / zoom |
+| A / B | jump / crouch |
+| X | use: enter and leave vehicles, holdable items |
+| Y, RB, d-pad up or right | next weapon |
+| LB, d-pad down or left | previous weapon |
+| Back / Start | scores / menu |
+| left stick click / right stick click | walk / centre the view |
+
+In menus the d-pad or left stick moves, A selects and B goes back. In a
+vehicle the left stick is throttle and steering, A the handbrake and B the
+brake. Stick speed and response are cvars (`j_yaw`, `j_pitch`,
+`j_lookCurve`; see [cvars.md](cvars.md)).
+
+### Settings and performance
+
+The graphics menu (Setup, System) lists your display's resolutions; the
+console command `ui_graphics` opens it directly. OpenArena's configs cap the
+frame rate at 85 (`com_maxfps`): set it to your display's refresh rate, or 0
+for no cap. `cl_oaxPerfHud 1` shows frame time and CPU and GPU totals on
+screen, `cl_oaxPerfHud 2` the GPU time of every pass, and `oaxprof` prints the
+same in the console. Antialiasing is `r_ext_framebuffer_multisample` (4 by
+default); foliage edges use it too.
 
 The cvars of the engine are listed in [cvars.md](cvars.md); the game code's
 in the oax-gamecode repo (`docs/cvars.md`).

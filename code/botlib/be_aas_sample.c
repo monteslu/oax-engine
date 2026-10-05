@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "be_aas_def.h"
 
 // oax: depth of the BSP walk stacks in the traces and entity linking; very
-// large maps (UT99 ports) overflowed the stock 127
+// large maps overflowed the stock 127
 #define AAS_STACK_DEPTH 1024
 
 

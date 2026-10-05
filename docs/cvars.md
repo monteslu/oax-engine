@@ -132,6 +132,8 @@ back. Weapons have no alternate fire.
 | `oaxprof` | | command | Print the breakdown to the console (averages over the last 60 frames). |
 | `oaxprof csv <file> [frames]` | | command | One row a frame for the next frames (default 600) into the home's game folder. |
 | `r_oaxDirectPost` | 1 | archive | Tone map (with the map's grading and atmosphere) straight to the screen when nothing after needs the image in a texture: saves several full-screen copies. 0 keeps the copy chain (for comparisons). |
+| `r_oaxMsaaTextures` | 1 | archive, latch | Desktop GL: the multisampled scene is kept in multisample textures, so the tone map reads them directly and the separate MSAA resolve runs only on frames that measure exposure. 0 uses renderbuffers. |
+| `r_oaxReflectCull` | 1 | | Water reflections draw only what can appear where the water is on screen; 0 draws the whole mirrored view (for comparisons). |
 | `r_oaxProfile` | 0 | | The renderer's profiler; the overlay and `oaxprof` turn it on while they need it. Debug values `r_prof_*` every 30 frames for tests. |
 
 CPU stages: server, cgame, renderer front end (culling, sorting), back end

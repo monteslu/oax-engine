@@ -7,11 +7,14 @@ still runs, and new maps can use:
   * a GLES 3.0 / GL 3.2 renderer with unified dynamic lighting and shadows,
     physically described lights, bloom, soft particles, decals and trails
   * heightmap terrain, instanced foliage and occlusion culling for large
-    outdoor maps
+    outdoor maps; per-map wind, height fog, cloud shadows and colour grading
+  * water with reflection, refraction, caustics and shore foam
   * render-surface worlds over a separate collision hull, zones, sky portals
   * movers, triggers, in-world GUIs and map scripts (id Tech 4 style)
   * Box3D rigid body physics for effects and for drivable vehicles
   * navmesh bots for maps without AAS, with links built from authored intent
+  * gamepads out of the box with modern twin-stick controls
+  * a built-in frame profiler (GPU time per pass, CPU time per stage)
   * deterministic simulation: the native client and the
     [wasmcart](https://github.com/wasmcart) cart build play the same match
 
