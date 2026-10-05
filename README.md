@@ -14,6 +14,7 @@ still runs, and new maps can use:
   * Box3D rigid body physics for effects and for drivable vehicles with
     mounted guns, cockpit and chase views
   * navmesh bots for maps without AAS, with links built from authored intent
+  * an Assault game mode: attack and defend objectives against the clock
   * gamepads out of the box with modern twin-stick controls
   * a built-in frame profiler (GPU time per pass, CPU time per stage)
   * deterministic simulation: the native client and the

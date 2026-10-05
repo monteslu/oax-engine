@@ -92,6 +92,7 @@ tooling). Worth playing:
 | `oax_showcase` | every map feature in one place: surfaces, lights, zones, teleporters, navigation links, GUIs, scripts | |
 | `oax_outdoor_ctf` | a heightmap valley with two forts, foliage, sun shadows; navmesh bots play CTF | `g_gametype 4` |
 | `oax_outdoor_vctf` | the same valley with buggies and hover craft | `g_gametype 4`, `g_oaxVehicles 1` |
+| `oax_assault` | Assault: one team attacks a walled fortress against the clock (destroy the gate generator, take the keep controls, destroy the reactor core), then the teams swap; bots attack and defend | `g_gametype 14`, optionally `g_oaxVehicles 1` |
 | `oax_scripted` | movers, triggers and an in-world GUI driven by a map script | |
 | `oax_unified` | unified dynamic lighting and shadows | |
 | `oax_fx` | particles, soft particles, decals, trails, water, bloom | |
