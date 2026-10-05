@@ -113,7 +113,7 @@ Both builds read a gamepad by default with modern twin-stick controls
 | `j_yaw` / `j_pitch` | -0.022 / 0.022 -> **-0.008 / 0.0055** | archive | Look speed at full tilt: about 260 degrees a second across, 180 up and down (was 720). |
 | `j_lookCurve` | **2** (new) | archive | Look response: the stick's deflection to this power, so small movements aim finely; 1 = linear. |
 | `in_gamepadBinds` | **1** (new) | archive | At startup, bind the default layout to every pad button the player has not bound; 0 leaves the pad alone. |
-| `in_gamepadVersion` | (new) | archive | Configs older than the modern stick values get them once. |
+| `in_gamepadVersion` | (new) | archive | Configs older than the current pad defaults get them once: version 1 the modern stick values, version 2 Y as the view toggle (when it was still next weapon). |
 
 The default layout (Xbox 360 names): left stick move, right stick look,
 RT fire, LT zoom, A jump, B crouch, X use (vehicles and holdable items),

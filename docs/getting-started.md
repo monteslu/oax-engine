@@ -142,15 +142,32 @@ an Xbox 360 style layout (SDL maps most pads to it):
 | RT / LT | fire / zoom |
 | A / B | jump / crouch |
 | X | use: enter and leave vehicles, holdable items |
-| Y, RB, d-pad up or right | next weapon |
+| Y | first / third person (V on the keyboard) |
+| RB, d-pad up or right | next weapon |
 | LB, d-pad down or left | previous weapon |
 | Back / Start | scores / menu |
 | left stick click / right stick click | walk / centre the view |
 
-In menus the d-pad or left stick moves, A selects and B goes back. In a
-vehicle the left stick is throttle and steering, A the handbrake and B the
-brake. Stick speed and response are cvars (`j_yaw`, `j_pitch`,
-`j_lookCurve`; see [cvars.md](cvars.md)).
+In menus the d-pad or left stick moves, A selects and B goes back.
+
+In a vehicle the left stick is throttle and steering, A the handbrake and B
+the brake. Each vehicle has a mounted gun fired with RT: the hover tank's
+turret cannon and the hover craft's plasma guns belong to the driver, the
+heavy machine guns on the buggy and the carrier to the gunner (the second
+seat, on the bed or the roof). Whoever has the gun aims it with the right
+stick; the camera follows the aim while the vehicle drives on its own, and
+the reticle shows where the gun's line meets the world. The machine guns
+overheat: the bar above the vehicle panel is the heat (or, for the cannon,
+the reload). The driver of a vehicle without the gun looks around with the
+right stick and the view swings back behind the vehicle when it is let go.
+
+Y switches between first person and the chase camera. The carrier and the
+hover tank have cockpits: their driver sits inside and starts in first
+person, the drivers of open vehicles start with the chase camera, and
+gunners in first person. On foot Y toggles a third-person view.
+
+Stick speed and response are cvars (`j_yaw`, `j_pitch`, `j_lookCurve`; see
+[cvars.md](cvars.md)).
 
 ### Settings and performance
 

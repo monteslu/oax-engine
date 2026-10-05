@@ -11,7 +11,8 @@ still runs, and new maps can use:
   * water with reflection, refraction, caustics and shore foam
   * render-surface worlds over a separate collision hull, zones, sky portals
   * movers, triggers, in-world GUIs and map scripts (id Tech 4 style)
-  * Box3D rigid body physics for effects and for drivable vehicles
+  * Box3D rigid body physics for effects and for drivable vehicles with
+    mounted guns, cockpit and chase views
   * navmesh bots for maps without AAS, with links built from authored intent
   * gamepads out of the box with modern twin-stick controls
   * a built-in frame profiler (GPU time per pass, CPU time per stage)

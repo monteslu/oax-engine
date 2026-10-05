@@ -37,10 +37,20 @@ as alpha, brightened (`-modulate 125,135,100`) and colour-filled as above.
     # its blue camo regraded to a grey-olive
     convert apc_0.png -modulate 80,12,100 -fill '#4f5236' -colorize 30% -sigmoidal-contrast 2,45% apc_0.png
 
-    # the hover tank (KillGorack, CC0), turret turned to face forward
+    # the hover tank (KillGorack, CC0) in three parts, the turret turned to
+    # face forward: the hull without the turret, the turret with its origin
+    # at its pivot (the source model's origin: hull space -35 0 18), and the
+    # barrel with its origin at its pitch pivot, 16 units ahead of that
+    # (bg_vehicleTypes: gunMount, gunBarrelPivot)
+    T='Barrel|Optics|Shield|Turret=30'
     node misc/tools/glb-to-md3.mjs hovertank-aegis-killgorack.glb tests/maps/assets/canyon models/oax/vehicles/hovertank.md3 \
-      --textures models/oax/vehicles --scale 32 --offset "-35 0 18" --rotz 'Barrel|Optics|Shield|Turret=30'
-    # its 4K hull texture halved and stored as JPEG (it is opaque)
+      --textures models/oax/vehicles --scale 32 --offset "-35 0 18" --rotz "$T" --exclude '^(Barrel|Optics|Shield|Turret)$'
+    node misc/tools/glb-to-md3.mjs hovertank-aegis-killgorack.glb tests/maps/assets/canyon models/oax/vehicles/hovertank_turret.md3 \
+      --textures models/oax/vehicles --texname hovertank --scale 32 --offset "0 0 0" --rotz "$T" --only '^(Optics|Shield|Turret)$'
+    node misc/tools/glb-to-md3.mjs hovertank-aegis-killgorack.glb tests/maps/assets/canyon models/oax/vehicles/hovertank_barrel.md3 \
+      --textures models/oax/vehicles --texname hovertank --scale 32 --offset "-16 0 0" --rotz "$T" --only '^Barrel$'
+    # its 4K hull texture halved and stored as JPEG (it is opaque); the
+    # textures the converter writes are not copied over these
 
 The scale and offset put each model's origin at the centre of its physics
 hull (`bg_vehicleTypes` in the game code: types `apc` and `hovertank`).

@@ -108,20 +108,22 @@ CL_GamepadDefaults
 
 After the config files: modern twin-stick controls (Xbox 360 layout) on
 every pad button the player has not bound, and, once per config, modern
-stick tuning. in_gamepadBinds 0 leaves the pad unbound.
+stick tuning. in_gamepadBinds 0 leaves the pad unbound. The keyboard's V
+toggles the view the same way when nothing else is bound to it.
 
   left stick   move                  right stick  look
   A            jump                  B            crouch
-  X            use (vehicles, items) Y            next weapon
+  X            use (vehicles, items) Y            first / third person
   LB / RB      previous / next weapon
   LT           zoom                  RT           fire
   left click   walk                  right click  centre view
   d-pad        up / right next weapon, down / left previous
   Back         scores                Start        menu
-(The same layout the cart has always had; Q3 weapons have no alternate fire.)
+(Q3 weapons have no alternate fire. Y was next weapon before version 2,
+which LB/RB and the d-pad already do.)
 ===============
 */
-#define GAMEPAD_DEFAULTS_VERSION 1
+#define GAMEPAD_DEFAULTS_VERSION 2
 
 void CL_GamepadDefaults( void )
 {
@@ -131,7 +133,7 @@ void CL_GamepadDefaults( void )
 		{ K_PAD0_RIGHTSTICK_UP, "+lookup" }, { K_PAD0_RIGHTSTICK_DOWN, "+lookdown" },
 		{ K_PAD0_RIGHTSTICK_LEFT, "+left" }, { K_PAD0_RIGHTSTICK_RIGHT, "+right" },
 		{ K_PAD0_A, "+moveup" }, { K_PAD0_B, "+movedown" },
-		{ K_PAD0_X, "+button2" }, { K_PAD0_Y, "weapnext" },
+		{ K_PAD0_X, "+button2" }, { K_PAD0_Y, "toggleview" },
 		{ K_PAD0_LEFTSHOULDER, "weapprev" }, { K_PAD0_RIGHTSHOULDER, "weapnext" },
 		{ K_PAD0_LEFTTRIGGER, "+zoom" }, { K_PAD0_RIGHTTRIGGER, "+attack" },
 		{ K_PAD0_LEFTSTICK_CLICK, "+speed" }, { K_PAD0_RIGHTSTICK_CLICK, "centerview" },
@@ -152,9 +154,22 @@ void CL_GamepadDefaults( void )
 		if ( !b || !b[0] )
 			Key_SetBinding( binds[i].key, binds[i].bind );
 	}
+	{
+		const char *b = Key_GetBinding( 'v' );
+
+		if ( !b || !b[0] )
+			Key_SetBinding( 'v', "toggleview" );
+	}
+	// version 1 put next weapon on Y; Y toggles the view now
+	if ( version->integer < 2 ) {
+		const char *b = Key_GetBinding( K_PAD0_Y );
+
+		if ( b && !Q_stricmp( b, "weapnext" ) )
+			Key_SetBinding( K_PAD0_Y, "toggleview" );
+	}
 	// configs written before these defaults hold the old stick values
 	// (digital-feeling movement, 720 degrees a second of look)
-	if ( version->integer < GAMEPAD_DEFAULTS_VERSION ) {
+	if ( version->integer < 1 ) {
 		Cvar_Set( "in_joystick", "1" );
 		Cvar_Set( "in_joystickUseAnalog", "1" );
 		Cvar_Set( "j_forward", "-0.0045" );
@@ -162,8 +177,9 @@ void CL_GamepadDefaults( void )
 		Cvar_Set( "j_yaw", "-0.008" );
 		Cvar_Set( "j_pitch", "0.0055" );
 		Cvar_Set( "j_lookCurve", "2" );
-		Cvar_SetValue( "in_gamepadVersion", GAMEPAD_DEFAULTS_VERSION );
 	}
+	if ( version->integer < GAMEPAD_DEFAULTS_VERSION )
+		Cvar_SetValue( "in_gamepadVersion", GAMEPAD_DEFAULTS_VERSION );
 }
 
 /*

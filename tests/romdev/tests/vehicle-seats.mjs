@@ -1,11 +1,13 @@
-// Vehicle seats (phase 8): the driver drives and cannot shoot, the gunner
-// shoots and cannot drive, getting out puts the player back on its feet.
+// Vehicle seats (phase 8): the buggy's driver drives and cannot shoot, the
+// gunner shoots the mounted gun and cannot drive, getting out puts the
+// player back on its feet.
 // On oax_vehicle_test (vehicle rule on), on the cart:
 //   1. on foot, firing spends ammo (the control that firing works at all);
 //   2. in the buggy's driver seat (use button), firing spends nothing and
 //      the stick drives the buggy;
-//   3. moved to the gunner seat (server command vehseat), firing spends
-//      ammo (counted as gunner shots) while the stick moves nothing;
+//   3. moved to the gunner seat (server command vehseat), firing works the
+//      buggy's mounted machine gun (counted as gunner shots; the gunner's
+//      own weapon is down, its ammo untouched) while the stick moves nothing;
 //   4. the use button gets the gunner out, standing beside the buggy.
 // The rider's player state carries PMF_OAX_VEHICLE and STAT_OAX_VEHICLE,
 // read back through the g_veh_p0 debug value (vehicle, seat, weapon, ammo).
@@ -71,9 +73,11 @@ export async function run({ out }) {
     await hold(s, fire);
     const g1 = await readValues(s);
     b = p0(g1);
-    rows.push(`gunner: vehicle ${b.veh} seat ${b.seat}, ammo ${a.ammo} -> ${b.ammo}, gunner shots ${g0.g_veh_gunner_shots} -> ${g1.g_veh_gunner_shots}`);
+    rows.push(`gunner: vehicle ${b.veh} seat ${b.seat}, own ammo ${a.ammo} -> ${b.ammo}, gunner shots ${g0.g_veh_gunner_shots} -> ${g1.g_veh_gunner_shots}, ` +
+      `gun shots ${g0.g_veh_gun_shots} -> ${g1.g_veh_gun_shots}`);
     if (!(b.veh >= 0 && b.seat === 1)) failures.push(`vehseat did not seat the player as gunner (vehicle ${b.veh} seat ${b.seat})`);
-    if (!(b.ammo < a.ammo)) failures.push('the gunner could not shoot');
+    if (!(Number(g1.g_veh_gun_shots) > Number(g0.g_veh_gun_shots))) failures.push('the gunner could not fire the mounted gun');
+    if (b.ammo !== a.ammo) failures.push('the gunner fired its own weapon instead of the mounted gun');
     if (!(Number(g1.g_veh_gunner_shots) > Number(g0.g_veh_gunner_shots))) failures.push('no gunner shots counted');
     const before = Number(g1.g_veh_distance);
     await hold(s, throttle);
