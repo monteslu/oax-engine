@@ -108,22 +108,27 @@ CL_GamepadDefaults
 
 After the config files: modern twin-stick controls (Xbox 360 layout) on
 every pad button the player has not bound, and, once per config, modern
-stick tuning. in_gamepadBinds 0 leaves the pad unbound. The keyboard's V
-toggles the view the same way when nothing else is bound to it.
+stick tuning. in_gamepadBinds 0 leaves the pad unbound. On the keyboard,
+E is use and V toggles the view when nothing else is bound to them.
 
   left stick   move                  right stick  look
   A            jump                  B            crouch
-  X            use (vehicles, items) Y            first / third person
+  X            use (vehicles, items) Y            next weapon
   LB / RB      previous / next weapon
   LT           zoom                  RT           fire
-  left click   walk                  right click  centre view
+  left click   walk                  right click  first / third person
   d-pad        up / right next weapon, down / left previous
   Back         scores                Start        menu
-(Q3 weapons have no alternate fire. Y was next weapon before version 2,
-which LB/RB and the d-pad already do.)
+
+In a vehicle the game reads the same buttons its own way (Halo and
+Battlefield's conventions): A switches seats, B is the handbrake, X held
+gets out (a tap gets in), RT fires the mounted gun. Q3 weapons have no
+alternate fire. Version 2 put the view toggle on Y; version 3 moves it to
+the right stick click, as Battlefield has it, and gives Y back to next
+weapon.
 ===============
 */
-#define GAMEPAD_DEFAULTS_VERSION 2
+#define GAMEPAD_DEFAULTS_VERSION 3
 
 void CL_GamepadDefaults( void )
 {
@@ -133,10 +138,10 @@ void CL_GamepadDefaults( void )
 		{ K_PAD0_RIGHTSTICK_UP, "+lookup" }, { K_PAD0_RIGHTSTICK_DOWN, "+lookdown" },
 		{ K_PAD0_RIGHTSTICK_LEFT, "+left" }, { K_PAD0_RIGHTSTICK_RIGHT, "+right" },
 		{ K_PAD0_A, "+moveup" }, { K_PAD0_B, "+movedown" },
-		{ K_PAD0_X, "+button2" }, { K_PAD0_Y, "toggleview" },
+		{ K_PAD0_X, "+button2" }, { K_PAD0_Y, "weapnext" },
 		{ K_PAD0_LEFTSHOULDER, "weapprev" }, { K_PAD0_RIGHTSHOULDER, "weapnext" },
 		{ K_PAD0_LEFTTRIGGER, "+zoom" }, { K_PAD0_RIGHTTRIGGER, "+attack" },
-		{ K_PAD0_LEFTSTICK_CLICK, "+speed" }, { K_PAD0_RIGHTSTICK_CLICK, "centerview" },
+		{ K_PAD0_LEFTSTICK_CLICK, "+speed" }, { K_PAD0_RIGHTSTICK_CLICK, "toggleview" },
 		{ K_PAD0_DPAD_UP, "weapnext" }, { K_PAD0_DPAD_DOWN, "weapprev" },
 		{ K_PAD0_DPAD_LEFT, "weapprev" }, { K_PAD0_DPAD_RIGHT, "weapnext" },
 		{ K_PAD0_BACK, "+scores" },
@@ -159,13 +164,20 @@ void CL_GamepadDefaults( void )
 
 		if ( !b || !b[0] )
 			Key_SetBinding( 'v', "toggleview" );
+		b = Key_GetBinding( 'e' );
+		if ( !b || !b[0] )
+			Key_SetBinding( 'e', "+button2" );
 	}
-	// version 1 put next weapon on Y; Y toggles the view now
-	if ( version->integer < 2 ) {
+	// earlier defaults: the view toggle on Y (version 2), centre view on
+	// the right stick click (before version 3)
+	if ( version->integer < 3 ) {
 		const char *b = Key_GetBinding( K_PAD0_Y );
 
-		if ( b && !Q_stricmp( b, "weapnext" ) )
-			Key_SetBinding( K_PAD0_Y, "toggleview" );
+		if ( b && !Q_stricmp( b, "toggleview" ) )
+			Key_SetBinding( K_PAD0_Y, "weapnext" );
+		b = Key_GetBinding( K_PAD0_RIGHTSTICK_CLICK );
+		if ( b && !Q_stricmp( b, "centerview" ) )
+			Key_SetBinding( K_PAD0_RIGHTSTICK_CLICK, "toggleview" );
 	}
 	// configs written before these defaults hold the old stick values
 	// (digital-feeling movement, 720 degrees a second of look)

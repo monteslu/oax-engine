@@ -1,6 +1,9 @@
 // Mounted vehicle guns and seat views (cg_oax_vehicle.c, g_oax_vehicle.c
 // G_VehGunThink). On oax_vehicle_test (vehicle rule on), native and cart run
 // the same console script:
+//   0. seats: in the buggy's driver seat, jump (A) moves to the gunner
+//      seat, the number keys (weapon 1, weapon 2) pick seats, a tap of use
+//      keeps the player in (getting out takes a hold);
 //   1. the buggy's gunner seat: first person, on the gun (cg_veh_view);
 //   2. control: the gun turned away from the hover craft fires and hits
 //      nothing (so the hits below are the aim's, not the counter's);
@@ -28,7 +31,13 @@ const SETUP = ['set g_oaxVehicles 1', 'cg_oaxVehView 0', 'cg_draw2D 1'];
 
 function shots() {
   return [
-    { cmd: 'vehseat 0 1', settle: 30, values: 'gunner' },
+    { cmd: 'vehseat 0 0', settle: 30, values: 'driver' },
+    { cmd: '+moveup', settle: 10 },
+    { cmd: '-moveup', settle: 20, values: 'swapped' },
+    { cmd: 'weapon 1', settle: 20, values: 'keyed' },
+    { cmd: '+button2', settle: 2 },
+    { cmd: '-button2', settle: 20, values: 'tapped' },
+    { cmd: 'weapon 2', settle: 30, values: 'gunner' },
     { cmd: 'vehaim 0 0 -90', settle: 10 },
     { cmd: '+attack', settle: 20 },
     { cmd: '-attack', settle: 10, values: 'control' },
@@ -40,11 +49,11 @@ function shots() {
     { cmd: 'wait', settle: 400, values: 'cooled' },
     { cmd: 'toggleview', settle: 10, values: 'toggled', name: 'chase' },
     { cmd: 'toggleview', settle: 10, values: 'toggled2' },
-    { cmd: 'cg_oaxVehView 0;+button2', settle: 4 },
-    { cmd: '-button2', settle: 30 },
+    { cmd: 'cg_oaxVehView 0;+button2', settle: 60 },
+    { cmd: '-button2', settle: 30, values: 'out' },
     { cmd: 'vehplace 0 -1600 420 120', settle: 60 },
     { cmd: 'vehseat 0 0', settle: 30, values: 'hover' },
-    { cmd: '+attack', settle: 30 },
+    { cmd: '+attack', settle: 90 },
     { cmd: '-attack', settle: 10, values: 'plasma', name: 'plasma' },
   ];
 }
@@ -61,6 +70,18 @@ const worldTime = (v) => list(v, 'g_veh0_exact').at(-1);
 
 function check(build, at, rows, failures) {
   const f = (msg) => failures.push(`${build}: ${msg}`);
+  const seat = (k) => p0(at[k]).seat;
+  rows.push(`${build}: seats: driver ${seat('driver')}, jump -> ${seat('swapped')}, weapon 1 -> ${seat('keyed')}, ` +
+    `a tap of use -> ${seat('tapped')}, weapon 2 -> ${seat('gunner')}, held use -> ${seat('out')}; ` +
+    `swaps ${at.gunner.g_veh_seat_swaps}, enters ${at.gunner.g_veh_enters}`);
+  if (seat('driver') !== 0) f(`vehseat 0 0 gave seat ${seat('driver')}`);
+  if (seat('swapped') !== 1) f(`jump moved the driver to seat ${seat('swapped')}, not the gunner seat`);
+  if (seat('keyed') !== 0) f(`weapon 1 gave seat ${seat('keyed')}`);
+  if (seat('tapped') !== 0) f('a tap of use got the player out');
+  if (seat('gunner') !== 1) f(`weapon 2 gave seat ${seat('gunner')}`);
+  if (!(p0(at.out).veh < 0)) f('holding use did not get the player out');
+  if (num(at.gunner, 'g_veh_seat_swaps') !== 3) f(`${at.gunner.g_veh_seat_swaps} seat swaps counted (want 3)`);
+  if (num(at.gunner, 'g_veh_enters') !== 1) f(`seat swaps counted as entries (${at.gunner.g_veh_enters})`);
   const g = at.gunner, c = at.control, a = at.aimed, h = at.hot, k = at.cooled;
   const vg = view(g);
   rows.push(`${build}: gunner seat ${p0(g).seat}, first person ${vg.fp}, on the gun ${vg.gun}`);
@@ -112,7 +133,7 @@ export async function run({ out }) {
     setup: SETUP.filter((c) => !c.startsWith('set g_oaxVehicles')), startArgs: ['+set', 'g_oaxVehicles', '1'],
   });
   for (const [b, r] of [['cart', cart], ['native', native]]) {
-    for (const k of ['gunner', 'control', 'aimed', 'hot', 'released', 'cooled', 'toggled', 'toggled2', 'hover', 'plasma']) {
+    for (const k of ['driver', 'swapped', 'keyed', 'tapped', 'out', 'gunner', 'control', 'aimed', 'hot', 'released', 'cooled', 'toggled', 'toggled2', 'hover', 'plasma']) {
       if (!r.valuesAt[k] || !Object.keys(r.valuesAt[k]).length) failures.push(`${b}: no values at ${k}`);
     }
   }

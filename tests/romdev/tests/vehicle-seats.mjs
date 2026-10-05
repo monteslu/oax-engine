@@ -20,7 +20,7 @@ export const name = 'vehicle-seats';
 
 const MAP = 'oax_vehicle_test';
 // pad scripts (tests/romdev/data/padscripts/seats_*.pad): fire, use, throttle
-const PAD_FRAMES = { fire: 46, use: 9, throttle: 66 };
+const PAD_FRAMES = { fire: 46, use: 66, throttle: 66 };
 
 function p0(v) {
   const [veh, seat, weapon, ammo] = String(v.g_veh_p0 || '-1 -1 0 0').split(' ').map(Number);

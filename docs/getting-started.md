@@ -128,8 +128,8 @@ and start a map with bots, for example:
 
 then `addbot Sarge 3 blue` and so on in the console. Team games start you as
 a spectator: `team red` (or ESC and the JOIN menu) puts you in, and on the
-vehicle maps the use-item key (`+button2`: Enter on the keyboard, X on a
-gamepad) enters and leaves a vehicle.
+vehicle maps the use-item key (`+button2`: E or Enter on the keyboard, X on
+a gamepad) gets into a vehicle with a tap and out with a short hold.
 
 ### Controls
 
@@ -141,17 +141,32 @@ an Xbox 360 style layout (SDL maps most pads to it):
 | left stick / right stick | move / look |
 | RT / LT | fire / zoom |
 | A / B | jump / crouch |
-| X | use: enter and leave vehicles, holdable items |
-| Y | first / third person (V on the keyboard) |
-| RB, d-pad up or right | next weapon |
+| X | use: holdable items; tap to get into a vehicle, hold to get out |
+| Y, RB, d-pad up or right | next weapon |
 | LB, d-pad down or left | previous weapon |
 | Back / Start | scores / menu |
-| left stick click / right stick click | walk / centre the view |
+| left stick click / right stick click | walk / first or third person |
 
 In menus the d-pad or left stick moves, A selects and B goes back.
 
-In a vehicle the left stick is throttle and steering, A the handbrake and B
-the brake. Each vehicle has a mounted gun fired with RT: the hover tank's
+In a vehicle the buttons follow Halo and Battlefield:
+
+| Control | Action |
+| --- | --- |
+| left stick | drive: forward throttle, back brakes then reverses, sideways steers |
+| right stick | aim the gun, or look around from a seat without one |
+| RT / LT | fire the mounted gun / zoom |
+| A | switch to the next free seat |
+| B | handbrake (on a hover craft, the brake) |
+| X | hold to get out |
+| right stick click | first or third person |
+
+On the keyboard: WASD drive, the mouse aims, Space switches seats, 1 and 2
+pick the driver or gunner seat, crouch is the handbrake, hold E to get out
+and V switches the view. A line of these hints shows for a few seconds after
+taking a seat (`cg_oaxVehHints 0` hides it).
+
+Each vehicle has a mounted gun fired with RT: the hover tank's
 turret cannon and the hover craft's plasma guns belong to the driver, the
 heavy machine guns on the buggy and the carrier to the gunner (the second
 seat, on the bed or the roof). Whoever has the gun aims it with the right
@@ -161,10 +176,12 @@ overheat: the bar above the vehicle panel is the heat (or, for the cannon,
 the reload). The driver of a vehicle without the gun looks around with the
 right stick and the view swings back behind the vehicle when it is let go.
 
-Y switches between first person and the chase camera. The carrier and the
-hover tank have cockpits: their driver sits inside and starts in first
-person, the drivers of open vehicles start with the chase camera, and
-gunners in first person. On foot Y toggles a third-person view.
+The right stick click (V) switches between first person and the chase
+camera, in any seat, cockpits included. The carrier and the hover tank
+have cockpits: their driver sits inside and starts in first person, the
+drivers of open vehicles start with the chase camera, and gunners in first
+person. On foot it toggles a third-person view. Driving with only one
+player, stop, switch to the gunner seat with A and fire, then switch back.
 
 Stick speed and response are cvars (`j_yaw`, `j_pitch`, `j_lookCurve`; see
 [cvars.md](cvars.md)).
