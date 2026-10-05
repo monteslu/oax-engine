@@ -255,10 +255,34 @@ static void ProfileUE1( const spawnArgs_t *a, uLightParms_t *p ) {
 		break;
 	}
 
-	// LightEffect: only the angular one has a translation; the rest are
-	// spatial patterns of UE1's software renderer
+	// LightEffect: the angular one, the static spot and the cylinder (both
+	// measured in UE1, docs/lights.md); the rest are spatial patterns of
+	// UE1's software renderer with no translation
 	if ( effect == 13 ) {           // LE_NonIncidence
 		ph->lambert = qfalse;
+	} else if ( effect == 8 ) {     // LE_StaticSpot: a soft cone round the facing
+		const char *v = R_ULightArg( a, "ue1_direction" );
+		float cone = KeyFloat( a, "ue1_LightCone", 128 );
+		vec3_t dir = { 1, 0, 0 };
+
+		// measured: the edge has 1 - cos(edge) = 0.00342 * LightCone (27.2
+		// degrees at 32, 38.1 at 64, about 56 at 128); 0 reads as UE1's 128
+		if ( cone <= 0 ) {
+			cone = 128;
+		}
+		if ( v && sscanf( v, "%f %f %f", &dir[0], &dir[1], &dir[2] ) == 3 && VectorNormalize( dir ) > 0 ) {
+			VectorCopy( dir, ph->spotDir );
+			ph->spotScale = 1.0f / MIN( 0.00342f * cone, 2.0f );
+		} else {
+			ph->unsupported++;      // no facing: lit as a plain lamp
+		}
+	} else if ( effect == 17 ) {    // LE_Cylinder: the full peak anywhere in the sphere
+		ph->falloffMode = ULF_TABLE;
+		ph->numPoints = 2;
+		ph->points[0][0] = 0.0f;
+		ph->points[0][1] = 1.0f;
+		ph->points[1][0] = 1.0f;
+		ph->points[1][1] = 1.0f;
 	} else if ( effect != 0 ) {
 		ph->unsupported++;
 	}

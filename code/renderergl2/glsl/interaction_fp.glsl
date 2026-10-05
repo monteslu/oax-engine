@@ -97,6 +97,15 @@ uniform vec4      u_ShadowParams;   // near (0: orthographic), far, depth bias (
 uniform vec4      u_PhysLight;      // 1 / radius, intensity, cap (0: none), knee half width
 uniform vec4      u_PhysLight2;     // falloff mode (0 table, 1 image, 2 inverse square, 3 smoothstep), inverse square clamp (x), lambert (1) or none (0), ceiling
 uniform vec2      u_PhysCurve[16];  // falloff points (x, y), x ascending
+uniform vec4      u_PhysSpot;       // a cone: the direction it faces (xyz), 1 / (1 - cos(edge)) (w; 0: no cone)
+
+// UE1 LE_StaticSpot, measured in UE1 (LightCone 32, 64, 128): with
+// u = (1 - cos(angle off the axis)) / (1 - cos(edge)), the light is
+// smoothstep(1 - u), none past the edge
+float PhysCone(float cosAngle)
+{
+	return smoothstep(0.0, 1.0, 1.0 - (1.0 - cosAngle) * u_PhysSpot.w);
+}
 uniform int       u_PhysCurveCount;
 
 float PhysFalloff(float x)
@@ -237,6 +246,8 @@ void main()
 #if defined(ULIGHT_PHYSICAL)
 	vec4 diffuse = texture(u_DiffuseMap, var_TexCoords) * u_DiffuseColor;
 	float v = PhysCap(u_PhysLight.y * PhysFalloff(physX));
+	if (u_PhysSpot.w > 0.0)
+		v *= PhysCone(dot(-L, u_PhysSpot.xyz));
 	float ang = u_PhysLight2.z > 0.5 ? NL : step(0.0, surfNL);
 	vec3 lightRGB = min(v * ang * u_LightColor, vec3(u_PhysLight2.w));
 	vec3 color = diffuse.rgb * lightRGB;

@@ -80,7 +80,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `cm_noCollisionMeshes` | 0 | cheat | Debug: collision ignores `OAX_COLLISION` meshes. |
 | `cm_noTerrain` | 0 | cheat | Debug: collision ignores oax heightmap terrain. |
 | `cm_surfGap` | 8 | none | Surface-world load validation: a surface with no hull solid within this many units behind it is reported as floating (values <= 0 use 8). |
-| `sv_navmesh` | -1 | none | Bot navigation mesh: -1 = build for maps with terrain or without an `.aas` file, 0 never, 1 always ([navigation.md](navigation.md)). Read at map load. |
+| `sv_navmesh` | -1 | none | Bot navigation mesh: -1 = build for maps with terrain or without an `.aas` file, and for Assault (`g_gametype 14`, whose bots use it even where AAS exists), 0 never, 1 always ([navigation.md](navigation.md)). Read at map load. |
 | `sv_navCellSize` | 8 | none | Navmesh voxel size across, in world units (values <= 1 use 8). |
 | `sv_navLinks` | 1 | none | Build the navmesh with the map's authored links and hazard costs (teleporters, jump pads, ladders, routes); 0 = plain walkable mesh (a test control). |
 

@@ -15,6 +15,14 @@
 // Defenders reach the wall walk by two ramps in the courtyard and can drop
 // down outside; the wall is too high to climb from outside.
 //
+// The battlefield: two defender turrets on the wall walk (misc_oax_turret),
+// artillery on the field in front of the wall until the generator falls
+// (trigger_oax_artillery), a shake and explosions when the generator and
+// the core go (target_oax_shake, target_oax_explosion). Once the generator
+// is down an attackers-only teleporter at the landing sends them straight
+// to the field (trigger_teleport with role / after). Defending bots hold
+// posts by the objectives (info_oax_assault_defend).
+//
 // With the vehicle rule (g_oaxVehicles 1) a buggy and a hover craft wait at
 // the landing. No AAS: bots path on the navmesh. Our own geometry with
 // OpenArena textures.
@@ -110,7 +118,7 @@ function fortress(map) {
     map.brush(ramp(x1 + WALK_W, x1 + WALK_W + 560, y0, y1, 0, WALK_Z, -1, STONE));
   }
   // the gate: slides sideways into the wall when the generator falls
-  map.entity('func_door', { targetname: 'gate', angle: 90, lip: 8, speed: 140, wait: -1, sounds: 1 },
+  map.entity('func_door', { targetname: 'genfall', angle: 90, lip: 8, speed: 140, wait: -1, sounds: 1 },
     [box([x0 + 16, -GATE_W, 4], [x0 + 48, GATE_W, GATE_H], DOOR)]);
 
   // the keep: four walls with a door in the west one, a roof
@@ -142,7 +150,7 @@ function objectives(map) {
   // 1. the gate generator: a machine against the wall, glowing on top
   const [gx, gy] = GENERATOR;
   map.entity('func_oax_objective', {
-    type: 'destroy', id: 'generator', name: 'the gate generator', order: 1, health: 900, target: 'gate',
+    type: 'destroy', id: 'generator', name: 'the gate generator', order: 1, health: 900, target: 'genfall',
     message: 'The gate generator is down: the gate is open',
   }, [
     box([gx - 56, gy - 56, -16], [gx + 56, gy + 56, 96], { sides: 'base_support/cable', top: 'base_light/proto_lightblue', bottom: 'common/caulk' }),
@@ -160,12 +168,40 @@ function objectives(map) {
   // 3. the reactor core
   const [rx, ry] = CORE;
   map.entity('func_oax_objective', {
-    type: 'destroy', id: 'core', name: 'the reactor core', order: 3, final: 1, health: 1500,
+    type: 'destroy', id: 'core', name: 'the reactor core', order: 3, final: 1, health: 1500, target: 'coreboom',
     message: 'The reactor core is destroyed',
   }, [
     box([rx - 56, ry - 56, 4], [rx + 56, ry + 56, 176], { sides: 'base_light/proto_lightred', top: METAL, bottom: 'common/caulk' }),
   ]);
   map.entity('light', { origin: [rx - 120, ry, 200], light: 400, _color: [1, 0.35, 0.3] });
+  // what their fall looks like
+  map.entity('target_oax_shake', { targetname: 'genfall', origin: [gx, gy, 64], intensity: 2.5, duration: 1.2, radius: 2500 });
+  map.entity('target_oax_explosion', { targetname: 'genfall', origin: [gx, gy, 48], count: 3, delay: 0.3, spread: 48 });
+  map.entity('target_oax_shake', { targetname: 'coreboom', origin: [rx, ry, 90], intensity: 5, duration: 2.5 });
+  map.entity('target_oax_explosion', { targetname: 'coreboom', origin: [rx, ry, 90], count: 6, delay: 0.25, spread: 80 });
+}
+
+function battlefield(map, ground) {
+  // defender turrets on the wall walk, covering the approach
+  for (const y of [-760, 760]) {
+    map.entity('misc_oax_turret', { origin: [WALL_X + 32, y, WALL_H], angle: 180, role: 'defend', arc: 70, range: 1100, health: 250 });
+  }
+  // artillery on the field before the wall, until the generator falls
+  map.entity('trigger_oax_artillery', { role: 'attack', until: 'generator', interval: 4, dmg: 70, radius: 180, spread: 200 },
+    [box([-600, -1300, -400], [WALL_X - 40, 1300, 700], 'common/trigger')]);
+  // an attackers-only teleporter at the landing, once the generator is down
+  const [tx, ty] = [-3800, 900];
+  map.entity('trigger_teleport', { target: 'tp_field', role: 'attack', after: 'generator' },
+    [box([tx - 48, ty - 48, ground(tx, ty) - 8], [tx + 48, ty + 48, ground(tx, ty) + 64], 'common/trigger')]);
+  map.brush(box([tx - 56, ty - 56, ground(tx, ty) - 24], [tx + 56, ty + 56, ground(tx, ty) + 2], { top: 'base_light/proto_lightblue', sides: METAL, bottom: 'common/caulk' }));
+  map.entity('misc_teleporter_dest', { targetname: 'tp_field', origin: [400, 0, ground(400, 0) + 40], angle: 0 });
+  // defending bots' posts: the generator's front, the walk, the controls, the core
+  const post = (x, y, z, objective, priority) => map.entity('info_oax_assault_defend', { origin: [x, y, z], objective, priority });
+  for (const [x, y] of [[1500, 300], [1500, 750], [1400, -200], [1650, -600]]) post(x, y, ground(x, y) + 32, 'generator', 0);
+  post(WALL_X + 112, -400, WALK_Z + 32, 'generator', 1);
+  post(WALL_X + 112, 400, WALK_Z + 32, 'generator', 1);
+  for (const [x, y] of [[2350, -350], [2650, -760], [2700, -300], [2300, -800]]) post(x, y, 60, 'controls', 2);
+  for (const [x, y] of [[3350, -250], [3350, 250], [3600, -350], [3600, 350]]) post(x, y, 40, 'core', 3);
 }
 
 function spawns(map, ground) {
@@ -174,7 +210,7 @@ function spawns(map, ground) {
   for (const [x, y] of [[-3700, -260], [-3700, 0], [-3700, 260], [-3550, -130], [-3550, 130], [-3850, 0]]) {
     spot('attack', x, y, ground(x, y) + 32, 0, { until: 'generator' });
   }
-  for (const [x, y] of [[800, -420], [800, 0], [800, 420], [650, -210], [650, 210]]) {
+  for (const [x, y] of [[300, -420], [300, 0], [300, 420], [150, -210], [150, 210]]) {
     spot('attack', x, y, ground(x, y) + 32, 0, { after: 'generator', until: 'controls' });
   }
   for (const [x, y] of [[2000, -300], [2000, 300], [1500, -200], [1500, 200], [1500, 0]]) {
@@ -244,6 +280,7 @@ export function build() {
   objectives(map);
   const ground = (x, y) => Math.ceil(t.groundZ(x, y));
   spawns(map, ground);
+  battlefield(map, ground);
   map.entity('info_oax_assault', {
     time: 300,
     message: 'Destroy the gate generator, take the keep controls, destroy the reactor core',

@@ -31,7 +31,9 @@ when the game module commits its authored links (G_OAX_NAV_COMMIT), or on
 the first query if it never does. Tiles are built out from the map's spawn
 points (nav_oax.cpp), so floors no one can reach cost nothing:
 
-  sv_navmesh -1 (default)  build for maps with OAX_TERRAIN or without an AAS file
+  sv_navmesh -1 (default)  build for maps with OAX_TERRAIN or without an AAS
+                           file, and for Assault (g_gametype 14), which the oax
+                           game's navmesh bots play even where AAS exists
               0            never
               1            always
 
@@ -96,7 +98,8 @@ void SV_OAXNavMapLoaded( const char *mapname ) {
 
 	want = sv_navmesh->integer;
 	if ( want < 0 ) {
-		want = CM_OAXNumTerrains() > 0 || FS_ReadFile( va( "maps/%s.aas", mapname ), NULL ) <= 0;
+		want = CM_OAXNumTerrains() > 0 || FS_ReadFile( va( "maps/%s.aas", mapname ), NULL ) <= 0 ||
+			Cvar_VariableIntegerValue( "g_gametype" ) == 14;
 	}
 	if ( !want ) {
 		return;
@@ -430,7 +433,7 @@ static qboolean SV_OAXNavCalls( intptr_t *args, intptr_t *ret ) {
 
 void SV_OAXNavInit( void ) {
 	sv_navmesh = Cvar_Get( "sv_navmesh", "-1", 0 );
-	Cvar_SetDescription( sv_navmesh, "Navigation mesh for bots: -1 for maps with terrain or without AAS, 0 never, 1 always." );
+	Cvar_SetDescription( sv_navmesh, "Navigation mesh for bots: -1 for maps with terrain or without AAS and for Assault (g_gametype 14), 0 never, 1 always." );
 	sv_navCellSize = Cvar_Get( "sv_navCellSize", "8", 0 );
 	Cvar_SetDescription( sv_navCellSize, "Navigation mesh voxel size across (world units)." );
 	sv_navLinks = Cvar_Get( "sv_navLinks", "1", 0 );

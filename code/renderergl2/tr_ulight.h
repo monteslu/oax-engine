@@ -104,8 +104,9 @@ void        R_StageExprColor( shader_t *sh, int stageNum, const float *parms, fl
 //
 // A light with any physical key (`oax_profile`, `oax_falloff`, `ue1_*`, ...)
 // is a spherical light evaluated in the interaction shader:
-//   v     = softcap( intensity * falloff( d / radius ) )
+//   v     = softcap( intensity * falloff( d / radius ) ) * cone
 //   light = min( v * angular * color, ceiling )      (per channel)
+// (cone: 1, or a spot's measured profile over the angle off its direction)
 // with no projection or falloff image. Profiles translate a source engine's
 // keys into these terms (tr_ulight.c ULightPhysProfile*).
 
@@ -148,6 +149,9 @@ typedef struct {
 	float       effectPhase;        // table offset (cycles)
 	float       effectBase, effectAmp;  // multiplier = base + amp * table(time * rate + phase)
 	qboolean    startOff;           // a profile switched it off (UE1 LT_None, brightness 0)
+	vec3_t      spotDir;            // a cone (UE1 LE_StaticSpot): the direction it faces
+	float       spotScale;          // 1 / (1 - cos(the cone's edge)); 0: no cone
+	                                // (the measured profile: interaction_fp PhysCone)
 	int         unsupported;        // source features with no translation (UE1 spatial effects)
 } uLightPhys_t;
 

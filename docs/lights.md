@@ -110,10 +110,18 @@ offset; `LT_Blink` dark for the second half of each `35 / (LightPeriod + 1)`
 cycle; `LT_Flicker` and `LT_Strobe` from fixed random tables (35 / 64
 table cycles a second). These constants are UE1's light manager recalled,
 NOT measured: treat them as provisional until a UE1 bake of each type
-confirms them. `LT_BackdropLight`, `LT_TexturePalette*` and the spatial
-`LightEffect`s (`LE_TorchWaver`, `LE_Spotlight`, `LE_Cylinder`, ...) have no
-translation: the light is steady, and the count of such features shows as
-`unsupported` in its `r_ulight_phys_lights` record (below).
+confirms them. `LT_BackdropLight`, `LT_TexturePalette*` and most spatial
+`LightEffect`s (`LE_TorchWaver`, `LE_Spotlight`, ...) have no translation:
+the light is steady, and the count of such features shows as `unsupported`
+in its `r_ulight_phys_lights` record (below).
+
+Two spatial effects are translated, measured in UE1 (linear-display shots of
+UE1 bakes, an external converter's calibration tool, 2026-10-05):
+
+| effect | translation |
+| --- | --- |
+| `LE_StaticSpot` | a soft cone round the facing direction, on top of the plain falloff: with u = (1 - cos(angle off the axis)) / (1 - cos(edge)), the light is multiplied by `smoothstep(1 - u)`, none past the edge. The edge has 1 - cos(edge) = 0.00342 * `LightCone` (27.2 degrees at `LightCone` 32, 38.1 at 64, about 56 at 128, the shape the same at each). Keys: `ue1_LightCone` (UE1's default 128; 0 reads as 128) and `ue1_direction` "x y z", the facing in map space (the actor's Rotation X axis); without a direction the lamp is lit plain and counted unsupported. |
+| `LE_Cylinder` | the lamp's full peak anywhere inside its sphere (radius `25 * (LightRadius + 1)`, the full radius), times Lambert; nothing outside (7.2x and 4.9x a plain lamp at two measured points, against 7.4x and 4.8x predicted). |
 
 ### Profile `q3` (q3map2)
 

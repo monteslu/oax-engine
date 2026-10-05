@@ -72,7 +72,7 @@ function check(build, at, rows, failures) {
   const g = at.generator, r = p0(at.respawn);
   rows.push(`${build}: generator done: states ${[0, 1, 2].map((i) => obj(g, i).state).join(' ')}; respawned at ${r.x} ${r.y} ${r.z}`);
   if (!(obj(g, 0).state === 2 && obj(g, 1).state === 1 && obj(g, 2).state === 0)) f('the controls did not open after the generator');
-  if (!(r.x > 550 && r.x < 900 && r.health > 0)) f(`the attacker respawned at x ${r.x}, not at the field spawns (650..800)`);
+  if (!(r.x > 50 && r.x < 400 && r.health > 0)) f(`the attacker respawned at x ${r.x}, not at the field spawns (150..300)`);
 
   const u = obj(at.using, 1), rel = obj(at.released, 1);
   rows.push(`${build}: controls: progress ${u.progress}% while holding use, ${rel.progress}% after letting go`);
