@@ -38,8 +38,11 @@ int demo_protocols[] =
 #define MAX_NUM_ARGVS	50
 
 #define MIN_DEDICATED_COMHUNKMEGS 1
-#define DEF_COMHUNKMEGS 	128
-#define MIN_COMHUNKMEGS		DEF_COMHUNKMEGS
+// oax: large imported maps (8k+ surfaces, hundreds of lights) with a
+// full team of players overflow OpenArena's 128 MB; the floor lifts
+// configs that saved the old default (the cart sets its own, wc_sys.c)
+#define DEF_COMHUNKMEGS 	512
+#define MIN_COMHUNKMEGS		256
 #define DEF_COMZONEMEGS		48
 #define DEF_COMHUNKMEGS_S	XSTRING(DEF_COMHUNKMEGS)
 #define DEF_COMZONEMEGS_S	XSTRING(DEF_COMZONEMEGS)
@@ -1575,7 +1578,7 @@ void Com_InitHunkMemory( void ) {
 	cv = Cvar_Get( "com_hunkMegs", DEF_COMHUNKMEGS_S, CVAR_LATCH | CVAR_ARCHIVE );
 	Cvar_SetDescription(cv, "The size of the hunk memory segment");
 
-	// if we are not dedicated min allocation is 56, otherwise min is 1
+	// if we are not dedicated min allocation is MIN_COMHUNKMEGS, otherwise min is 1
 	if (com_dedicated && com_dedicated->integer) {
 		nMinAlloc = MIN_DEDICATED_COMHUNKMEGS;
 		pMsg = "Minimum com_hunkMegs for a dedicated server is %i, allocating %i megs.\n";

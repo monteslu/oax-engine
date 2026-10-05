@@ -158,6 +158,7 @@ const fin = report.rounds.at(-1);
 if (fin?.winner) console.log(`winner: ${fin.winner === 1 ? 'red' : 'blue'}`);
 if (!done) console.log(`stopped after ${idx} samples (${maxMinutes} min cap or the client exited)`);
 if (last) console.log(`last sample: round ${last.g_as_round} phase ${last.g_as_phase} left ${last.g_as_left} ms, navmesh bots ${last.g_navbots ?? 0}, level time ${last.g_level_rel ?? '?'}`);
+if (last?.g_navbot_stuck_at) console.log(`last stuck spots (x,y,z,goal kind): ${last.g_navbot_stuck_at}`);
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(report, null, 2));
 let ok = true;
 if (expect === 'complete') {
@@ -167,5 +168,18 @@ if (expect === 'complete') {
 }
 if (!idx) console.log(readLog().split('\n').slice(-20).join('\n'));
 fs.closeSync(logFd);
-fs.rmSync(logFile, { force: true });
+// keep the console when something looks wrong, for the post-mortem
+const crashed = /Server crashed|ERROR: /.test(readLog());
+if (crashed) {
+  ok = false;
+  console.log(`FAIL: the server crashed: ${(readLog().match(/(ERROR: .*|Server crashed.*)/) || [''])[0]}`);
+}
+const short = crashed || Object.values(roundsSeen).some((R) => (R.navbots ?? 0) < bots * 2);
+if (short || !idx) {
+  const keep = path.join(game, `assault-botmatch-${process.pid}.log`);
+  fs.renameSync(logFile, keep);
+  console.log(`console log kept: ${keep}`);
+} else {
+  fs.rmSync(logFile, { force: true });
+}
 process.exit(ok ? 0 : 1);
