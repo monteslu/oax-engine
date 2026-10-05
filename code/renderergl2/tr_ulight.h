@@ -240,6 +240,7 @@ typedef struct {
 	int         numLights;
 	uViewLight_t lights[MAX_VIEW_ULIGHTS];
 	int         firstAmbient, numAmbient;   // opaque surfaces for the ambient pass
+	int         firstMetal, numMetal;       // oaxMetal surfaces for the reflection pass
 	vec3_t      ambient;
 	int         lightingModel;
 	int         shadowMode;
@@ -277,6 +278,7 @@ extern uLightWorld_t ulw;
 #define ULB_AMBIENT     1
 #define ULB_INTERACTION 2
 #define ULB_DEPTH       3
+#define ULB_REFLECT     4     // oaxMetal: the probe reflection, added after the lights
 
 typedef struct {
 	int             mode;

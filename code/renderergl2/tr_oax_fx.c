@@ -45,6 +45,7 @@ cvar_t	*r_oaxDecals;
 cvar_t	*r_oaxTrails;
 cvar_t	*r_oaxWater;
 cvar_t	*r_oaxBloom;
+cvar_t	*r_oaxReflect;
 
 oaxFxStats_t oaxFxStats;
 
@@ -79,6 +80,8 @@ void R_OAXFxRegisterCvars( void ) {
 	ri.Cvar_SetDescription( r_oaxTrails, "Draw ribbon trails the cgame adds." );
 	r_oaxWater = ri.Cvar_Get( "r_oaxWater", "1", CVAR_ARCHIVE );
 	ri.Cvar_SetDescription( r_oaxWater, "oaxWater shaders: 1 reflection and refraction, 2 refraction only, 0 the shader's own stages." );
+	r_oaxReflect = ri.Cvar_Get( "r_oaxReflect", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	ri.Cvar_SetDescription( r_oaxReflect, "oaxMetal materials reflect the map's misc_cubemap probes, captured when the map loads (0: no probes, the metal draws without its reflection)." );
 	r_oaxBloom = ri.Cvar_Get( "r_oaxBloom", "0", CVAR_ARCHIVE );
 	ri.Cvar_SetDescription( r_oaxBloom, "Bloom in the HDR post-process chain (r_oaxBloomThreshold, r_oaxBloomKnee, r_oaxBloomIntensity, r_oaxBloomLevels)." );
 }
@@ -574,6 +577,8 @@ void R_OAXFxPublishStats( void ) {
 		ri.DebugSet( "r_trail_points", va( "%d", oaxFxStats.trailPointsDrawn ) );
 		ri.DebugSet( "r_water_reflections", va( "%d", oaxFxStats.waterReflections ) );
 		ri.DebugSet( "r_water_surfs", va( "%d", oaxFxStats.waterSurfsDrawn ) );
+		ri.DebugSet( "r_metal_probes", va( "%d", r_cubeMapping->integer ? 0 : tr.numCubemaps ) );
+		ri.DebugSet( "r_metal_draws", va( "%d", oaxFxStats.metalDraws ) );
 		ri.DebugSet( "r_bloom_passes", va( "%d", oaxFxStats.bloomPasses ) );
 		ri.DebugSet( "r_scene_copies", va( "%d", oaxFxStats.sceneCopies ) );
 	}

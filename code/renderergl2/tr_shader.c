@@ -2152,6 +2152,29 @@ static qboolean ParseShader( char **text )
 				shader.oaxHasTint = qtrue;
 			continue;
 		}
+		// oax: oaxMetal r g b roughness: a metal that reflects its
+		// surroundings (the nearest misc_cubemap probe; docs/materials.md)
+		else if ( !Q_stricmp( token, "oaxMetal" ) )
+		{
+			int i;
+
+			for ( i = 0; i < 4; i++ )
+			{
+				token = COM_ParseExt( text, qfalse );
+				if ( !token[0] )
+				{
+					ri.Printf( PRINT_WARNING, "WARNING: oaxMetal needs r g b roughness in shader '%s'\n", shader.name );
+					break;
+				}
+				shader.oaxMetalParms[i] = atof( token );
+			}
+			if ( i == 4 )
+			{
+				shader.oaxMetalParms[3] = Com_Clamp( 0.0f, 1.0f, shader.oaxMetalParms[3] );
+				shader.oaxMetal = qtrue;
+			}
+			continue;
+		}
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name );

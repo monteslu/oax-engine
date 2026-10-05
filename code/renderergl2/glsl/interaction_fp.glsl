@@ -36,7 +36,8 @@ more details.
 // square (m / max(x, m))^2, or 1 - smoothstep(x) (UE1); softcap: a quadratic
 // knee of half width k around the cap c; angular: N.L, or 1 on the lit side.
 //
-// Defines: ULIGHT_DEPTH (shadow map), ULIGHT_AMBIENT (diffuse * ambient;
+// Defines: ULIGHT_DEPTH (shadow map), ULIGHT_REFLECT (oaxMetal's probe
+// reflection), ULIGHT_AMBIENT (diffuse * ambient;
 // with ULIGHT_ZONEAMBIENT the per-vertex zone ambient times u_AmbientLight),
 // USE_SHADOW_CUBE (point lights), USE_SHADOW_2D (projected and parallel
 // lights), SWIZZLE_NORMALMAP.
@@ -58,7 +59,79 @@ varying vec3      var_Position;
 varying vec3      var_Normal;
 varying vec4      var_Tangent;
 
-#if defined(ULIGHT_AMBIENT)
+#if defined(ULIGHT_REFLECT)
+
+// oaxMetal (docs/materials.md): the metal's reflection of the nearest probe,
+// added over its lit colour. The probe is a cubemap rendered at map load
+// (R_RenderCubemapSide), in the render target's units, so it adds as is;
+// rougher metal reads a blurrier mip. The face layout and the parallax term
+// are the stock renderer's (lightall_fp): it samples reflect(E, N).
+uniform samplerCube u_CubeMap;
+uniform vec4      u_CubeMapInfo;    // (probe origin - eye) / radius, 1 / radius
+uniform vec4      u_MetalParms;     // reflectance at normal incidence (rgb), roughness
+uniform float     u_ReflectLod;     // the probe's blurriest mip to use
+uniform vec4      u_GridLightDir;   // a lightmapped map's model: toward its grid light (xyz), on (w)
+uniform vec3      u_GridLight;      // that light's colour
+uniform vec3      u_ViewOrigin;
+uniform sampler2D u_NormalMap;
+uniform vec4      u_NormalScale;
+
+void main()
+{
+	vec3 surfNormal = normalize(gl_FrontFacing ? -var_Normal : var_Normal);
+	vec3 N = surfNormal;
+	// a model without texture coordinates has no tangents: its normal alone
+	// (normalizing a zero tangent would make every term NaN)
+	vec3 t = var_Tangent.xyz - surfNormal * dot(surfNormal, var_Tangent.xyz);
+	if (dot(t, t) > 1e-8)
+	{
+		vec3 tangent = normalize(t);
+		vec3 bitangent = cross(surfNormal, tangent) * (var_Tangent.w < 0.0 ? -1.0 : 1.0);
+		vec3 Nt;
+#if defined(SWIZZLE_NORMALMAP)
+		Nt.xy = texture(u_NormalMap, var_TexCoords).ag - vec2(0.5);
+#else
+		Nt.xy = texture(u_NormalMap, var_TexCoords).rg - vec2(0.5);
+#endif
+		Nt.xy *= u_NormalScale.xy;
+		Nt.z = sqrt(clamp((0.25 - Nt.x * Nt.x) - Nt.y * Nt.y, 0.0, 1.0));
+		N = normalize(mat3(tangent, bitangent, surfNormal) * Nt);
+	}
+
+	vec3 viewDir = u_ViewOrigin - var_Position;
+	vec3 E = normalize(viewDir);
+	float NE = clamp(dot(N, E), 0.0, 1.0);
+	float rough = u_MetalParms.w;
+
+	// Schlick's Fresnel, held down at grazing angles as roughness grows
+	vec3 F0 = u_MetalParms.rgb * texture(u_DiffuseMap, var_TexCoords).rgb;
+	float fc = pow(1.0 - NE, 5.0);
+	vec3 F = F0 + (max(vec3(1.0 - rough), F0) - F0) * fc;
+
+	vec3 R = reflect(E, N) + u_CubeMapInfo.xyz + u_CubeMapInfo.w * viewDir;
+	vec3 env = textureLod(u_CubeMap, R, u_ReflectLod * rough).rgb;
+	vec3 color = env * F;
+
+	// a model on a lightmapped map has no light passes: the highlight of its
+	// light grid's directed light (GGX, the visibility term taken as 1/4),
+	// so the metal still shines where the light catches it
+	if (u_GridLightDir.w > 0.5)
+	{
+		vec3 L = normalize(u_GridLightDir.xyz);
+		vec3 H = normalize(L + E);
+		float NL = max(dot(N, L), 0.0);
+		float NH = max(dot(N, H), 0.0);
+		float a = max(rough * rough, 0.003);
+		float a2 = a * a;
+		float d = NH * NH * (a2 - 1.0) + 1.0;
+		float D = a2 / (3.14159265 * d * d);
+		vec3 FL = F0 + (1.0 - F0) * pow(1.0 - max(dot(E, H), 0.0), 5.0);
+		color += FL * min(D * 0.25, 32.0) * NL * u_GridLight;
+	}
+	gl_FragColor = vec4(color, 1.0);
+}
+
+#elif defined(ULIGHT_AMBIENT)
 
 uniform vec3      u_AmbientLight;
 #if defined(ULIGHT_ZONEAMBIENT)

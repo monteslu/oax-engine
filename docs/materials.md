@@ -86,6 +86,46 @@ stage: a tinted modulate would move its neutral value.
 	}
 ```
 
+## `oaxMetal r g b roughness` (shader level)
+
+A metal that reflects its surroundings. The map places reflection probes
+(`misc_cubemap` entities, an `origin` and optionally a `radius`, default 1000);
+when the map loads, each probe renders the lit world around it into a cube
+map (`r_cubemapSize`, 128 by default). A metal surface reflects the probe
+nearest to it (an entity's origin, a world surface's centre), added over its
+lit colour by unified lighting:
+
+    reflection = probe(R, mip = roughness * blurriest) * F
+    F          = F0 + (max(1 - roughness, F0) - F0) * (1 - N.V)^5   (Schlick)
+    F0         = (r g b) * the interaction stage's diffuse texture
+
+`r g b` is the metal's reflectance looking straight on (gold about
+`1 0.78 0.34`, silver `0.95 0.93 0.88`, copper `0.95 0.64 0.54`), so a
+texture can vary it across the surface. `roughness` (0 to 1) picks a
+blurrier mip of the probe: 0 a mirror, around 0.3 polished, 0.6 brushed.
+The interaction stage still draws the lit colour (the ambient pass and the
+lights, specular included), so give a metal a dark diffuse: a metal's look
+is mostly its reflection. A normal map in the stage bends the reflection
+too.
+
+The probes see the world as it was lit when the map loaded, without
+entities, and the reflection uses the stock renderer's parallax correction
+(a box of the probe's `radius`). With no probe in the map, or with
+`r_oaxReflect 0`, the metal draws without its reflection. The reflection is
+a unified-lighting pass (both lighting models); the stock renderer's own
+cube mapping (`r_cubeMapping`, off by default) is separate and unchanged.
+
+```
+models/oax/cow/gold_white
+{
+	oaxMetal 1 0.78 0.34 0.25
+	{
+		map $whiteimage
+		rgbGen const ( 0.12 0.09 0.03 )
+	}
+}
+```
+
 ## `oaxWater` (shader level)
 
 Draws the shader's surfaces as water: refraction of the scene behind,

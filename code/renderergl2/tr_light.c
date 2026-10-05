@@ -595,7 +595,9 @@ int R_CubemapForPoint( vec3_t point )
 {
 	int cubemapIndex = -1;
 
-	if (r_cubeMapping->integer && tr.numCubemaps)
+	// oax: the oaxMetal probes too (stock shading still samples a cubemap
+	// only with r_cubeMapping)
+	if ((r_cubeMapping->integer || r_oaxReflect->integer) && tr.numCubemaps)
 	{
 		int i;
 		vec_t shortest = (float)WORLD_SIZE * (float)WORLD_SIZE;

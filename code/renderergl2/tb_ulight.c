@@ -56,7 +56,8 @@ uLightBackend_t ulb;
 #define UPROG_INTERACTION 2
 #define UPROG_PHYSICAL    3     // step 7.5 B: physical lights (interaction_fp ULIGHT_PHYSICAL)
 #define UPROG_AMBIENTZONE 4     // step 7.5 B: ambient from the vertex color (zone ambient)
-#define UPROG_MODES       5
+#define UPROG_REFLECT     5     // oaxMetal: the probe reflection (interaction_fp ULIGHT_REFLECT)
+#define UPROG_MODES       6
 
 #define UANIM_NONE   0
 #define UANIM_VERTEX 1
@@ -75,6 +76,7 @@ typedef struct {
 	GLint           texNormal, texSpecular, texProj, texFalloff, texShadowCube, texShadow2D;
 	GLint           physLight, physLight2, physCurveCount, physSpot;
 	GLint           physCurve[ULIGHT_MAX_FALLOFF_POINTS];
+	GLint           texCube, metalParms, reflectLod, gridLightDir, gridLight;
 } uProgram_t;
 
 static uProgram_t uprogs[UPROG_MODES][3][3];
@@ -132,6 +134,8 @@ static void InitProgram( int mode, int anim, int shadow ) {
 			attribs |= ATTR_COLOR;
 		} else if ( mode == UPROG_PHYSICAL ) {
 			Q_strcat( extra, sizeof( extra ), "#define ULIGHT_PHYSICAL\n" );
+		} else if ( mode == UPROG_REFLECT ) {
+			Q_strcat( extra, sizeof( extra ), "#define ULIGHT_REFLECT\n" );
 		}
 	}
 	if ( anim == UANIM_VERTEX ) {
@@ -185,6 +189,11 @@ static void InitProgram( int mode, int anim, int shadow ) {
 		}
 	}
 	p->physCurveCount = qglGetUniformLocation( prog, "u_PhysCurveCount" );
+	p->texCube = qglGetUniformLocation( prog, "u_CubeMap" );
+	p->metalParms = qglGetUniformLocation( prog, "u_MetalParms" );
+	p->reflectLod = qglGetUniformLocation( prog, "u_ReflectLod" );
+	p->gridLightDir = qglGetUniformLocation( prog, "u_GridLightDir" );
+	p->gridLight = qglGetUniformLocation( prog, "u_GridLight" );
 
 	GLSL_SetUniformInt( &p->sp, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP );
 	if ( p->texNormal >= 0 ) {
@@ -204,6 +213,9 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	}
 	if ( p->texShadow2D >= 0 ) {
 		qglProgramUniform1iEXT( prog, p->texShadow2D, UTMU_SHADOW2D );
+	}
+	if ( p->texCube >= 0 ) {
+		qglProgramUniform1iEXT( prog, p->texCube, TB_CUBEMAP );
 	}
 	p->valid = qtrue;
 }
@@ -726,6 +738,81 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 		return qtrue;
 	}
 
+	if ( ulb.mode == ULB_REFLECT ) {
+		// oaxMetal: the nearest probe's reflection, added (docs/materials.md)
+		cubemap_t *cm;
+		vec4_t v;
+		int mips, size;
+
+		if ( !input->shader->oaxMetal || !input->cubemapIndex || input->cubemapIndex > tr.numCubemaps ) {
+			return qtrue;
+		}
+		cm = &tr.cubemaps[input->cubemapIndex - 1];
+		if ( !cm->image || !( p = PickProgram( UPROG_REFLECT, USHADOW_NONE ) ) ) {
+			return qtrue;
+		}
+		GLSL_BindProgram( &p->sp );
+		SetCommonUniforms( p, input );
+		{
+			vec4_t texMatrix[8];
+
+			ComputeTexMods( pStage, TB_DIFFUSEMAP, texMatrix );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX0, texMatrix[0] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX1, texMatrix[1] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX2, texMatrix[2] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX3, texMatrix[3] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX4, texMatrix[4] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX5, texMatrix[5] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX6, texMatrix[6] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX7, texMatrix[7] );
+		}
+		GLSL_SetUniformVec3( &p->sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.or.origin );
+		GLSL_SetUniformVec4( &p->sp, UNIFORM_NORMALSCALE, pStage->bundle[TB_NORMALMAP].image[0] ? pStage->normalScale : colorWhite );
+		// the stock renderer's parallax term (tr_shade.c)
+		VectorSubtract( cm->origin, backEnd.viewParms.or.origin, v );
+		v[3] = 1.0f;
+		VectorScale4( v, 1.0f / cm->parallaxRadius, v );
+		GLSL_SetUniformVec4( &p->sp, UNIFORM_CUBEMAPINFO, v );
+		if ( p->metalParms >= 0 ) {
+			const float *m = input->shader->oaxMetalParms;
+
+			qglProgramUniform4fEXT( p->sp.program, p->metalParms, m[0], m[1], m[2], m[3] );
+		}
+		// the blurriest mip roughness 1 reads: two above the 1x1 one, as the
+		// stock renderer's ROUGHNESS_MIPS
+		for ( mips = 0, size = cm->image->width; size; size >>= 1 ) {
+			mips++;
+		}
+		if ( p->reflectLod >= 0 ) {
+			qglProgramUniform1fEXT( p->sp.program, p->reflectLod, (float)MAX( 1, mips - 2 ) );
+		}
+		// on a lightmapped map a model's highlight comes from its light grid
+		// light (in the frame's units: light 1 is identityLight)
+		if ( p->gridLightDir >= 0 ) {
+			trRefEntity_t *e = backEnd.currentEntity;
+			qboolean grid = ulb.view->lightingModel == ULIGHT_LIGHTMAP && e && e != &tr.worldEntity;
+
+			qglProgramUniform4fEXT( p->sp.program, p->gridLightDir, grid ? e->lightDir[0] : 0, grid ? e->lightDir[1] : 0, grid ? e->lightDir[2] : 1, grid ? 1.0f : 0.0f );
+			if ( grid && p->gridLight >= 0 ) {
+				float s = tr.identityLight / 255.0f;
+
+				qglProgramUniform3fEXT( p->sp.program, p->gridLight, e->directedLight[0] * s, e->directedLight[1] * s, e->directedLight[2] * s );
+			}
+		}
+		R_BindAnimatedImageToTMU( &pStage->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP );
+		if ( pStage->bundle[TB_NORMALMAP].image[0] ) {
+			R_BindAnimatedImageToTMU( &pStage->bundle[TB_NORMALMAP], TB_NORMALMAP );
+		} else {
+			GL_BindToTMU( ulightImages_flat, TB_NORMALMAP );
+		}
+		GL_BindToTMU( cm->image, TB_CUBEMAP );
+		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+		R_DrawElements( input->numIndexes, input->firstIndex );
+		ulw.statDraws++;
+		oaxFxStats.metalDraws++;
+		return qtrue;
+	}
+
 	if ( ulb.mode == ULB_AMBIENT ) {
 		// step 7.5 B: zone ambient: world vertices carry it, an entity takes
 		// the zone at its origin
@@ -944,6 +1031,14 @@ void RB_DrawULights( void ) {
 	ulb.vl = NULL;
 	FBO_Bind( viewFbo );
 	RestoreView();
+
+	// oaxMetal: the probe reflections (a probe's capture view draws none:
+	// it is VPF_NOCUBEMAPS)
+	if ( view->numMetal && !( backEnd.viewParms.flags & VPF_NOCUBEMAPS ) ) {
+		ulb.mode = ULB_REFLECT;
+		RB_RenderDrawSurfList( R_ULightSurfList( view->firstMetal ), view->numMetal );
+		ulb.mode = ULB_NONE;
+	}
 }
 
 /*

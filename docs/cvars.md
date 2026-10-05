@@ -30,6 +30,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_oaxDecals` | 1 | archive | Projected decals from the cgame; 0 = off (the cgame then makes stock marks). |
 | `r_oaxTrails` | 1 | archive | Draw ribbon trails the cgame adds. |
 | `r_oaxWater` | 1 | archive | `oaxWater` shaders: 1 reflection and refraction, 2 refraction only, 0 the shader's own stages. |
+| `r_oaxReflect` | 1 | archive, latch | `oaxMetal` materials reflect the map's `misc_cubemap` probes, captured when the map loads; 0: no probes (the metal draws without its reflection). |
 | `r_oaxEnv` | 1 | archive | The outdoor environment a map's worldspawn asks for (wind, foliage alpha to coverage, atmosphere, cloud shadows, colour grading; [materials.md](materials.md#outdoor-environment-worldspawn)); 0 turns all of it off. |
 | `r_oaxBloom` | 0 | archive | Bloom in the HDR post-process chain, before tone mapping. |
 | `r_oaxBloomThreshold` | 1.0 | archive | Bloom: scene light above this blooms. |

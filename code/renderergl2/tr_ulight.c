@@ -1702,6 +1702,7 @@ typedef struct {
 	vec3_t      bounds[2];
 	qboolean    hasBounds;
 	qboolean    interaction;    // has an interaction stage (lit, ambient)
+	qboolean    metal;          // oaxMetal: reflects a probe
 	qboolean    caster;
 	int         mask;           // light-mask groups (step 7.5 B)
 	qboolean    maskNonDefault; // mask is not the default group alone
@@ -1727,8 +1728,12 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 	int numVS = 0, i, j;
 	qboolean shadowsOn;
 
-	if ( model == ULIGHT_LIGHTMAP || ( tr.viewParms.flags & ( VPF_SHADOWMAP | VPF_DEPTHSHADOW ) )
-		|| ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+	if ( ( tr.viewParms.flags & ( VPF_SHADOWMAP | VPF_DEPTHSHADOW ) ) || ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		return 0;
+	}
+	// a lightmapped map gets a view only for oaxMetal's reflection probes
+	// (no lights, no ambient pass: the stock pass lights it)
+	if ( model == ULIGHT_LIGHTMAP && ( !tr.numCubemaps || r_cubeMapping->integer || ( tr.viewParms.flags & VPF_NOCUBEMAPS ) ) ) {
 		return 0;
 	}
 	ResetPools();
@@ -1738,6 +1743,7 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 	view = &ulViews[ulNumViews];
 	view->numLights = 0;
 	view->firstAmbient = view->numAmbient = 0;
+	view->firstMetal = view->numMetal = 0;
 	view->lightingModel = model;
 	VectorCopy( ulw.ambient, view->ambient );
 	view->shadowMode = r_ulightShadowMode->integer ? r_ulightShadowMode->integer : ulw.shadowMode;
@@ -1770,6 +1776,7 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 		vs->worldIndex = -1;
 		vs->hasBounds = qfalse;
 		vs->interaction = R_ULightInteractionStage( sh ) >= 0;
+		vs->metal = vs->interaction && sh->oaxMetal;
 		vs->caster = !sh->oaxNoShadow;
 		if ( entityNum == REFENTITYNUM_WORLD ) {
 			vs->worldIndex = WorldSurfIndex( ds->surface );
@@ -1820,8 +1827,22 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 	}
 	view->numAmbient = ulNumSurfs - view->firstAmbient;
 
+	// oaxMetal surfaces, for the reflection pass (both lighting models)
+	view->firstMetal = ulNumSurfs;
+	if ( tr.numCubemaps ) {
+		for ( i = 0; i < numVS && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
+			if ( viewSurfs[i].metal && viewSurfs[i].interaction ) {
+				ulSurfs[ulNumSurfs++] = *viewSurfs[i].ds;
+			}
+		}
+	}
+	view->numMetal = ulNumSurfs - view->firstMetal;
+	if ( model == ULIGHT_LIGHTMAP && !view->numMetal ) {
+		return 0;	// nothing for unified lighting to draw in this view
+	}
+
 	// the visible lights
-	for ( j = 0; j < ulw.numLights && view->numLights < MAX_VIEW_ULIGHTS; j++ ) {
+	for ( j = 0; model != ULIGHT_LIGHTMAP && j < ulw.numLights && view->numLights < MAX_VIEW_ULIGHTS; j++ ) {
 		uLight_t *l = &ulw.lights[j];
 		uViewLight_t *vl;
 		vec4_t c;

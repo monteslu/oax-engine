@@ -2657,7 +2657,11 @@ void R_RenderMissingCubemaps(void)
 	{
 		if (!tr.cubemaps[i].image)
 		{
-			tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, flags, GL_RGBA8);
+			// oax: oaxMetal probes keep the scene's range (the render target's
+			// format, R_CreateBuiltinImages), so bright lights stay bright
+			GLenum format = !r_cubeMapping->integer && r_hdr->integer && glRefConfig.textureFloat ? GL_RGBA16F_ARB : GL_RGBA8;
+
+			tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, flags, format);
 
 			for (j = 0; j < 6; j++)
 			{
@@ -3017,6 +3021,17 @@ void RE_LoadWorldMap( const char *name ) {
 			R_AssignCubemapsToWorldSurfaces();
 		}
 	}
+	else if (r_oaxReflect->integer)
+	{
+		// oax: the map's own probes, for oaxMetal materials only (with
+		// r_cubeMapping 0 the stock shading never samples them)
+		R_LoadCubemapEntities("misc_cubemap");
+
+		if (tr.numCubemaps)
+		{
+			R_AssignCubemapsToWorldSurfaces();
+		}
+	}
 
 	s_worldData.dataSize = (byte *)ri.Hunk_Alloc(0, h_low) - startMarker;
 
@@ -3046,6 +3061,14 @@ void RE_LoadWorldMap( const char *name ) {
 	{
 		R_LoadCubemaps();
 		R_RenderMissingCubemaps();
+	}
+	else if (r_oaxReflect->integer && tr.numCubemaps && tr.renderCubeFbo)
+	{
+		// oax: the oaxMetal probes are captured at the start of the first
+		// frame (RE_BeginFrame), not here: drawing during the map load ran
+		// terrain draws a wasmcart host's GL could not take (it crashed in
+		// glDrawElements); a frame is where every host expects drawing
+		tr.oaxProbesPending = qtrue;
 	}
 
     ri.FS_FreeFile( buffer.v );

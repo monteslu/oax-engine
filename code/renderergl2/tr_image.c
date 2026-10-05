@@ -3047,9 +3047,12 @@ void R_CreateBuiltinImages( void ) {
 			tr.screenShadowImage = R_CreateImage("*screenShadow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 		}
 
-		if (r_cubeMapping->integer)
+		// oax: and for the oaxMetal probes (r_oaxReflect)
+		if (r_cubeMapping->integer || r_oaxReflect->integer)
 		{
-			tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, rgbFormat);
+			// oax: the oaxMetal probes keep the scene's range (the render
+			// target's format), so a bright light stays bright in a reflection
+			tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, r_cubeMapping->integer ? rgbFormat : hdrFormat);
 		}
 	}
 }

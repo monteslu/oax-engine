@@ -522,6 +522,8 @@ typedef struct shader_s {
 	qboolean	oaxNoShadow;		// oaxNoShadow / OSF_NOSHADOW: lit, but casts no unified-lighting shadow
 	qboolean	oaxHasTint;			// oaxTint r g b: colour multiplier of the diffuse stages
 	vec3_t		oaxTint;
+	qboolean	oaxMetal;			// oaxMetal r g b roughness: reflects the nearest probe (docs/materials.md)
+	vec4_t		oaxMetalParms;		// the reflectance at normal incidence (r g b) and the roughness
 
 	struct	shader_s	*next;
 } shader_t;
@@ -1668,6 +1670,7 @@ typedef struct {
 	int						fatLightmapRows;
 
 	int                     numCubemaps;
+	qboolean               oaxProbesPending;  // oaxMetal probes to capture at the next frame (tr_cmds.c)
 	cubemap_t               *cubemaps;
 
 	trRefEntity_t			*currentEntity;
@@ -1987,6 +1990,7 @@ void R_RenderDlightCubemaps(const refdef_t *fd);
 void R_RenderPshadowMaps(const refdef_t *fd);
 void R_RenderSunShadowMaps(const refdef_t *fd, int level);
 void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene );
+void R_RenderMissingCubemaps( void );
 
 void R_AddMD3Surfaces( trRefEntity_t *e );
 void R_AddNullModelSurfaces( trRefEntity_t *e );
@@ -2737,6 +2741,7 @@ extern cvar_t	*r_oaxSoftParticles;
 extern cvar_t	*r_oaxDecals;
 extern cvar_t	*r_oaxTrails;
 extern cvar_t	*r_oaxWater;
+extern cvar_t	*r_oaxReflect;
 extern cvar_t	*r_oaxBloom;
 
 void R_OAXFxRegisterCvars( void );
@@ -2819,6 +2824,7 @@ typedef struct {
 	int		decalsDrawn, decalPolysDrawn;
 	int		trailsAdded, trailsDrawn, trailPointsDrawn;
 	int		waterReflections, waterSurfsDrawn;
+	int		metalDraws;			// oaxMetal reflection draws (tb_ulight.c)
 	int		bloomPasses;
 	int		sceneCopies;
 } oaxFxStats_t;

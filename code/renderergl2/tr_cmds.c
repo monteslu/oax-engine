@@ -339,6 +339,14 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	if ( !tr.registered ) {
 		return;
 	}
+
+	// oax: the oaxMetal probes of a map just loaded (tr_bsp.c), before this
+	// frame's commands: each side is a frame of its own, as at a stock load
+	if ( tr.oaxProbesPending && tr.world ) {
+		tr.oaxProbesPending = qfalse;
+		R_RenderMissingCubemaps();
+		ri.Printf( PRINT_ALL, "oaxMetal: %d reflection probe%s captured (%dx%d)\n", tr.numCubemaps, tr.numCubemaps == 1 ? "" : "s", r_cubemapSize->integer, r_cubemapSize->integer );
+	}
 	glState.finishCalled = qfalse;
 
 	tr.frameCount++;
