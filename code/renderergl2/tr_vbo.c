@@ -361,8 +361,11 @@ void R_BindVao(vao_t * vao)
 			qglBindVertexArray(vao->vao);
 
 			// Intel Graphics doesn't save GL_ELEMENT_ARRAY_BUFFER binding with VAO binding.
-			if (glRefConfig.intelGraphics || vao == tess.vao)
-				qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->indexesIBO);
+			// oax: always, not only on Intel: a GL layer may track the element
+			// buffer globally rather than per VAO (the wasmcart host does), and
+			// then took a draw's index offset for a pointer into the cart's
+			// memory and crashed; on a correct GL this re-binds the same buffer
+			qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->indexesIBO);
 
 			// tess VAO always has buffers bound
 			if (vao == tess.vao)

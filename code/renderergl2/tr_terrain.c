@@ -986,6 +986,25 @@ void R_OAXTerrainAddView( void ) {
 
 // ---- back end --------------------------------------------------------------------------------
 
+/*
+A VAO bound for drawing with its index buffer bound again, as the stock
+renderer does (R_BindVao): GL keeps the element buffer in the VAO, but a GL
+layer may track it globally (the wasmcart host does: it then took a terrain
+draw's index offset for a pointer into the cart's memory, and crashed).
+Unbinding clears both. glState learns no VAO is bound (the stock code then
+binds its own).
+*/
+static void BindVao( GLuint vao, GLuint ibo ) {
+	qglBindVertexArray( vao );
+	qglBindBuffer( GL_ELEMENT_ARRAY_BUFFER, ibo );
+	glState.currentVao = NULL;
+}
+
+static void UnbindVao( void ) {
+	qglBindVertexArray( 0 );
+	qglBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+}
+
 static tView_t *BackendView( void ) {
 	int s = backEnd.viewParms.oaxTerrainView;
 
@@ -1102,8 +1121,7 @@ static void IssueQueries( const tView_t *v ) {
 		who[n++] = c;
 	}
 	if ( n ) {
-		qglBindVertexArray( tw.boxVao );
-		glState.currentVao = NULL;
+		BindVao( tw.boxVao, tw.boxIbo );
 		qglBindBuffer( GL_ARRAY_BUFFER, tw.boxVbo );
 		qglBufferSubData( GL_ARRAY_BUFFER, 0, n * 8 * 12, boxes );
 		GLSL_BindProgram( &tw.terrainProg[0] );
@@ -1127,7 +1145,7 @@ static void IssueQueries( const tView_t *v ) {
 			tw.lastQuery = c->query;
 			VectorCopy( v->eye, c->queryEye );
 		}
-		qglBindVertexArray( 0 );
+		UnbindVao();
 		qglBindBuffer( GL_ARRAY_BUFFER, 0 );
 	}
 	tw.statQueries = n;
@@ -1214,8 +1232,7 @@ static void DrawTerrain( const tView_t *v, int pass ) {
 			qglUniform2f( loc[TU_SURFACEFX], ( in->flags & OAX_TERRAIN_MACRO ) ? 1.0f : 0.0f, ( in->flags & OAX_TERRAIN_DETAIL ) ? 1.0f : 0.0f );
 			qglUniform3f( loc[TU_VIEWORIGIN], backEnd.viewParms.or.origin[0], backEnd.viewParms.or.origin[1], backEnd.viewParms.or.origin[2] );
 		}
-		qglBindVertexArray( t->vao );
-		glState.currentVao = NULL;
+		BindVao( t->vao, tw.ibo );
 		// attribute pointers below capture the bound array buffer
 		qglBindBuffer( GL_ARRAY_BUFFER, t->vbo );
 		for ( i = 0; i < v->num; i++ ) {
@@ -1245,7 +1262,7 @@ static void DrawTerrain( const tView_t *v, int pass ) {
 			stitched += vc->mask != 0;
 		}
 	}
-	qglBindVertexArray( 0 );
+	UnbindVao();
 	qglBindBuffer( GL_ARRAY_BUFFER, 0 );
 	if ( v->shadow ) {
 		qglDisable( GL_POLYGON_OFFSET_FILL );
@@ -1280,8 +1297,7 @@ static int DrawModelFoliage( tTerrain_t *t, int k, int f, const tView_t *v, int 
 	if ( !t->modelVao || !t->numParts[f] ) {
 		return 0;
 	}
-	qglBindVertexArray( t->modelVao );
-	glState.currentVao = NULL;
+	BindVao( t->modelVao, t->modelIbo );
 	qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
 	qglUniform4f( loc[FU_FADE], fd->fadeStart, fd->fadeEnd > fd->fadeStart ? 1.0f / ( fd->fadeEnd - fd->fadeStart ) : 0.0f, v->shadow ? 0.0f : 1.0f, 0 );
 	for ( pi = 0; pi < t->numParts[f]; pi++ ) {
@@ -1354,8 +1370,7 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 		if ( !t->numInstances ) {
 			continue;
 		}
-		qglBindVertexArray( t->folVao );
-		glState.currentVao = NULL;
+		BindVao( t->folVao, tw.meshIbo );
 		qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
 		for ( f = 0; f < t->info.numFoliage; f++ ) {
 			const oaxFoliageDisk_t *fd = &t->info.foliage[f];
@@ -1366,7 +1381,7 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 					instances += n;
 					trees += n;
 				}
-				qglBindVertexArray( t->folVao );
+				BindVao( t->folVao, tw.meshIbo );
 				qglBindBuffer( GL_ARRAY_BUFFER, t->instVbo );
 				continue;
 			}
@@ -1393,7 +1408,7 @@ static void DrawFoliage( const tView_t *v, int pass ) {
 			}
 		}
 	}
-	qglBindVertexArray( 0 );
+	UnbindVao();
 	qglBindBuffer( GL_ARRAY_BUFFER, 0 );
 	if ( a2c ) {
 		qglDisable( GL_SAMPLE_ALPHA_TO_COVERAGE );
