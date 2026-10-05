@@ -6,7 +6,7 @@
 //      the gate;
 //   2. the keep controls (use: hold the use button for 5 seconds), in the
 //      courtyard: they open the keep;
-//   3. the reactor core (destroy, final), inside the keep: the round.
+//   3. the golden cow (destroy, final), inside the keep: the round.
 //
 // Spawns move with the fight: the attackers land in the west, then spawn on
 // the field in front of the fortress once the generator is down, then in
@@ -18,19 +18,40 @@
 // The battlefield: two defender turrets on the wall walk (misc_oax_turret),
 // artillery on the field in front of the wall until the generator falls
 // (trigger_oax_artillery), a shake and explosions when the generator and
-// the core go (target_oax_shake, target_oax_explosion). Once the generator
+// the cow go (target_oax_shake, target_oax_explosion). Once the generator
 // is down an attackers-only teleporter at the landing sends them straight
 // to the field (trigger_teleport with role / after). Defending bots hold
 // posts by the objectives (info_oax_assault_defend).
 //
 // With the vehicle rule (g_oaxVehicles 1) a buggy and a hover craft wait at
 // the landing. No AAS: bots path on the navmesh. Our own geometry with
-// OpenArena textures.
+// OpenArena textures; the cow is Quaternius's CC0 one (its source and build
+// in assets/assault/BUILD.md), gilded with oaxMetal: it reflects the keep
+// through a misc_cubemap probe.
 
 import { MapFile, Brush, Face, box } from '../mapwriter.mjs';
 import { Terrain } from '../lib/terrain.mjs';
 import { foliageFiles } from '../lib/foliage-art.mjs';
 import { vehicleFiles, addVehicle } from '../lib/vehicles.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// the map's art (the golden cow; licences in assets/assault/licenses)
+const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'assault');
+function assetFiles() {
+  const out = {};
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      const rel = path.relative(ASSETS, p);
+      if (e.isDirectory()) walk(p);
+      else if (rel !== 'BUILD.md') out[rel.startsWith('licenses') ? rel.replace(/^licenses/, 'credits/oax_assault') : rel] = fs.readFileSync(p);
+    }
+  };
+  walk(ASSETS);
+  return out;
+}
 
 export const FIELD = { x0: -4096, x1: 4096, y0: -2048, y1: 2048 };
 export const CELL = 64;
@@ -165,15 +186,30 @@ function objectives(map) {
     box([cx - 24, cy - 40, 28], [cx + 24, cy + 40, 76], { sides: METAL, top: 'base_light/ceil1_38', bottom: 'common/caulk' }),
   ]);
   map.entity('light', { origin: [cx, cy, 140], light: 220, _color: [0.6, 1, 0.6] });
-  // 3. the reactor core
+  // 3. the golden cow, on a plinth, facing the keep door: the model drawn
+  // at the origin, an invisible hitbox around it (brushes of an entity with
+  // an origin are relative to it: q3map2 keeps them as written, the game
+  // adds the origin)
   const [rx, ry] = CORE;
+  map.brush(box([rx - 140, ry - 60, 0], [rx + 140, ry + 60, 16], { sides: METAL, top: 'base_floor/clang_floor', bottom: 'common/caulk' }));
   map.entity('func_oax_objective', {
-    type: 'destroy', id: 'core', name: 'the reactor core', order: 3, final: 1, health: 1500, target: 'coreboom',
-    message: 'The reactor core is destroyed',
+    type: 'destroy', id: 'cow', name: 'the golden cow', order: 3, final: 1, health: 1500, target: 'coreboom',
+    message: 'The golden cow is dead', origin: [rx, ry, 16], model2: 'models/oax/cow/goldcow.md3',
   }, [
-    box([rx - 56, ry - 56, 4], [rx + 56, ry + 56, 176], { sides: 'base_light/proto_lightred', top: METAL, bottom: 'common/caulk' }),
+    box([-120, -32, 0], [120, 32, 130], 'common/weapclip'),
   ]);
-  map.entity('light', { origin: [rx - 120, ry, 200], light: 400, _color: [1, 0.35, 0.3] });
+  map.entity('light', { origin: [rx - 160, ry, 220], light: 400, _color: [1, 0.85, 0.6] });
+  // bright fixtures around it for the gold to mirror: ceiling panels and
+  // blue strips on the side walls
+  for (const [x, y] of [[rx - 180, ry - 220], [rx - 180, ry + 220], [rx + 180, ry - 220], [rx + 180, ry + 220]]) {
+    map.brush(box([x - 32, y - 32, KEEP.h - 8], [x + 32, y + 32, KEEP.h], { bottom: 'base_light/ceil1_38', sides: METAL, top: 'common/caulk' }));
+  }
+  for (const y of [-KEEP.y, KEEP.y]) {
+    const iy = y < 0 ? y : y - 8;
+    map.brush(box([rx - 200, iy, 120], [rx + 200, iy + 8, 136], { [y < 0 ? 'py' : 'ny']: 'base_light/proto_lightblue', sides: METAL }));
+  }
+  // the probe the gold reflects (misc_cubemap: oaxMetal, docs/materials.md)
+  map.entity('misc_cubemap', { origin: [rx, ry, 90], radius: 420, name: 'cowprobe' });
   // what their fall looks like
   map.entity('target_oax_shake', { targetname: 'genfall', origin: [gx, gy, 64], intensity: 2.5, duration: 1.2, radius: 2500 });
   map.entity('target_oax_explosion', { targetname: 'genfall', origin: [gx, gy, 48], count: 3, delay: 0.3, spread: 48 });
@@ -201,7 +237,7 @@ function battlefield(map, ground) {
   post(WALL_X + 112, -400, WALK_Z + 32, 'generator', 1);
   post(WALL_X + 112, 400, WALK_Z + 32, 'generator', 1);
   for (const [x, y] of [[2350, -350], [2650, -760], [2700, -300], [2300, -800]]) post(x, y, 60, 'controls', 2);
-  for (const [x, y] of [[3350, -250], [3350, 250], [3600, -350], [3600, 350]]) post(x, y, 40, 'core', 3);
+  for (const [x, y] of [[3350, -250], [3350, 250], [3600, -350], [3600, 350]]) post(x, y, 40, 'cow', 3);
 }
 
 function spawns(map, ground) {
@@ -228,7 +264,29 @@ function spawns(map, ground) {
   }
 }
 
+// a metal (oaxMetal: reflectance, roughness: it mirrors the keep) over a
+// dark base, with the classic chrome trick on top: an additive sphere map of
+// a studio's hot spots (goldshine.png), so it shines like gold in any light
+const gold = (name, metal, base) => `models/oax/cow/gold_${name}
+{
+	oaxMetal ${metal}
+	{
+		map $whiteimage
+		rgbGen const ( ${base} )
+	}
+	{
+		map models/oax/cow/goldshine.png
+		tcGen environment
+		blendFunc add
+		rgbGen identityLighting
+	}
+}
+`;
+
 const shaders = `// oax_assault map shaders (tests/maps/src/oax_assault.mjs)
+// the golden cow: one polished gold all over (its spots too), the nose a
+// touch rosier
+${gold('white', '1 0.78 0.34 0.35', '0.12 0.08 0.02')}${gold('black', '1 0.78 0.34 0.35', '0.12 0.08 0.02')}${gold('pink', '1 0.7 0.45 0.35', '0.12 0.07 0.03')}
 textures/oax_assault/sky
 {
 	qer_editorimage textures/base_wall/basewall01.jpg
@@ -283,7 +341,7 @@ export function build() {
   battlefield(map, ground);
   map.entity('info_oax_assault', {
     time: 300,
-    message: 'Destroy the gate generator, take the keep controls, destroy the reactor core',
+    message: 'Destroy the gate generator, take the keep controls, kill the golden cow',
   });
 
   // items: the attackers' landing and the field; the defenders' walk and keep
@@ -314,7 +372,7 @@ export function build() {
     manifest: { features: ['terrain', 'nav', 'vehicles', 'assault'] },
     files: {
       'scripts/oax_assault.shader': shaders, 'scripts/oax_assault.arena': arena,
-      ...t.files(), ...foliageFiles(), ...vehicleFiles(),
+      ...t.files(), ...foliageFiles(), ...vehicleFiles(), ...assetFiles(),
     },
   };
 }

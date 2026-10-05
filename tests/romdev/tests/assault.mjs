@@ -8,7 +8,7 @@
 //      complete), the keep controls open, and a respawn puts the player on
 //      the field in front of the fortress (the attackers' spawns advance);
 //   4. holding use beside the controls works them (progress), letting go
-//      lets it slip back; they fall, the core falls, and the round ends a
+//      lets it slip back; they fall, the cow falls, and the round ends a
 //      success with its time;
 //   5. after the map restart round 2 has blue attacking with red's time to
 //      beat as its limit, the player now defends (DEFEND on the HUD);
@@ -42,7 +42,7 @@ function shots() {
     { cmd: '+button2', settle: 120, values: 'using' },
     { cmd: '-button2', settle: 300, values: 'released' },
     { cmd: 'assault complete controls', settle: 20 },
-    { cmd: 'assault complete core', settle: 20, values: 'won' },
+    { cmd: 'assault complete cow', settle: 20, values: 'won' },
     // the result shows 7 s, the map restarts, the clock starts 3 s later
     { cmd: 'wait', settle: 2600, values: 'round2', name: 'round2' },
     { cmd: 'assault limit 1', settle: 1200, values: 'decided' },
@@ -81,7 +81,7 @@ function check(build, at, rows, failures) {
 
   const w = at.won;
   rows.push(`${build}: round 1: phase ${num(w, 'g_as_phase')}, outcome ${num(w, 'g_as_outcome')}, time ${num(w, 'g_as_r1time')} ms`);
-  if (!(num(w, 'g_as_phase') === 2 && num(w, 'g_as_outcome') === 1 && num(w, 'g_as_r1time') > 0)) f('the core did not end round 1 a success');
+  if (!(num(w, 'g_as_phase') === 2 && num(w, 'g_as_outcome') === 1 && num(w, 'g_as_r1time') > 0)) f('the cow did not end round 1 a success');
 
   const r2 = at.round2;
   rows.push(`${build}: round 2: round ${num(r2, 'g_as_round')}, attackers ${num(r2, 'g_as_attackers')}, limit ${num(r2, 'g_as_limit')}, ` +

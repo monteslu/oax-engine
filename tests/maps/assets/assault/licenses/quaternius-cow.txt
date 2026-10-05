@@ -1,0 +1,10 @@
+models/oax/cow/goldcow.md3 (the golden cow in oax_assault)
+
+Source: the Cow from "Farm Animals Pack" by Quaternius
+  https://opengameart.org/content/farm-animals-pack (OBJ/Cow.obj)
+  https://www.patreon.com/quaternius
+Licence: CC0 1.0 Universal (public domain dedication)
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Converted to MD3 for oax (normals smoothed); the gold is a material
+(oaxMetal) plus a highlight sphere map (goldshine.png, CC0, made for oax).
