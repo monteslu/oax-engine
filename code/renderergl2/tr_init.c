@@ -1463,6 +1463,8 @@ void R_Register( void )
 	R_OAXEnvRegisterCvars();
 	r_oaxProfile = ri.Cvar_Get( "r_oaxProfile", "0", 0 );
 	r_oaxDirectPost = ri.Cvar_Get( "r_oaxDirectPost", "1", CVAR_ARCHIVE );
+	r_oaxReflectCull = ri.Cvar_Get( "r_oaxReflectCull", "1", 0 );
+	ri.Cvar_SetDescription( r_oaxReflectCull, "Water reflections cull to the part of the screen the water covers (0: the whole view, for comparisons)." );
 	r_oaxMsaaTextures = ri.Cvar_Get( "r_oaxMsaaTextures", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_oaxMsaaTextures, "Desktop GL: render MSAA into multisample textures so the direct post path tone maps straight from them, skipping the resolve on frames that do not measure exposure. 0 uses renderbuffers." );
 	ri.Cvar_SetDescription( r_oaxDirectPost, "Tone map (and grade) straight to the screen when nothing after needs the image: saves several full-screen copies. 0 keeps the copy chain." );

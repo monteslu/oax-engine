@@ -47,6 +47,7 @@ GL 3.3); without them only the CPU side is measured.
 cvar_t	*r_oaxProfile;
 cvar_t	*r_oaxDirectPost;
 cvar_t	*r_oaxMsaaTextures;
+cvar_t	*r_oaxReflectCull;
 GLsync ( APIENTRY *qglFenceSyncOAX )( GLenum condition, GLbitfield flags );
 void ( APIENTRY *qglGetSyncivOAX )( GLsync sync, GLenum pname, GLsizei bufSize, GLsizei *length, GLint *values );
 void ( APIENTRY *qglDeleteSyncOAX )( GLsync sync );

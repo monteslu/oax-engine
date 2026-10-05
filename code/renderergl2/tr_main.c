@@ -750,6 +750,53 @@ void R_SetupFrustum (viewParms_t *dest, float xmin, float xmax, float ymax, floa
 R_SetupProjection
 ===============
 */
+/*
+=================
+R_OAXNarrowFrustum
+
+oax: a view drawn only within part of its viewport (viewParms.oaxScissor:
+the water reflection, where the water is) culls against that part, so
+what cannot reach the kept pixels is not drawn at all. The side planes go
+through the eye and the edges of the scissor rectangle.
+=================
+*/
+static void R_OAXNarrowFrustum(viewParms_t *dest, float xmax, float ymax, float zProj)
+{
+	const int *sc = dest->oaxScissor;
+	float nx[2], ny[2];
+	vec3_t corner[4], center;
+	int i;
+
+	if (sc[2] <= 0 || sc[3] <= 0 || dest->viewportWidth <= 0 || dest->viewportHeight <= 0)
+		return;
+	nx[0] = 2.0f * (sc[0] - dest->viewportX) / dest->viewportWidth - 1.0f;
+	nx[1] = 2.0f * (sc[0] + sc[2] - dest->viewportX) / dest->viewportWidth - 1.0f;
+	ny[0] = 2.0f * (sc[1] - dest->viewportY) / dest->viewportHeight - 1.0f;
+	ny[1] = 2.0f * (sc[1] + sc[3] - dest->viewportY) / dest->viewportHeight - 1.0f;
+	// screen right is -axis[1] (axis[1] points left), up is axis[2]
+	for (i = 0; i < 4; i++)
+	{
+		float x = nx[(i == 1 || i == 2) ? 1 : 0], y = ny[i >= 2 ? 1 : 0];
+
+		VectorScale(dest->or.axis[0], zProj, corner[i]);
+		VectorMA(corner[i], -x * xmax, dest->or.axis[1], corner[i]);
+		VectorMA(corner[i], y * ymax, dest->or.axis[2], corner[i]);
+	}
+	VectorAdd(corner[0], corner[2], center);
+	for (i = 0; i < 4; i++)
+	{
+		cplane_t *p = &dest->frustum[i];
+
+		CrossProduct(corner[i], corner[(i + 1) & 3], p->normal);
+		VectorNormalize(p->normal);
+		if (DotProduct(p->normal, center) < 0)
+			VectorScale(p->normal, -1.0f, p->normal);
+		p->type = PLANE_NON_AXIAL;
+		p->dist = DotProduct(dest->or.origin, p->normal);
+		SetPlaneSignbits(p);
+	}
+}
+
 void R_SetupProjection(viewParms_t *dest, float zProj, float zFar, qboolean computeFrustum)
 {
 	float	xmin, xmax, ymin, ymax;
@@ -797,6 +844,8 @@ void R_SetupProjection(viewParms_t *dest, float zProj, float zFar, qboolean comp
 	// Now that we have all the data for the projection matrix we can also setup the view frustum.
 	if(computeFrustum)
 		R_SetupFrustum(dest, xmin, xmax, ymax, zProj, zFar, stereoSep);
+		if (dest->oaxReflection && r_oaxReflectCull->integer)
+			R_OAXNarrowFrustum(dest, xmax, ymax, zProj);
 }
 
 /*

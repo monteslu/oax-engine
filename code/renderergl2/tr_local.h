@@ -2857,6 +2857,7 @@ void R_OAXProfShutdown( void );
 void RE_OAXGetProfile( oaxProfile_t *out );
 extern cvar_t	*r_oaxDirectPost;
 extern cvar_t	*r_oaxMsaaTextures;
+extern cvar_t	*r_oaxReflectCull;
 extern void ( APIENTRY *qglTexImage2DMultisampleOAX )( GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations );
 qboolean RB_ToneMapLevelsDue( void );
 // oax: sync objects (OpenGL 3.2 / ES 3.0): ask whether the GPU has passed a
