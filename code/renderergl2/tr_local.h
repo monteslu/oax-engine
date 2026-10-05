@@ -2097,6 +2097,7 @@ void	R_ImageList_f( void );
 void	R_SkinList_f( void );
 // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=516
 const void *RB_TakeScreenshotCmd( const void *data );
+void RB_OAXTakePendingScreenshot( void );
 void	R_ScreenShot_f( void );
 
 void	R_InitFogTable( void );

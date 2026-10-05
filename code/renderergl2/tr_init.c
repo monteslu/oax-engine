@@ -594,30 +594,55 @@ void RB_TakeScreenshotJPEG(int x, int y, int width, int height, char *fileName)
 RB_TakeScreenshotCmd
 ==================
 */
+/*
+oax: a screenshot is taken at the end of the frame its command arrives in,
+in RB_SwapBuffers once the frame is on the window's back buffer and before
+the swap (RB_OAXTakePendingScreenshot). The command itself comes first in
+the frame's command list (the console runs before the frame is drawn), and
+reading then meant reading the previous frame's back buffer after its swap,
+which is undefined: compositors and real GPUs hand back blank buffers now
+and then (all-black shots), and the frame tone-mapped straight to the window
+(r_oaxDirectPost) has no copy left in an FBO to read instead.
+*/
+static struct {
+	qboolean	pending;
+	int			x, y, width, height;
+	qboolean	jpeg;
+	char		fileName[MAX_OSPATH];
+} oaxShot;
+
 const void *RB_TakeScreenshotCmd( const void *data ) {
 	const screenshotCommand_t	*cmd;
-	
+
 	cmd = (const screenshotCommand_t *)data;
+	oaxShot.pending = qtrue;
+	oaxShot.x = cmd->x;
+	oaxShot.y = cmd->y;
+	oaxShot.width = cmd->width;
+	oaxShot.height = cmd->height;
+	oaxShot.jpeg = cmd->jpeg;
+	Q_strncpyz( oaxShot.fileName, cmd->fileName, sizeof( oaxShot.fileName ) );
 
-	// finish any 2D drawing if needed
-	if(tess.numIndexes)
-		RB_EndSurface();
+	return (const void *)(cmd + 1);
+}
 
-	// oax: the frame is on the screen, not in the render FBO: read the
-	// default framebuffer explicitly (blits leave the read binding where
-	// they set it, which the FBO cache does not track)
-	if (backEnd.oaxDirect || backEnd.oaxPrevDirect)
-	{
-		FBO_Bind(NULL);
-		qglBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+/* RB_SwapBuffers, after the frame is presented and before the swap */
+void RB_OAXTakePendingScreenshot( void ) {
+	if ( !oaxShot.pending ) {
+		return;
 	}
-
-	if (cmd->jpeg)
-		RB_TakeScreenshotJPEG( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
+	oaxShot.pending = qfalse;
+	// finish any 2D drawing if needed
+	if ( tess.numIndexes )
+		RB_EndSurface();
+	// the window's back buffer (blits leave the read binding where they set
+	// it, which the FBO cache does not track)
+	FBO_Bind( NULL );
+	qglBindFramebuffer( GL_READ_FRAMEBUFFER, 0 );
+	if ( oaxShot.jpeg )
+		RB_TakeScreenshotJPEG( oaxShot.x, oaxShot.y, oaxShot.width, oaxShot.height, oaxShot.fileName );
 	else
-		RB_TakeScreenshot( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
-	
-	return (const void *)(cmd + 1);	
+		RB_TakeScreenshot( oaxShot.x, oaxShot.y, oaxShot.width, oaxShot.height, oaxShot.fileName );
 }
 
 /*

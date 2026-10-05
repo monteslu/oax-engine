@@ -69,7 +69,9 @@ function parse(file) {
 
 const tag = `abm_${process.pid}`;
 const names = botNames();
-const lines = ['wait 200', 'team spectator'];
+// a large map can still be loading for a while: bots added before the
+// server runs are lost, so wait well past the load first
+const lines = ['wait 800', 'team spectator', 'wait 200'];
 names.slice(0, bots).forEach((n) => lines.push(`addbot ${n} ${skill} red`));
 names.slice(bots, bots * 2).forEach((n) => lines.push(`addbot ${n} ${skill} blue`));
 for (let i = 0; i < 2000; i++) lines.push(`wait ${sample}`, `debugvalues ${tag}_${i}.txt`);
@@ -81,17 +83,19 @@ const args = [
   '+set', 'fs_basepath', basepath, '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
   '+set', 'sv_pure', '0', '+set', 'com_introplayed', '1', '+set', 'g_gametype', '14', '+set', 'bot_enable', '1',
   '+set', 'g_oaxVehicles', opt('vehicles', '1'), '+set', 'r_mode', '-1', '+set', 'r_customwidth', '640',
-  '+set', 'r_customheight', '360', '+set', 'r_fullscreen', '0', '+set', 'com_maxfps', '0', '+set', 's_volume', '0',
+  '+set', 'r_customheight', '360', '+set', 'r_fullscreen', '0', '+set', 'com_maxfps', '125', '+set', 's_volume', '0',
   ...(opt('time') ? ['+set', 'g_oaxAssaultTime', opt('time')] : []),
   '+devmap', map, '+exec', `${tag}.cfg`,
 ];
 const env = { ...process.env, SDL_VIDEODRIVER: 'offscreen' };
 delete env.DISPLAY;
 delete env.WAYLAND_DISPLAY;
-const child = spawn(binary, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
-let log = '';
-child.stdout.on('data', (d) => { log += d; });
-child.stderr.on('data', (d) => { log += d; });
+// the console to a file, as a shell redirect would (not a pipe this process
+// has to keep draining)
+const logFile = path.join(game, `${tag}.log`);
+const logFd = fs.openSync(logFile, 'w');
+const child = spawn(binary, args, { env, stdio: ['ignore', logFd, logFd] });
+const readLog = () => { try { return fs.readFileSync(logFile, 'latin1'); } catch { return ''; } };
 
 // the match as the dumps show it
 const roundsSeen = {};
@@ -110,6 +114,7 @@ function track(v) {
   }
   if (Number(v.g_as_phase) === 2) R.outcome = Number(v.g_as_outcome);
   R.winner = Number(v.g_as_winner);
+  R.navbots = Math.max(R.navbots ?? 0, Number(v.g_navbots ?? 0));
   R.stuck = Number(v.g_navbot_stuck);
   const [attackN, guardN, guardNear, guardMean] = String(v.g_navbot_assault ?? '0 0 0 0').split(' ').map(Number);
   R.posted = (R.posted ?? []).concat([{ attackN, guardN, guardNear, guardMean }]);
@@ -127,7 +132,8 @@ await new Promise((resolve) => {
     }
     if (done || Date.now() - started > maxMinutes * 60000) {
       clearInterval(timer);
-      child.kill('SIGTERM');
+      // SIGKILL: the client's SIGTERM handler can deadlock in the renderer shutdown
+      child.kill('SIGKILL');
       resolve();
     }
   }, 2000);
@@ -145,11 +151,13 @@ for (const R of report.rounds) {
   delete R.posted;
   const team = R.attackers === 1 ? 'red' : 'blue';
   console.log(`round ${R.round}: ${team} attacks, limit ${R.limit / 1000} s; fell: ${Object.entries(R.fell).map(([id, t]) => `${id} at ${t} s`).join(', ') || 'nothing'}; ` +
-    `outcome ${R.outcome === 1 ? 'made it' : R.outcome === 2 ? 'ran out of time' : 'unfinished'}; defenders at their posts ${R.defendersPosted ?? '-'} (mean ${R.defenderMeanDist ?? '-'} units); bot stuck events ${R.stuck}`);
+    `outcome ${R.outcome === 1 ? 'made it' : R.outcome === 2 ? 'ran out of time' : 'unfinished'}; defenders at their posts ${R.defendersPosted ?? '-'} (mean ${R.defenderMeanDist ?? '-'} units); bot stuck events ${R.stuck}; navmesh bots ${R.navbots} of ${bots * 2}`);
+  if (R.navbots < bots * 2) console.log(`  warning: only ${R.navbots} of ${bots * 2} bots ran as navmesh bots (missing bots joined late, failed to join, or are stock AAS bots)`);
 }
 const fin = report.rounds.at(-1);
 if (fin?.winner) console.log(`winner: ${fin.winner === 1 ? 'red' : 'blue'}`);
 if (!done) console.log(`stopped after ${idx} samples (${maxMinutes} min cap or the client exited)`);
+if (last) console.log(`last sample: round ${last.g_as_round} phase ${last.g_as_phase} left ${last.g_as_left} ms, navmesh bots ${last.g_navbots ?? 0}, level time ${last.g_level_rel ?? '?'}`);
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(report, null, 2));
 let ok = true;
 if (expect === 'complete') {
@@ -157,5 +165,7 @@ if (expect === 'complete') {
   ok = !!r1 && r1.outcome === 1;
   console.log(ok ? 'PASS: round 1 attackers completed every objective' : 'FAIL: round 1 attackers did not complete the objectives');
 }
-if (!idx) console.log(log.split('\n').slice(-20).join('\n'));
+if (!idx) console.log(readLog().split('\n').slice(-20).join('\n'));
+fs.closeSync(logFd);
+fs.rmSync(logFile, { force: true });
 process.exit(ok ? 0 : 1);

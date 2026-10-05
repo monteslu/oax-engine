@@ -1211,8 +1211,13 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 	if (!isShadowView && (backEnd.refdef.rdflags & RDF_OAX_SKYPORTAL))
 	{
-		// oax sky portal scene: no sun, sun rays or flares
-		RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
+		// oax sky portal scene: no sun, sun rays or flares, but lit by the
+		// unified lights like any other view (the stock list alone draws
+		// unified materials' diffuse stage at 1x, i.e. fullbright)
+		if (backEnd.viewParms.ulightView)
+			RB_ULightDrawViewSurfs( cmd->drawSurfs, cmd->numDrawSurfs );
+		else
+			RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
 	}
 	else if (!isShadowView)
 	{
@@ -1578,6 +1583,7 @@ const void	*RB_SwapBuffers( const void *data ) {
 
 	RB_OAXProfZone( OAX_PZ_PRESENT );
 	RB_PresentToScreen();
+	RB_OAXTakePendingScreenshot();	// oax: screenshots read the finished frame (tr_init.c)
 	backEnd.oaxPrevDirect = backEnd.oaxDirect;
 	backEnd.oaxDirect = qfalse;
 	RB_OAXProfEndFrame();

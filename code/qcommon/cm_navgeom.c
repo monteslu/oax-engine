@@ -170,9 +170,64 @@ static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top 
 	g->numVolumes++;
 }
 
+#define NAV_OPEN_GRID_MAX	64	// samples per axis over a large floor face
+
+/* the same for an upward face, sampled on a grid over it (in xy): an
+   imported hull's floor brush can run under walls and out into the void
+   with its centre and every corner in opaque space, while a room stands
+   on one part of it (UT99 AS-Overlord: 6112 x 640 under one barracks room) */
+static qboolean FloorFaceOpen( const winding_t *w, const vec3_t normal, float dist ) {
+	vec3_t mins, maxs, q;
+	float step[2];
+	int i, a, sx, sy, n[2];
+
+	ClearBounds( mins, maxs );
+	for ( i = 0; i < w->numpoints; i++ ) {
+		AddPointToBounds( w->p[i], mins, maxs );
+	}
+	for ( a = 0; a < 2; a++ ) {
+		step[a] = ( maxs[a] - mins[a] ) / NAV_OPEN_GRID_MAX;
+		if ( step[a] < 16.0f ) {
+			step[a] = 16.0f;
+		}
+		n[a] = (int)( ( maxs[a] - mins[a] ) / step[a] ) + 1;
+	}
+	for ( sy = 0; sy < n[1]; sy++ ) {
+		for ( sx = 0; sx < n[0]; sx++ ) {
+			const float x = mins[0] + ( sx + 0.5f ) * step[0], y = mins[1] + ( sy + 0.5f ) * step[1];
+			int inside = 1;
+			// inside the convex winding, in xy (either winding order)
+			float sign = 0.0f;
+			for ( i = 0; i < w->numpoints && inside; i++ ) {
+				const float *p0 = w->p[i], *p1 = w->p[( i + 1 ) % w->numpoints];
+				const float cr = ( p1[0] - p0[0] ) * ( y - p0[1] ) - ( p1[1] - p0[1] ) * ( x - p0[0] );
+				if ( cr != 0.0f ) {
+					if ( sign == 0.0f ) {
+						sign = cr;
+					} else if ( ( cr > 0.0f ) != ( sign > 0.0f ) ) {
+						inside = 0;
+					}
+				}
+			}
+			if ( !inside ) {
+				continue;
+			}
+			q[0] = x;
+			q[1] = y;
+			q[2] = ( dist - normal[0] * x - normal[1] * y ) / normal[2];
+			VectorMA( q, 1.0f, normal, q );
+			if ( cm.leafs[CM_PointLeafnum( q )].cluster >= 0 ) {
+				return qtrue;
+			}
+		}
+	}
+	return qfalse;
+}
+
 /* is there open air (a leaf with a cluster) just in front of the face: at
-   its centre or near any corner, a unit out along its normal? */
-static qboolean FaceOpen( const winding_t *w, const vec3_t normal ) {
+   its centre or near any corner, a unit out along its normal? A walkable
+   face is also sampled across (FloorFaceOpen). */
+static qboolean FaceOpen( const winding_t *w, const vec3_t normal, float dist ) {
 	vec3_t c, q;
 	int i;
 
@@ -195,6 +250,9 @@ static qboolean FaceOpen( const winding_t *w, const vec3_t normal ) {
 		if ( cm.leafs[CM_PointLeafnum( q )].cluster >= 0 ) {
 			return qtrue;
 		}
+	}
+	if ( normal[2] >= NAV_MIN_WALK_NORMAL ) {
+		return FloorFaceOpen( w, normal, dist );
 	}
 	return qfalse;
 }
@@ -239,7 +297,7 @@ static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 			// structural solid or faces the void) is no floor: it would only
 			// widen the build to the whole hull of an imported map
 			float nz = side->plane->normal[2];
-			qboolean open = FaceOpen( w, side->plane->normal );
+			qboolean open = FaceOpen( w, side->plane->normal, side->plane->dist );
 			anyOpen |= open;
 			if ( nz >= NAV_MIN_WALK_NORMAL && !open ) {
 				nz = 0.0f;
