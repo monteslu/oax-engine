@@ -236,6 +236,7 @@ typedef struct {
 	qboolean    shadows;
 	qboolean    dynamicCasters;     // entities inside the volume: overlay them
 	int         shadowSize;
+	int         firstLitBlend, numLitBlend;   // lit blended surfaces (oaxLitBlend), drawn after the opaque pass
 } uViewLight_t;
 
 typedef struct {
@@ -289,6 +290,7 @@ typedef struct {
 	int             mode;
 	uViewLight_t   *vl;
 	uView_t        *view;
+	qboolean        litBlend;       // drawing a light's blended surfaces: depth tested, not depth equal
 	int             shadowType;     // 0 none, 1 cube, 2 2D, 3 stencil
 	float           shadowMatrix[16];
 	vec4_t          shadowParams;   // near, far, bias, texel
@@ -300,6 +302,8 @@ extern uLightBackend_t ulb;
 // cvars
 extern cvar_t *r_ulight;
 extern cvar_t *r_ulightShadows;
+extern cvar_t *r_ulightLitBlend;
+extern cvar_t *r_ulightOnly;
 extern cvar_t *r_ulightUE1Floor;
 extern cvar_t *r_ulightShadowMode;
 extern cvar_t *r_ulightScissor;

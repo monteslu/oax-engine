@@ -170,10 +170,12 @@ void R_OAXSurfVariantApply( const void *variant, shader_t *sh, shaderStage_t *st
 		st->stateBits &= ~( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_DEPTHMASK_TRUE );
 		if ( ( v->flags & OSF_ADDITIVE ) && ( v->flags & OSF_TRANSLUCENT ) ) {
 			// lit additive (UE1 Translucent without Unlit: water): its
-			// vertex light x texel, the tint on top (oaxTint, below), added
-			// to what is behind it
+			// vertex light (the ambient) x texel, the tint on top (oaxTint,
+			// below), added to what is behind it; the unified lights add
+			// their own light x texel over it (tr_ulight.c oaxLitBlend)
 			st->stateBits |= GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
 			st->rgbGen = CGEN_EXACT_VERTEX;
+			sh->oaxLitBlend = qtrue;
 		} else if ( v->flags & OSF_ADDITIVE ) {
 			// a glow: added unlit, tint x texel on screen (identityLight in
 			// the render target; the frame is scaled by the overbright at the end)

@@ -56,6 +56,8 @@ cvar_t *r_ulightSpecular;
 cvar_t *r_ulightShadowBias;
 cvar_t *r_ulightDebug;
 cvar_t *r_ulightCasterDump;
+cvar_t *r_ulightLitBlend;
+cvar_t *r_ulightOnly;
 cvar_t *r_dlightShadows;
 cvar_t *r_shadowMapSizeU;
 static cvar_t *r_ulightStencil;     // registered again at each renderer start (latched)
@@ -223,6 +225,10 @@ void R_ULightInit( void ) {
 	ri.Cvar_SetDescription( r_ulightUE1Floor, "UE1 lights: light units taken off each lamp's own contribution (UE1 loses about one display unit per lamp; 0.0075 fitted with the gain, docs/lights.md), read when the map loads." );
 	r_ulightShadowBias = ri.Cvar_Get( "r_ulightShadowBias", "0.004", CVAR_CHEAT );
 	r_ulightDebug = ri.Cvar_Get( "r_ulightDebug", "0", CVAR_CHEAT );
+	r_ulightLitBlend = ri.Cvar_Get( "r_ulightLitBlend", "1", CVAR_CHEAT | CVAR_TEMP );
+	ri.Cvar_SetDescription( r_ulightLitBlend, "Unified lights light blended surfaces (water); 0 is a test control only: they keep their ambient alone." );
+	r_ulightOnly = ri.Cvar_Get( "r_ulightOnly", "-1", CVAR_CHEAT | CVAR_TEMP );
+	ri.Cvar_SetDescription( r_ulightOnly, "Draw only the map light with this entity-lump ordinal (the ambient stays); -1 all. For measuring one lamp's contribution." );
 	r_ulightCasterDump = ri.Cvar_Get( "r_ulightCasterDump", "-1", CVAR_CHEAT | CVAR_TEMP );
 	ri.Cvar_SetDescription( r_ulightCasterDump, "Print the shadow casters of the map light with this entity-lump ordinal once (the next view that lights with it), then reset to -1." );
 	r_dlightShadows = ri.Cvar_Get( "r_dlightShadows", "0", CVAR_ARCHIVE );
@@ -1450,6 +1456,16 @@ int R_ULightInteractionStage( shader_t *sh ) {
 		return sh->oaxInteraction > 0 ? sh->oaxInteraction - 1 : -1;
 	}
 	sh->oaxInteraction = -1;   // none, unless a stage qualifies below
+	if ( sh->oaxLitBlend ) {
+		// a lit blended surface: its one stage, lit after the opaque pass
+		for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
+			if ( sh->stages[i] && sh->stages[i]->active ) {
+				sh->oaxInteraction = i + 1;
+				return i;
+			}
+		}
+		return -1;
+	}
 	if ( sh->sort > SS_OPAQUE || sh->isSky || ( sh->surfaceFlags & ( SURF_SKY | SURF_NODRAW ) ) || sh->oaxLightFlags & ULSF_LIGHTSHADER ) {
 		return -1;
 	}
@@ -1711,6 +1727,7 @@ typedef struct {
 	vec3_t      bounds[2];
 	qboolean    hasBounds;
 	qboolean    interaction;    // has an interaction stage (lit, ambient)
+	qboolean    litBlend;       // a blended surface the lights light after the opaque pass (no ambient pass, casts nothing)
 	qboolean    metal;          // oaxMetal: reflects a probe
 	qboolean    caster;
 	int         mask;           // light-mask groups (step 7.5 B)
@@ -1763,17 +1780,28 @@ static void R_ULightDumpCasters( const uLight_t *l, const uViewLight_t *vl ) {
 		int entityNum, fogNum, dlighted, pshadowed;
 		shader_t *sh;
 		vec3_t lo, hi;
+		int worldIndex;
 
 		R_DecomposeSort( ds->sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
 		VectorClear( lo );
 		VectorClear( hi );
-		if ( entityNum == REFENTITYNUM_WORLD && ( *ds->surface == SF_FACE || *ds->surface == SF_GRID || *ds->surface == SF_TRIANGLES ) ) {
-			const srfBspSurface_t *srf = (const srfBspSurface_t *)ds->surface;
-			VectorCopy( srf->cullBounds[0], lo );
-			VectorCopy( srf->cullBounds[1], hi );
+		worldIndex = -1;
+		if ( entityNum == REFENTITYNUM_WORLD ) {
+			// the world surface and its bounds (surface-world surfaces keep
+			// theirs in the msurface_t cullinfo, not in the srf)
+			int i;
+
+			for ( i = 0; i < tr.world->numsurfaces; i++ ) {
+				if ( tr.world->surfaces[i].data == ds->surface ) {
+					worldIndex = i;
+					VectorCopy( tr.world->surfaces[i].cullinfo.bounds[0], lo );
+					VectorCopy( tr.world->surfaces[i].cullinfo.bounds[1], hi );
+					break;
+				}
+			}
 		}
 		ri.Printf( PRINT_ALL, "  %s %s%s %.0f %.0f %.0f .. %.0f %.0f %.0f\n", sh->name,
-			entityNum == REFENTITYNUM_WORLD ? "world" : va( "entity %i", entityNum ), sh->isSky ? " sky" : "",
+			entityNum == REFENTITYNUM_WORLD ? va( "world %i", worldIndex ) : va( "entity %i", entityNum ), sh->isSky ? " sky" : "",
 			lo[0], lo[1], lo[2], hi[0], hi[1], hi[2] );
 	}
 }
@@ -1841,7 +1869,7 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		viewSurf_t *vs;
 
 		R_DecomposeSort( ds->sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
-		if ( sh->sort > SS_OPAQUE || sh->isSky || ( sh->surfaceFlags & ( SURF_SKY | SURF_NODRAW ) ) ) {
+		if ( ( sh->sort > SS_OPAQUE && !sh->oaxLitBlend ) || sh->isSky || ( sh->surfaceFlags & ( SURF_SKY | SURF_NODRAW ) ) ) {
 			continue;
 		}
 		vs = &viewSurfs[numVS];
@@ -1853,8 +1881,9 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		if ( i >= numVisible ) {
 			vs->interaction = qfalse;	// an entity out of view: a shadow caster only
 		}
-		vs->metal = vs->interaction && sh->oaxMetal;
-		vs->caster = !sh->oaxNoShadow;
+		vs->litBlend = sh->oaxLitBlend ? qtrue : qfalse;
+		vs->metal = vs->interaction && sh->oaxMetal && !vs->litBlend;
+		vs->caster = !sh->oaxNoShadow && !vs->litBlend;
 		if ( entityNum == REFENTITYNUM_WORLD ) {
 			vs->worldIndex = WorldSurfIndex( ds->surface );
 			vs->mask = R_ULightSurfaceMask( sh, vs->worldIndex );
@@ -1897,7 +1926,7 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 	view->firstAmbient = ulNumSurfs;
 	if ( model == ULIGHT_UNIFIED ) {
 		for ( i = 0; i < numVS && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
-			if ( viewSurfs[i].interaction ) {
+			if ( viewSurfs[i].interaction && !viewSurfs[i].litBlend ) {
 				ulSurfs[ulNumSurfs++] = *viewSurfs[i].ds;
 			}
 		}
@@ -1928,6 +1957,9 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		if ( !l->on || l->numFrustumVerts < 4 ) {
 			R_ULightDumpSkip( l, l->on ? "no frustum" : "off" );
 			continue;
+		}
+		if ( r_ulightOnly->integer >= 0 && l->entityNum != r_ulightOnly->integer ) {
+			continue;	// measuring one lamp
 		}
 		if ( !LightAreaVisible( l ) ) {
 			R_ULightDumpSkip( l, "its areas are not visible from the view (r_ulightAreaCull)" );
@@ -1979,7 +2011,7 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		for ( i = 0; i < numVS && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
 			viewSurf_t *vs = &viewSurfs[i];
 
-			if ( !vs->interaction ) {
+			if ( !vs->interaction || vs->litBlend ) {
 				continue;
 			}
 			if ( l->parms.lightMask != ULIGHT_MASK_DEFAULT || vs->maskNonDefault ) {
@@ -2000,7 +2032,33 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 			ulSurfs[ulNumSurfs++] = *vs->ds;
 		}
 		vl->numLit = ulNumSurfs - vl->firstLit;
-		if ( !vl->numLit ) {
+		// the lit blended surfaces (water): drawn after the opaque pass with
+		// the same light, depth tested but not depth equal
+		vl->firstLitBlend = ulNumSurfs;
+		for ( i = 0; r_ulightLitBlend->integer && i < numVS && ulNumSurfs < MAX_ULIGHT_SURFS; i++ ) {
+			viewSurf_t *vs = &viewSurfs[i];
+
+			if ( !vs->interaction || !vs->litBlend ) {
+				continue;
+			}
+			if ( l->parms.lightMask != ULIGHT_MASK_DEFAULT || vs->maskNonDefault ) {
+				if ( !( l->parms.lightMask & (unsigned)vs->mask ) ) {
+					continue;
+				}
+			}
+			if ( vs->worldIndex >= 0 && j < ulw.numMapLights ) {
+				if ( !( lightFacingBits[j][vs->worldIndex >> 3] & ( 1 << ( vs->worldIndex & 7 ) ) ) ) {
+					continue;
+				}
+			} else if ( vs->hasBounds ) {
+				if ( !BoxInLight( l, vs->bounds[0], vs->bounds[1] ) ) {
+					continue;
+				}
+			}
+			ulSurfs[ulNumSurfs++] = *vs->ds;
+		}
+		vl->numLitBlend = ulNumSurfs - vl->firstLitBlend;
+		if ( !vl->numLit && !vl->numLitBlend ) {
 			if ( r_ulightCasterDump->integer >= 0 && l->entityNum == r_ulightCasterDump->integer && R_ULightDumpView() ) {
 				// the view's world surfaces inside the light's box, and why each is not lit
 				int n = 0;

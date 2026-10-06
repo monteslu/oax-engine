@@ -522,6 +522,7 @@ typedef struct shader_s {
 	qboolean	oaxNoShadow;		// oaxNoShadow / OSF_NOSHADOW: lit, but casts no unified-lighting shadow
 	qboolean	oaxHasTint;			// oaxTint r g b: colour multiplier of the diffuse stages
 	vec3_t		oaxTint;
+	qboolean	oaxLitBlend;		// a blended surface the unified lights light (OSF_TRANSLUCENT|OSF_ADDITIVE water): their passes add to it after the opaque pass
 	qboolean	oaxMetal;			// oaxMetal r g b roughness: reflects the nearest probe (docs/materials.md)
 	vec4_t		oaxMetalParms;		// the reflectance at normal incidence (r g b) and the roughness
 

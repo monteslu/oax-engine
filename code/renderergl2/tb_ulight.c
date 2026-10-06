@@ -944,7 +944,7 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 			}
 		}
 
-		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+		GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | ( ulb.litBlend ? 0 : GLS_DEPTHFUNC_EQUAL ) );
 		R_DrawElements( input->numIndexes, input->firstIndex );
 		ulw.statDraws++;
 	}
@@ -1047,6 +1047,66 @@ void RB_DrawULights( void ) {
 
 /*
 =================
+RB_DrawULightsBlend
+
+The lights' blended surfaces (water: oaxLitBlend), after the opaque pass:
+each light adds light x texel over them, depth tested against the opaque
+scene, with its shadows. Their own stage (the ambient) draws in the
+translucent pass as before.
+=================
+*/
+static void RB_DrawULightsBlend( void ) {
+	uView_t *view = R_ULightGetView( backEnd.viewParms.ulightView );
+	FBO_t *viewFbo = glState.currentFBO;
+	int i;
+
+	if ( !view ) {
+		return;
+	}
+	ulb.view = view;
+	ulb.litBlend = qtrue;
+	for ( i = 0; i < view->numLights; i++ ) {
+		uViewLight_t *vl = &view->lights[i];
+		image_t *shadowImage = NULL;
+
+		if ( !vl->numLitBlend ) {
+			continue;
+		}
+		ulb.shadowType = USHADOW_NONE;
+		if ( vl->shadows ) {
+			if ( view->shadowMode == ULIGHT_SHADOW_STENCIL ) {
+				ulb.mode = ULB_NONE;
+				FBO_Bind( viewFbo );
+				RestoreView();
+				qglScissor( vl->scissor[0], vl->scissor[1], vl->scissor[2], vl->scissor[3] );
+				RB_ULightStencilShadows( vl );
+			} else {
+				ulb.shadowType = RB_ULightShadowMaps( vl, &shadowImage );
+				FBO_Bind( viewFbo );
+				RestoreView();
+			}
+		}
+		if ( shadowImage ) {
+			GL_BindToTMU( shadowImage, ulb.shadowType == USHADOW_CUBE ? UTMU_SHADOWCUBE : UTMU_SHADOW2D );
+		}
+		qglScissor( vl->scissor[0], vl->scissor[1], vl->scissor[2], vl->scissor[3] );
+		ulb.mode = ULB_INTERACTION;
+		ulb.vl = vl;
+		RB_RenderDrawSurfList( R_ULightSurfList( vl->firstLitBlend ), vl->numLitBlend );
+		ulb.mode = ULB_NONE;
+		if ( vl->shadows && view->shadowMode == ULIGHT_SHADOW_STENCIL ) {
+			qglDisable( GL_STENCIL_TEST );
+		}
+	}
+	ulb.litBlend = qfalse;
+	ulb.mode = ULB_NONE;
+	ulb.vl = NULL;
+	FBO_Bind( viewFbo );
+	RestoreView();
+}
+
+/*
+=================
 RB_ULightDrawViewSurfs
 
 Replaces the stock RB_RenderDrawSurfList call for a view with unified
@@ -1081,6 +1141,7 @@ void RB_ULightDrawViewSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		RB_RenderDrawSurfList( drawSurfs, split );
 		RB_DrawULights();
 	}
+	RB_DrawULightsBlend();
 	if ( split < numDrawSurfs ) {
 		RB_RenderDrawSurfList( drawSurfs + split, numDrawSurfs - split );
 	}

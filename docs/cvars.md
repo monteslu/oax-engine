@@ -50,6 +50,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_oaxSurfaces` | 1 | cheat, latch | Load a map's surface world (`OAX_SURFACES`, [map-format.md](map-format.md#oax_surfaces-version-1)); 0 loads the map without it for comparisons, from the next map load. |
 | `r_ulight` | 1 | cheat | Unified lighting for maps that ask for it (`oax_lighting unified` or `hybrid`, [lights.md](lights.md)); 0 renders them like stock maps. |
 | `r_ulightShadows` | 1 | cheat | Shadows of unified lights; 0 is a test control only. |
+| `r_ulightLitBlend` | 1 | cheat | Unified lights light blended surfaces (lit additive water, map-format.md); 0 is a test control only: those surfaces keep their ambient alone. |
 | `r_ulightShadowMode` | 0 | cheat | 0 = the map's `oax_shadowmode`, 1 = shadow maps, 2 = stencil volumes (falls back to shadow maps without `r_ulightStencil 1`). |
 | `r_ulightShadowMapSize` | 512 | archive, latch | Unified-light shadow map size, clamped to 128-2048 (goldens use 512). |
 | `r_ulightShadowBias` | 0.004 | cheat | Depth bias of the unified-light shadow map comparison. |
@@ -57,6 +58,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_ulightScissor` | 1 | cheat | Scissor each unified light to its screen rectangle; 0 draws it over the whole viewport. |
 | `r_ulightAreaCull` | 1 | cheat | Skip static unified lights whose areas are not in the visible area mask; 0 draws them all. |
 | `r_ulightSpecular` | 1 | archive | Specular from unified lights; 0 turns it off for every light. |
+| `r_ulightOnly` | -1 | cheat | Draw only the map light with this entity-lump ordinal (the ambient stays); -1 all. For measuring one lamp's contribution at a point. |
 | `r_ulightCasterDump` | -1 | cheat | Print the shadow casters of the unified light with this entity-lump ordinal once (the next view that lights with it), or why that view skipped it, then reset to -1. |
 | `r_ulightUE1Floor` | 0.0075 | read at map load | UE1-profile lights: light units taken off each lamp's own contribution before the lamps add (UE1 loses about one display unit per lamp; fitted with the profile's gain, docs/lights.md). 0 is the plain curve. |
 | `r_ulightDebug` | 0 | cheat | Registered but currently read by nothing (no effect). |
