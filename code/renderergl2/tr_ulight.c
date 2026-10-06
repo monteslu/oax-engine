@@ -48,6 +48,7 @@ uLightWorld_t ulw;
 
 cvar_t *r_ulight;
 cvar_t *r_ulightShadows;
+cvar_t *r_ulightUE1Floor;
 cvar_t *r_ulightShadowMode;
 cvar_t *r_ulightScissor;
 cvar_t *r_ulightAreaCull;
@@ -214,6 +215,8 @@ void R_ULightInit( void ) {
 	r_ulightScissor = ri.Cvar_Get( "r_ulightScissor", "1", CVAR_CHEAT );
 	r_ulightAreaCull = ri.Cvar_Get( "r_ulightAreaCull", "1", CVAR_CHEAT );
 	r_ulightSpecular = ri.Cvar_Get( "r_ulightSpecular", "1", CVAR_ARCHIVE );
+	r_ulightUE1Floor = ri.Cvar_Get( "r_ulightUE1Floor", "0.0075", CVAR_TEMP );
+	ri.Cvar_SetDescription( r_ulightUE1Floor, "UE1 lights: light units taken off each lamp's own contribution (UE1 loses about one display unit per lamp; 0.0075 fitted with the gain, docs/lights.md), read when the map loads." );
 	r_ulightShadowBias = ri.Cvar_Get( "r_ulightShadowBias", "0.004", CVAR_CHEAT );
 	r_ulightDebug = ri.Cvar_Get( "r_ulightDebug", "0", CVAR_CHEAT );
 	r_dlightShadows = ri.Cvar_Get( "r_dlightShadows", "0", CVAR_ARCHIVE );

@@ -153,6 +153,8 @@ typedef struct {
 	float       spotScale;          // 1 / (1 - cos(the cone's edge)); 0: no cone
 	                                // (the measured profile: interaction_fp PhysCone)
 	int         unsupported;        // source features with no translation (UE1 spatial effects)
+	float       floor;              // light units taken off this light's own contribution
+	                                // (UE1 loses about one display unit per lamp), 0 none
 } uLightPhys_t;
 
 // one entity's keys from the entity lump
@@ -295,6 +297,7 @@ extern uLightBackend_t ulb;
 // cvars
 extern cvar_t *r_ulight;
 extern cvar_t *r_ulightShadows;
+extern cvar_t *r_ulightUE1Floor;
 extern cvar_t *r_ulightShadowMode;
 extern cvar_t *r_ulightScissor;
 extern cvar_t *r_ulightAreaCull;

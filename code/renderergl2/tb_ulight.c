@@ -74,7 +74,7 @@ typedef struct {
 	GLint           lightOriginW, lightColor, diffuseColor, specularColor;
 	GLint           shadowParams, shadowMatrix;
 	GLint           texNormal, texSpecular, texProj, texFalloff, texShadowCube, texShadow2D;
-	GLint           physLight, physLight2, physCurveCount, physSpot;
+	GLint           physLight, physLight2, physCurveCount, physSpot, physFloor;
 	GLint           physCurve[ULIGHT_MAX_FALLOFF_POINTS];
 	GLint           texCube, metalParms, reflectLod, gridLightDir, gridLight;
 } uProgram_t;
@@ -181,6 +181,7 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	p->physLight = qglGetUniformLocation( prog, "u_PhysLight" );
 	p->physLight2 = qglGetUniformLocation( prog, "u_PhysLight2" );
 	p->physSpot = qglGetUniformLocation( prog, "u_PhysSpot" );
+	p->physFloor = qglGetUniformLocation( prog, "u_PhysFloor" );
 	{
 		int k;
 
@@ -927,6 +928,9 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 			qglProgramUniform4fEXT( prog, p->physLight, 1.0f / ph->radius, ph->intensity, ph->cap, ph->capKnee );
 			qglProgramUniform4fEXT( prog, p->physLight2, (float)ph->falloffMode, ph->invsqMin, ph->lambert ? 1.0f : 0.0f, ulw.overbright * tr.identityLight );
 			qglProgramUniform4fEXT( prog, p->physSpot, ph->spotDir[0], ph->spotDir[1], ph->spotDir[2], ph->spotScale );
+			if ( p->physFloor >= 0 ) {
+				qglProgramUniform1fEXT( prog, p->physFloor, ph->floor * tr.identityLight );
+			}
 			for ( k = 0; k < ph->numPoints; k++ ) {
 				if ( p->physCurve[k] >= 0 ) {
 					qglProgramUniform2fEXT( prog, p->physCurve[k], ph->points[k][0], ph->points[k][1] );

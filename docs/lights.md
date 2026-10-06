@@ -73,12 +73,13 @@ number), `ue1_LightEffect` (`LE_None`), `ue1_LightPeriod` (32),
 | --- | --- | --- |
 | radius | `25 * (LightRadius + 1)` | `Actor::WorldLightRadius()`, UE1 SDK AActor.h |
 | falloff | `1 - smoothstep(x)` (`3x^2 - 2x^3`), zero at the radius, no ceiling | measured in linear space, below |
-| intensity | `0.0123 * LightBrightness` | measured; the one fitted gain, below |
+| intensity | `0.01265 * LightBrightness` | measured; fitted with the floor, below |
 | color | FGetHSV hue and saturation, unnormalised: hue wheel linear (red 0, green 85, blue 170), saturation blends toward white (255 white); hue 0 is RED | UE1 |
 | angular | Lambert; `LE_NonIncidence`: none | |
 | mask | 1; `bSpecialLit`: 2 | |
 | off | `LT_None`, or brightness 0 | |
 | level brightness | worldspawn `ue1_LevelBrightness` b: intensity x b | measured, below |
+| per-lamp floor | each lamp's own light less 0.0075 (about one display unit), not below 0, before the lamps add (`r_ulightUE1Floor`) | measured, below |
 
 Measured in linear space (2026-10-02). UE1 test maps were baked with
 the UE1 editor's lighting build (driven by an external converter's
@@ -87,12 +88,32 @@ chain neutral (Brightness 0.5, GammaOffset 0), so a pixel is texel x light.
 Six lamps: four calibration corridors (LightRadius 12 to 64, 325 to
 1625 units, brightness 50 and 96) and two halls with a reference map's
 deck-lamp radii (LightRadius 200 and 255, 5025 and 6400 units). Every lamp fits
-`gain * LightBrightness * (1 - smoothstep(d / R)) * N.L` with R =
-WorldLightRadius() exactly (fitted zeros 0.93 to 1.03 R) and one gain,
-0.0123: rms 1.3 grey levels, mean |log| 0.030 over 433 cells
-(`misc/tools/ue1-light-calib.mjs`, `tests/romdev/reference/ue1-light-calib.json`).
+`max(gain * LightBrightness * (1 - smoothstep(d / R)) * N.L - floor, 0)` with R =
+WorldLightRadius() exactly (fitted zeros 0.93 to 1.03 R), gain 0.01265 and
+floor 0.0075: rms 1.14 grey levels, mean |log| 0.027 over 433 cells
+(`misc/tools/ue1-light-calib.mjs`, `tests/romdev/reference/ue1-light-calib.json`;
+the gain fitted alone, 0.0123, gave rms 1.29 and |log| 0.030).
 A line with a ceiling fits no better (rms 1.27 to 4.6 per lamp against 1.04
 to 4.5) and needs two more numbers per lamp.
+
+The per-lamp floor (measured 2026-10-05, an external converter's
+calibration maps at a reference Assault map's lamp settings, shot straight
+down at a floor 200 below each lamp): far out on its falloff a UE1 lamp
+gives about one display unit less than the curve, reaching zero at 0.80 to
+0.90 R where the curve still has 1 to 1.4. The loss is per lamp, not on the
+sum: two overlapping lamps sum to their two single-lamp profiles in UE1, as
+in oax (a floor on the sum would leave the pair a unit above).
+The loss is the same at every radius (LightRadius 64, 128 and 255) and
+brightness (32 to 255, coloured too), and with LevelInfo ambient. Each
+lamp's contribution loses `r_ulightUE1Floor` light units (read when the map
+loads), floored at 0, before the lamps add. The gain fitted without the
+floor came out low, absorbing the tails' excess: near a lamp oax sat about
+4% under UE1 (a near-constant ratio, the reference halls' mid range).
+Fitted together on the 433 cells the optimum is gain 0.0126, floor 0.0065
+(rms 1.13); the engine takes 0.01265 and 0.0075 (rms 1.14, halls rms 1.04
+to 0.67), the floor that also fits the dimmer lamps' tails on the
+calibration rig (LightBrightness 64 at LightRadius 64, 120 at 32: tail rms
+0.83 to 0.12 display units, paired lamps on UE1's sum).
 
 The profile fitted before (a line to 0.89 R, a ceiling at 115 level / B of
 the peak, gain 0.02778, ceiling scaling with LevelInfo Brightness^0.65) was
@@ -100,7 +121,7 @@ fitted to shots that had passed the reference OpenGL renderer's display curve (i
 default settings: Brightness 1.0 and GammaOffset 0.1, see "Display curve" below): the curve's
 compressive top imitated the ceiling. On the linear points it is off by
 mean |log| 0.62; `ulight-ue1-calib` keeps it as the control that must
-fail. A lamp lights up to `0.0123 * LightBrightness` (1.18 for a 96 lamp),
+fail. A lamp lights up to `0.01265 * LightBrightness` (1.21 for a 96 lamp),
 so a near lamp needs `oax_overbright 2` to show above 1x.
 
 `LightType` time functions, as effects (35 ticks a second): `LT_Pulse`

@@ -313,11 +313,11 @@
   "minCount": 15
  },
  "fit": {
-  "gain": 0.0123,
-  "falloff": "1 - smoothstep(d / R)",
+  "gain": 0.01265,
+  "falloff": "1 - smoothstep(d / R), less the floor per lamp",
   "model": {
-   "rms": 1.29,
-   "meanAbsLog": 0.03,
+   "rms": 1.14,
+   "meanAbsLog": 0.0272,
    "cells": 433,
    "litCells": 298
   },
@@ -332,7 +332,8 @@
    "meanAbsLog": 0.6168,
    "cells": 433,
    "litCells": 298
-  }
+  },
+  "floor": 0.0075
  },
  "cells": [
   {

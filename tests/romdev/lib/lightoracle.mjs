@@ -12,7 +12,7 @@
 // falloff 'smooth': 1 - smoothstep(d / R), no ceiling (fitted in linear space);
 // 'line' with lineZero and capK is the profile fitted in the reference renderer's display space
 // before (kept for controls)
-export const UE1 = { falloff: 'smooth', gain: 0.0123, lineZero: 0.89, capK: 115 };
+export const UE1 = { falloff: 'smooth', gain: 0.01265, floor: 0.0075, lineZero: 0.89, capK: 115 };
 const Q3 = { pointScale: 7500, linearScale: 1 / 8000, minDist: 16 };
 
 export function ue1Level(brightness) {
@@ -56,6 +56,7 @@ export function profile(keys, world = {}) {
     const period = num(k.ue1_lightperiod, 32), phase = num(k.ue1_lightphase, 0);
     d.radius = 25 * (Math.trunc(r) + 1);
     d.intensity = UE1.gain * B;
+    d.floor = UE1.floor ?? 0;   // taken off this lamp's own light (r_ulightUE1Floor)
     if (UE1.falloff === 'line') {
       d.falloff = line(UE1.lineZero);
       d.cap = UE1.capK * UE1.gain * ue1Level(B);
@@ -176,5 +177,5 @@ export function light(desc, d, cosine, { ceiling = 1, time = 0, sample } = {}) {
   const v = softcap(desc.intensity * falloff(desc.falloff, x, sample), desc.cap, desc.knee);
   const ang = desc.lambert ? Math.max(0, cosine) : (cosine >= 0 ? 1 : 0);
   const e = effect(desc, time);
-  return desc.color.map((c) => Math.min(v * ang * c * e, ceiling));
+  return desc.color.map((c) => Math.max(Math.min(v * ang * c * e, ceiling) - (desc.floor || 0), 0));
 }

@@ -59,12 +59,13 @@ inside it.
 // UE1 shots with the display chain neutral (Brightness 0.5, GammaOffset
 // 0), six lamps from LightRadius 12 to 255 (325 to 6400 units): every lamp
 // is light = gain * LightBrightness * (1 - smoothstep(d / R)) * N.L with R
-// = WorldLightRadius() and no ceiling (rms 1.3 grey over 433 calibration
-// cells, misc/tools/ue1-light-calib.mjs). The line with a ceiling fitted
-// before was the renderer's display curve, not UE1's lighting.
+// = WorldLightRadius() and no ceiling, less a per-lamp floor (r_ulightUE1Floor,
+// 0.0075) fitted with the gain (rms 1.14 grey over 433 calibration cells,
+// misc/tools/ue1-light-calib.mjs). The line with a ceiling fitted before was
+// the renderer's display curve, not UE1's lighting.
 //
 // light (1.0 = the texture at 1x) per unit of LightBrightness
-#define UE1_GAIN        0.0123f
+#define UE1_GAIN        0.01265f
 
 // q3map2 (light.c, q3map2.h)
 #define Q3_POINTSCALE   7500.0f
@@ -218,6 +219,9 @@ static void ProfileUE1( const spawnArgs_t *a, uLightParms_t *p ) {
 	ph->capKnee = 0;
 	R_UE1Color( KeyFloat( a, "ue1_LightHue", 0 ), KeyFloat( a, "ue1_LightSaturation", 255 ), ph->color );
 	ph->lambert = qtrue;
+	// UE1 drops about one display unit from each lamp's own contribution
+	// (per lamp, not on the sum: measured on paired lamps; docs/lights.md)
+	ph->floor = r_ulightUE1Floor->value;
 	ph->mask = KeyBool( a, "ue1_bSpecialLit" ) ? ULIGHT_MASK_SPECIALLIT : ULIGHT_MASK_DEFAULT;
 	p->noSpecular = qtrue;       // lightmaps: no specular term
 	if ( brightness <= 0 || type == 0 ) {

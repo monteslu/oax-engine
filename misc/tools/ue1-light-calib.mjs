@@ -22,9 +22,11 @@
 //
 //   node misc/tools/ue1-light-calib.mjs --calib <dir> --big <dir> --texture wall.tga [--out file.json]
 //
-// It fits the profile's one gain (light per unit of LightBrightness) with
-// the falloff 1 - smoothstep(d / R) held fixed, and prints the error of that
-// model and of the curve-space profile it replaces on the same cells.
+// It fits the profile's gain (light per unit of LightBrightness) and its
+// per-lamp floor (light taken off each lamp's own contribution) together,
+// with the falloff 1 - smoothstep(d / R) held fixed, and prints the error of
+// that model and of the curve-space profile it replaces on the same cells.
+// (A gain fitted alone comes out low: it absorbs the floor's missing tail.)
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -144,11 +146,17 @@ export function predict(set, li, x, cos, texMean, constants = {}) {
   return lampChannel(lamp) === 'blue' ? px[2] : (px[0] + px[1] + px[2]) / 3;
 }
 
-// the gain: linear in the model, so closed form (no clamp is reached)
-let num = 0, den = 0;
-// (at a tiny trial gain, so no light reaches the 2x ceiling)
-for (const p of all) { const f = predict(p.set, p.lamp, p.x, p.cos, tex, { gain: 1e-4 }); num += p.ref * f; den += f * f; }
-const gain = Number((1e-4 * num / den).toFixed(5));
+// the gain and the floor: least squares over a grid (the floor's clamp at 0
+// makes it nonlinear)
+let best = null;
+for (let g = 0.0115; g <= 0.0140; g += 0.00005) {
+  for (let q = 0; q <= 0.014; q += 0.0005) {
+    let se = 0;
+    for (const p of all) se += (predict(p.set, p.lamp, p.x, p.cos, tex, { gain: g, floor: q }) - p.ref) ** 2;
+    if (!best || se < best.se) best = { se, g, q };
+  }
+}
+const gain = Number(best.g.toFixed(5)), floor = Number(best.q.toFixed(4));
 
 // cells
 const groups = new Map();
@@ -173,10 +181,10 @@ function stats(get) {
   }
   return { rms: +Math.sqrt(se / n).toFixed(2), meanAbsLog: +(lg / ln).toFixed(4), cells: n, litCells: ln };
 }
-const model = stats((c) => predict(c.set, c.lamp, c.x, c.cos, tex, { gain }));
+const model = stats((c) => predict(c.set, c.lamp, c.x, c.cos, tex, { gain, floor }));
 // the profile fitted in the reference renderer's display space before (line to 0.89 R, a
 // ceiling at 115 level / brightness of the peak, gain 0.02778)
-export const CURVE_SPACE = { gain: 0.02778, falloff: 'line', lineZero: 0.89, capK: 115 };
+export const CURVE_SPACE = { gain: 0.02778, floor: 0, falloff: 'line', lineZero: 0.89, capK: 115 };
 const curveSpace = stats((c) => predict(c.set, c.lamp, c.x, c.cos, tex, CURVE_SPACE));
 
 const fixture = {
@@ -185,11 +193,11 @@ const fixture = {
   textureMean: tex.map((v) => +v.toFixed(4)),
   blackLevel: black,
   bins: { x: XBIN, cos: CBIN, minCount: MIN_COUNT },
-  fit: { gain, falloff: '1 - smoothstep(d / R)', model, curveSpace: { constants: CURVE_SPACE, ...curveSpace } },
+  fit: { gain, floor, falloff: '1 - smoothstep(d / R), less the floor per lamp', model, curveSpace: { constants: CURVE_SPACE, ...curveSpace } },
   cells,
 };
 if (args.out) fs.writeFileSync(args.out, JSON.stringify(fixture, null, 1) + '\n');
 console.log(`texture mean ${tex.map((v) => v.toFixed(3)).join(' ')}; black ${calib.black} / ${big.black}; ${all.length} points, ${cells.length} cells`);
-console.log(`gain ${gain} (engine UE1.gain ${UE1.gain})`);
+console.log(`gain ${gain}, floor ${floor} (engine UE1.gain ${UE1.gain}, floor ${UE1.floor})`);
 console.log(`smoothstep profile vs reference: rms ${model.rms} grey, mean |log| ${model.meanAbsLog} over ${model.litCells} lit cells`);
 console.log(`curve-space profile vs reference: rms ${curveSpace.rms} grey, mean |log| ${curveSpace.meanAbsLog}`);
