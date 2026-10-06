@@ -158,7 +158,7 @@ Flags:
 | 0x001 | `OSF_TWOSIDED` | drawn from both sides (no back-face culling) |
 | 0x002 | `OSF_MASKED` | alpha tested: texels with alpha below 0.5 are holes |
 | 0x004 | `OSF_TRANSLUCENT` | alpha blended: tint[3] x the texture's alpha of (vertex light x texel x tint) over what is behind (in a unified map the vertex light is the ambient); drawn after opaque surfaces, not lit by light interactions |
-| 0x008 | `OSF_ADDITIVE` | adds tint x texel to what is behind it, unlit (glows, flames) |
+| 0x008 | `OSF_ADDITIVE` | adds tint x texel to what is behind it, unlit (glows, flames). With `OSF_TRANSLUCENT` too: lit additive, (vertex light x texel x tint) added to what is behind it (UE1 Translucent surfaces that are not Unlit: water); the vertex light is the translucent one |
 | 0x010 | `OSF_INVISIBLE` | never drawn (UE1 invisible surfaces, editor-only polygons); kept for tools and validation |
 | 0x020 | `OSF_UVMATRIX` | texture coordinates come from the surface's `uv` matrix; otherwise from each vertex's `st` |
 | 0x040 | `OSF_NORMALS` | each vertex's `normal` is used; otherwise the plane's normal (polygon) or the triangle normals averaged per vertex (mesh) |

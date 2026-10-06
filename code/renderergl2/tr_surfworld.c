@@ -168,7 +168,13 @@ void R_OAXSurfVariantApply( const void *variant, shader_t *sh, shaderStage_t *st
 		shaderStage_t *st = &stages[first];
 
 		st->stateBits &= ~( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_DEPTHMASK_TRUE );
-		if ( v->flags & OSF_ADDITIVE ) {
+		if ( ( v->flags & OSF_ADDITIVE ) && ( v->flags & OSF_TRANSLUCENT ) ) {
+			// lit additive (UE1 Translucent without Unlit: water): its
+			// vertex light x texel, the tint on top (oaxTint, below), added
+			// to what is behind it
+			st->stateBits |= GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
+			st->rgbGen = CGEN_EXACT_VERTEX;
+		} else if ( v->flags & OSF_ADDITIVE ) {
 			// a glow: added unlit, tint x texel on screen (identityLight in
 			// the render target; the frame is scaled by the overbright at the end)
 			st->stateBits |= GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
@@ -313,6 +319,7 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 	int *variantOf, *newIndexOfOld, *newIndexOfLump;
 	int addVerts = 0, addIndexes = 0, addSurfs = 0, numRefs = 0, maxRefs = 1;
 	leafRef_t *refs;
+	int *found;
 	dsurface_t *outSurfs;
 	drawVert_t *outVerts;
 	int *outIndexes, *outLeafSurfs;
@@ -412,6 +419,7 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 	newIndexOfOld = ri.Malloc( sizeof( int ) * ( numSurfs + 1 ) );
 	newIndexOfLump = ri.Malloc( sizeof( int ) * ( L.numSurfaces + 1 ) );
 	refs = ri.Malloc( sizeof( leafRef_t ) * maxRefs );
+	found = ri.Malloc( sizeof( int ) * ( numLeafs + 1 ) );
 	sw.recs = ri.Malloc( sizeof( surfRecord_t ) * ( addSurfs + 1 ) );
 	sw.numVerts = L.numVerts;
 	sw.verts = ri.Malloc( sizeof( oaxSurfVert_t ) * ( L.numVerts + 1 ) );
@@ -547,7 +555,12 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 				rec->variant = variantOf[i];
 				newIndexOfLump[i] = s;
 
-				// the leaves of a world surface
+				// the leaves of a world surface: the lump's own list, plus
+				// every leaf the surface's box reaches (a converter may list
+				// the leaf of one point; a converted map's scenery or hull can
+				// be one polygon thousands of units long, crossing hundreds of
+				// leaves, and a leaf that does not list it never draws or
+				// lights it). Duplicates go when the refs are sorted.
 				if ( k == 0 ) {
 					if ( so.firstLeaf >= 0 ) {
 						for ( j = 0; j < so.numLeafs && numRefs < maxRefs; j++ ) {
@@ -558,8 +571,9 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 								numRefs++;
 							}
 						}
-					} else {
-						int found[64], n = 0;
+					}
+					{
+						int n = 0;
 						vec3_t mins, maxs;
 
 						ClearBounds( mins, maxs );
@@ -570,7 +584,16 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 							mins[j] -= 1.0f;
 							maxs[j] += 1.0f;
 						}
-						BoxLeaves_r( file, h, 0, mins, maxs, found, &n, 64 );
+						BoxLeaves_r( file, h, 0, mins, maxs, found, &n, numLeafs );
+						if ( numRefs + n > maxRefs ) {
+							leafRef_t *grown;
+
+							maxRefs = ( numRefs + n ) * 2;
+							grown = ri.Malloc( sizeof( leafRef_t ) * maxRefs );
+							Com_Memcpy( grown, refs, sizeof( leafRef_t ) * numRefs );
+							ri.Free( refs );
+							refs = grown;
+						}
 						for ( j = 0; j < n && numRefs < maxRefs; j++ ) {
 							refs[numRefs].leaf = found[j];
 							refs[numRefs].surf = s;
@@ -613,7 +636,9 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 				r++;
 			}
 			while ( r < filledRefs && refs[r].leaf == i ) {
-				outLeafSurfs[n++] = LittleLong( refs[r].surf );
+				if ( r == 0 || refs[r].leaf != refs[r - 1].leaf || refs[r].surf != refs[r - 1].surf ) {
+					outLeafSurfs[n++] = LittleLong( refs[r].surf );
+				}
 				r++;
 			}
 			outLeafs[i].numLeafSurfaces = LittleLong( n - LittleLong( outLeafs[i].firstLeafSurface ) );
@@ -647,6 +672,7 @@ dheader_t *R_OAXSurfWorldRewrite( const byte *file, int fileLen ) {
 	ri.Free( newIndexOfOld );
 	ri.Free( newIndexOfLump );
 	ri.Free( refs );
+	ri.Free( found );
 
 	ri.Printf( PRINT_ALL, "OAX_SURFACES: %d surfaces (%d skipped), %d triangles, %d materials, %d shader variants\n",
 		sw.numRecs, sw.skipped, addIndexes / 3, L.numMaterials, sw.numVariants );
