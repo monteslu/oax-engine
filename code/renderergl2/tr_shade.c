@@ -310,6 +310,11 @@ void RB_BeginSurface( shader_t *shader, int fogNum, int cubemapIndex ) {
 	tess.xstages = state->stages;
 	tess.numPasses = state->numUnfoggedPasses;
 	tess.currentStageIteratorFunc = state->optimalStageIteratorFunc;
+	if ( ulb.mode == ULB_DEPTH && state->isSky ) {
+		// a shadow map pass draws the sky face itself (a caster for the
+		// map's lamps, tr_ulight.c WalkLightNodes), not the sky box
+		tess.currentStageIteratorFunc = RB_StageIteratorGeneric;
+	}
 	tess.useInternalVao = qtrue;
 	tess.useCacheVao = qfalse;
 

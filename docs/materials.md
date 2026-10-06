@@ -15,6 +15,16 @@ surface asks for the same per surface with `OSF_NOSHADOW`
 (docs/map-format.md). Stencil volumes of the world come from BSP brushes,
 so only a brush's own shader can keep a brush from casting there.
 
+## Sky faces as shadow casters
+
+A face with `surfaceparm sky` is never lit, but it blocks every point and
+spot light the way UE1's FakeBackdrop faces and Q3's sky brushes block
+their lamps: a courtyard lamp does not shine through the courtyard's sky
+panel onto the lawn beyond. Only a parallel light (the sun) passes through
+sky. The face is in each such light's shadow casters (maps and stencil
+volumes); its own pixels keep drawing the sky box. `oaxNoShadow` on the
+sky material turns this off.
+
 ## `oaxTint r g b` (shader level)
 
 Multiplies the colour of the material's surface stages by `r g b` (floats,

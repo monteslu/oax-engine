@@ -36,7 +36,8 @@ pixel = texture * light  (+ specular * v * color where the profile has it)
 - Shadows, scissoring, area culling and light shaders (`texture`, whose
   color expressions still multiply the color) work as for any unified
   light. A physical light is always a sphere: `light_target` and friends
-  are ignored.
+  are ignored. Sky faces cast shadows for point and spot lights, not for
+  parallel ones (docs/materials.md, "Sky faces as shadow casters").
 
 ## Light entity keys (`light`, `rtlight`)
 

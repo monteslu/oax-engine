@@ -964,6 +964,22 @@ static void AddLightArea( uLight_t *l, int area ) {
 	l->areas[l->numAreas++] = area;
 }
 
+// a world surface in the light's set (lit, a shadow caster, or both)
+static void AddWorldSurf( uLight_t *l, int s ) {
+	if ( l->numWorldSurfs == l->maxWorldSurfs ) {
+		int *n;
+
+		l->maxWorldSurfs = l->maxWorldSurfs ? l->maxWorldSurfs * 2 : 64;
+		n = ri.Malloc( sizeof( int ) * l->maxWorldSurfs );
+		if ( l->worldSurfs ) {
+			Com_Memcpy( n, l->worldSurfs, sizeof( int ) * l->numWorldSurfs );
+			ri.Free( l->worldSurfs );
+		}
+		l->worldSurfs = n;
+	}
+	l->worldSurfs[l->numWorldSurfs++] = s;
+}
+
 static void WalkLightNodes( interactionWalk_t *w, mnode_t *node ) {
 	uLight_t *l = w->light;
 
@@ -1009,27 +1025,27 @@ static void WalkLightNodes( interactionWalk_t *w, mnode_t *node ) {
 			if ( *surf->data == SF_SKIP || *surf->data == SF_BAD || *surf->data == SF_FLARE ) {
 				continue;
 			}
-			if ( surf->shader->isSky || ( surf->shader->surfaceFlags & ( SURF_SKY | SURF_NODRAW ) ) ) {
+			if ( surf->shader->surfaceFlags & SURF_NODRAW ) {
 				continue;
 			}
 			if ( ( ci->type & CULLINFO_BOX ) && !BoxInLight( l, ci->bounds[0], ci->bounds[1] ) ) {
 				continue;
 			}
+			if ( surf->shader->isSky || ( surf->shader->surfaceFlags & SURF_SKY ) ) {
+				// a sky face: never lit, but it blocks a point or spot light
+				// the way UE1's FakeBackdrop and Q3's sky brushes block their
+				// lamps (only the sun, a parallel light, shines through the
+				// sky): a shadow caster in the light's set, no facing bit
+				if ( !l->parms.parallel ) {
+					AddWorldSurf( l, s );
+					lightSurfBits[w->lightNum][s >> 3] |= 1 << ( s & 7 );
+				}
+				continue;
+			}
 			if ( !( (unsigned)R_ULightSurfaceMask( surf->shader, s ) & l->parms.lightMask ) ) {
 				continue;	// not in a group this light lights
 			}
-			if ( l->numWorldSurfs == l->maxWorldSurfs ) {
-				int *n;
-
-				l->maxWorldSurfs = l->maxWorldSurfs ? l->maxWorldSurfs * 2 : 64;
-				n = ri.Malloc( sizeof( int ) * l->maxWorldSurfs );
-				if ( l->worldSurfs ) {
-					Com_Memcpy( n, l->worldSurfs, sizeof( int ) * l->numWorldSurfs );
-					ri.Free( l->worldSurfs );
-				}
-				l->worldSurfs = n;
-			}
-			l->worldSurfs[l->numWorldSurfs++] = s;
+			AddWorldSurf( l, s );
 			lightSurfBits[w->lightNum][s >> 3] |= 1 << ( s & 7 );
 
 			// does the light reach its front side?
