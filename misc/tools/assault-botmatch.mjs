@@ -113,6 +113,13 @@ function track(v) {
     if (Number(state) === 2 && !(id in R.fell)) R.fell[id] = Math.round((R.limit - Number(v.g_as_left)) / 1000);
   }
   if (Number(v.g_as_phase) === 2) R.outcome = Number(v.g_as_outcome);
+  // round 1's result shows for 7 s; on a heavy map the samples can miss
+  // it, so round 2 fills it in from the time round 1 took (-1 failed)
+  const r1 = Number(v.g_as_r1time);
+  if (r === 2 && roundsSeen[1] && !roundsSeen[1].outcome && r1) {
+    roundsSeen[1].outcome = r1 > 0 ? 1 : 2;
+    if (r1 > 0) roundsSeen[1].took = Math.round(r1 / 1000);
+  }
   R.winner = Number(v.g_as_winner);
   R.navbots = Math.max(R.navbots ?? 0, Number(v.g_navbots ?? 0));
   R.stuck = Number(v.g_navbot_stuck);
@@ -151,7 +158,7 @@ for (const R of report.rounds) {
   delete R.posted;
   const team = R.attackers === 1 ? 'red' : 'blue';
   console.log(`round ${R.round}: ${team} attacks, limit ${R.limit / 1000} s; fell: ${Object.entries(R.fell).map(([id, t]) => `${id} at ${t} s`).join(', ') || 'nothing'}; ` +
-    `outcome ${R.outcome === 1 ? 'made it' : R.outcome === 2 ? 'ran out of time' : 'unfinished'}; defenders at their posts ${R.defendersPosted ?? '-'} (mean ${R.defenderMeanDist ?? '-'} units); bot stuck events ${R.stuck}; navmesh bots ${R.navbots} of ${bots * 2}`);
+    `outcome ${R.outcome === 1 ? `made it${R.took ? ` in ${R.took} s` : ''}` : R.outcome === 2 ? 'ran out of time' : 'unfinished'}; defenders at their posts ${R.defendersPosted ?? '-'} (mean ${R.defenderMeanDist ?? '-'} units); bot stuck events ${R.stuck}; navmesh bots ${R.navbots} of ${bots * 2}`);
   if (R.navbots < bots * 2) console.log(`  warning: only ${R.navbots} of ${bots * 2} bots ran as navmesh bots (missing bots joined late, failed to join, or are stock AAS bots)`);
 }
 const fin = report.rounds.at(-1);

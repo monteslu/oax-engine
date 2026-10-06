@@ -55,7 +55,9 @@ void OAX_AddFeature( const char *token ) {
 
 // ---- named debug values ------------------------------------------------------
 
-#define MAX_DEBUG_VALUES 256
+// a big map's debug values outgrew 256 (one per navmesh link, per bot, per
+// objective): the bot count was dropped and a bot match read "0 navmesh bots"
+#define MAX_DEBUG_VALUES 1024
 
 typedef struct {
 	char name[48];
@@ -75,6 +77,12 @@ void Com_DebugSet( const char *name, const char *value ) {
 	}
 	if ( i == numDebugValues ) {
 		if ( numDebugValues == MAX_DEBUG_VALUES ) {
+			static qboolean warned;
+
+			if ( !warned ) {
+				warned = qtrue;
+				Com_Printf( S_COLOR_YELLOW "WARNING: more than %i debug values: \"%s\" and later new names are dropped\n", MAX_DEBUG_VALUES, name );
+			}
 			return;
 		}
 		numDebugValues++;
