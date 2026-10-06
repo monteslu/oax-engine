@@ -259,12 +259,12 @@ static void ProfileUE1( const spawnArgs_t *a, uLightParms_t *p ) {
 		break;
 	}
 
-	// LightEffect: the angular one, the static spot and the cylinder (both
+	// LightEffect: the angular one, the spots and the cylinder (all
 	// measured in UE1, docs/lights.md); the rest are spatial patterns of
 	// UE1's software renderer with no translation
 	if ( effect == 13 ) {           // LE_NonIncidence
 		ph->lambert = qfalse;
-	} else if ( effect == 8 ) {     // LE_StaticSpot: a soft cone round the facing
+	} else if ( effect == 8 || effect == 12 ) {     // LE_StaticSpot, LE_Spotlight: a soft cone round the facing (the same cone; a Spotlight may move with its base, lit identically at rest)
 		const char *v = R_ULightArg( a, "ue1_direction" );
 		float cone = KeyFloat( a, "ue1_LightCone", 128 );
 		vec3_t dir = { 1, 0, 0 };
