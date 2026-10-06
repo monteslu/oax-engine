@@ -10,6 +10,8 @@ export const SIM_SCRIPTS = {
   // oax_zones from spawn 0: a low-gravity running jump that carries through
   // the current zone, then on into the fog room and a jump there
   ztour: [idle(20), fwd(2, { south: true }), fwd(300), fwd(2, { south: true }), fwd(60), idle(30)],
+  // stand still (a zone whose current drags walking players)
+  zstand: [idle(240)],
   // oax_warp: run down corridor A (or C) through the warp (or teleporter)
   wrun: [idle(10), fwd(220), idle(20)],
 };
