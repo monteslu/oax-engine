@@ -593,6 +593,46 @@ int dtNavMesh::connectFarOffMeshLinks()
 	return connected;
 }
 
+// oax patch
+int dtNavMesh::resetFarOffMeshLinks()
+{
+	for (int t = 0; t < m_maxTiles; ++t)
+	{
+		dtMeshTile* tile = &m_tiles[t];
+		if (!tile->header)
+			continue;
+		for (int i = 0; i < tile->header->polyCount; ++i)
+		{
+			dtPoly* poly = &tile->polys[i];
+			unsigned int prev = DT_NULL_LINK;
+			unsigned int k = poly->firstLink;
+			while (k != DT_NULL_LINK)
+			{
+				const unsigned int next = tile->links[k].next;
+				const dtPolyRef ref = tile->links[k].ref;
+				const unsigned int it = decodePolyIdTile(ref);
+				const dtMeshTile* rt = it < (unsigned int)m_maxTiles ? &m_tiles[it] : 0;
+				const bool far = !rt || !rt->header || rt->salt != decodePolyIdSalt(ref) ||
+					dtAbs(rt->header->x - tile->header->x) > 1 || dtAbs(rt->header->y - tile->header->y) > 1;
+				if (far)
+				{
+					if (prev == DT_NULL_LINK)
+						poly->firstLink = next;
+					else
+						tile->links[prev].next = next;
+					freeLink(tile, k);
+				}
+				else
+				{
+					prev = k;
+				}
+				k = next;
+			}
+		}
+	}
+	return connectFarOffMeshLinks();
+}
+
 void dtNavMesh::connectIntLinks(dtMeshTile* tile)
 {
 	if (!tile) return;

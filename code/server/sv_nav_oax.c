@@ -63,7 +63,7 @@ static cvar_t *sv_navCellSize;
 static cvar_t *sv_navLinks;
 
 #define NAV_MAX_LINKS	256
-#define NAV_MAX_AREAS	128
+#define NAV_MAX_AREAS	256
 
 static int			navBuildPending;	// the map wants a navmesh that is not built yet
 static oaxNavLink_t	navPendingLinks[NAV_MAX_LINKS];
@@ -383,9 +383,34 @@ static qboolean SV_OAXNavCalls( intptr_t *args, intptr_t *ret ) {
 		VectorCopy( (float *)VMA( 1 ), a->mins );
 		VectorCopy( (float *)VMA( 2 ), a->maxs );
 		a->cost = VMF( 3 );
+		a->dynamic = 0;
 		*ret = navNumPendingAreas++;
 		return qtrue;
 	}
+
+	case G_OAX_NAV_ADDBLOCKER: {
+		// a cost volume that removes the surface, switchable: its index is
+		// the area index the commit builds with (nav_oax.h oaxNavArea_t)
+		oaxNavArea_t *a;
+		VM_CheckBlock( args[1], sizeof( vec3_t ), "NAVBLOCKER" );
+		VM_CheckBlock( args[2], sizeof( vec3_t ), "NAVBLOCKER" );
+		*ret = -1;
+		if ( navNumPendingAreas >= NAV_MAX_AREAS ) {
+			return qtrue;
+		}
+		a = &navPendingAreas[navNumPendingAreas];
+		VectorCopy( (float *)VMA( 1 ), a->mins );
+		VectorCopy( (float *)VMA( 2 ), a->maxs );
+		a->cost = -1.0f;
+		a->dynamic = 1;
+		*ret = navNumPendingAreas++;
+		return qtrue;
+	}
+
+	case G_OAX_NAV_SETBLOCKER:
+		SV_OAXNavEnsure();
+		*ret = OAXNav_SetVolumeActive( args[1], args[2] );
+		return qtrue;
 
 	case G_OAX_NAV_COMMIT:
 		// the one build of a map with authored intent; with none (or

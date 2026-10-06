@@ -74,6 +74,7 @@ typedef struct {
 typedef struct {
 	float	mins[3], maxs[3];
 	float	cost;
+	int		dynamic;	// a navmesh obstacle (cost < 0): OAXNav_SetVolumeActive turns it on and off
 } oaxNavArea_t;
 
 // Builds the navmesh; returns its polygon count (0 on failure, with a reason
@@ -105,6 +106,10 @@ typedef struct {
 // The same with off-mesh links, cost volumes and solid volumes (any may be
 // empty / NULL). Large maps are built in tiles; only tiles that hold
 // walkable geometry are built.
+// Turns a dynamic cost volume (a navmesh obstacle) on or off, rebuilding the
+// tiles it reaches; obstacles start on. Returns the tiles rebuilt.
+int		OAXNav_SetVolumeActive( int vol, int active );
+
 int		OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const unsigned char *walkable,
 			int numTris, const oaxNavParams_t *params, const oaxNavLink_t *links, int numLinks,
 			const oaxNavArea_t *areas, int numAreas, const oaxNavSolids_t *solids, char *err, int errSize );

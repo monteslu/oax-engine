@@ -409,6 +409,13 @@ public:
 	/// @return The number of landings connected.
 	int connectFarOffMeshLinks();
 
+	/// oax patch: removes every link to a polygon more than one tile away or in
+	/// a tile that is gone (the far landings connectFarOffMeshLinks made, both
+	/// ways), then connects the far landings again. Call after a tile is
+	/// removed and rebuilt (removeTile unlinks only its 8 neighbours).
+	/// @return The number of landings connected.
+	int resetFarOffMeshLinks();
+
 	
 	/// Gets the tile reference for the tile at specified grid location.
 	///  @param[in]	x		The tile's x-location. (x, y, layer)

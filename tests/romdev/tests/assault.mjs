@@ -90,6 +90,16 @@ function check(build, at, rows, failures) {
   if (num(r2, 'g_as_limit') !== num(w, 'g_as_r1time')) f(`round 2's limit ${num(r2, 'g_as_limit')} is not round 1's time ${num(w, 'g_as_r1time')}`);
   if (num(r2, 'g_as_done') !== 0) f('the objectives were not reset for round 2');
 
+  // the doors the objectives open are navmesh obstacles while closed: the
+  // gate (the generator's) and the keep door (the controls'); the cow's
+  // targets are not (it ends the round). Re-armed by the restart (the links
+  // rebuild 300 ms into the round, so read it at 'decided', 10 s in).
+  const bl = (v) => String(v?.g_nav_blockers ?? '?');
+  rows.push(`${build}: navmesh door blockers: ${num(st, 'g_nav_blocker_count')} (${bl(st)} at the start, ${bl(at.respawn)} with the gate open, ${bl(at.decided)} in round 2)`);
+  if (num(st, 'g_nav_blocker_count') !== 2 || bl(st) !== '11') f(`the gate and the keep door are not the two closed navmesh blockers (${num(st, 'g_nav_blocker_count')}: ${bl(st)})`);
+  if (bl(at.respawn) !== '01') f(`the open gate still blocks the navmesh (${bl(at.respawn)})`);
+  if (bl(at.decided) !== '11') f(`the blockers were not re-armed for round 2 (${bl(at.decided)})`);
+
   const d = at.decided;
   rows.push(`${build}: decided: outcome ${num(d, 'g_as_outcome')}, winner ${num(d, 'g_as_winner')}; the player (team ${p0(d).team}) on the HUD: round ${hud(d).round}, role ${hud(d).role}`);
   // the HUD's numbers come from its last drawn frame: read in round 2's own time

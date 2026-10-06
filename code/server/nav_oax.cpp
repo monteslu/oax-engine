@@ -31,6 +31,8 @@ filter may cross (nav_oax.h OAXNAV_*).
 #include "nav_oax.h"
 
 #define NAV_MAX_POLYS_PATH	512
+#define NAV_TILE_CELLS		256
+#define NAV_MAX_TILES		4096
 #define NAV_QUERY_NODES		32768	// paths across a large tiled map
 
 static dtNavMesh		*navMesh;
@@ -66,7 +68,10 @@ static void Fail( char *err, int errSize, const char *msg ) {
 	}
 }
 
+static void NavBuildFree( void );
+
 void OAXNav_Free( void ) {
+	NavBuildFree();
 	if ( navQuery ) {
 		dtFreeNavMeshQuery( navQuery );
 		navQuery = NULL;
@@ -340,6 +345,355 @@ static void NavDropOpaqueTops( rcHeightfield &hf, const oaxNavSolids_t *sol ) {
 
 /*
 =================
+NavBuildTile
+
+One tile of the navmesh from the build's inputs (navBuild), into navMesh:
+-1 failed (err), 0 nothing walkable, 1 added. OAXNav_BuildEx builds every
+tile through it; OAXNav_SetVolumeActive rebuilds the tiles a navmesh
+obstacle covers.
+=================
+*/
+struct NavBuildState {
+	rcConfig				base;
+	oaxNavParams_t			p;
+	float					wmin[3], wmax[3], tileSize;
+	int						tw, th;
+	int						numVerts, numTris;
+	float					*rv;
+	int						*tris;
+	unsigned char			*walk, *areas;
+	float					*triBounds;
+	int						*tileTris;
+	int						numVols;
+	oaxNavArea_t			*vols;
+	unsigned char			*volId, *volOn;
+	int						numLinks;
+	float					*conVerts, *conRad;
+	unsigned short			*conFlags;
+	unsigned char			*conAreas, *conDir;
+	unsigned int			*conIds;
+	oaxNavSolids_t			solidsCopy;
+	const oaxNavSolids_t	*solids;
+	float					*seeds;
+	int						*solidFirst, *solidNum;
+	float					*solidBounds, *solidPlanes;
+	unsigned char			*solidTop;
+	unsigned char			*built;		// tiles of the first build, by index
+	int						tileBits;
+};
+static NavBuildState *navBuild;
+
+static void NavBuildFree( void ) {
+	NavBuildState *b = navBuild;
+
+	if ( !b ) {
+		return;
+	}
+	delete[] b->rv;
+	delete[] b->tris;
+	delete[] b->walk;
+	delete[] b->areas;
+	delete[] b->triBounds;
+	delete[] b->tileTris;
+	delete[] b->vols;
+	delete[] b->volId;
+	delete[] b->volOn;
+	delete[] b->conVerts;
+	delete[] b->conRad;
+	delete[] b->conFlags;
+	delete[] b->conAreas;
+	delete[] b->conDir;
+	delete[] b->conIds;
+	delete[] b->seeds;
+	delete[] b->solidFirst;
+	delete[] b->solidNum;
+	delete[] b->solidBounds;
+	delete[] b->solidPlanes;
+	delete[] b->solidTop;
+	delete[] b->built;
+	delete b;
+	navBuild = NULL;
+}
+
+// a copy of the solid volumes (the caller's arrays are freed after the build)
+static void NavCopySolids( NavBuildState *b, const oaxNavSolids_t *in ) {
+	oaxNavSolids_t *o = &b->solidsCopy;
+	int v, planes = 0;
+
+	*o = *in;
+	for ( v = 0; v < in->numVolumes; v++ ) {
+		if ( in->volFirstPlane[v] + in->volNumPlanes[v] > planes ) {
+			planes = in->volFirstPlane[v] + in->volNumPlanes[v];
+		}
+	}
+	const size_t nv = in->numVolumes > 0 ? (size_t)in->numVolumes : 0, np = planes > 0 ? (size_t)planes : 0;
+	const size_t ns = in->numSeeds > 0 ? (size_t)in->numSeeds : 0;
+	b->solidFirst = new int[nv + 1];
+	b->solidNum = new int[nv + 1];
+	b->solidBounds = new float[nv * 6 + 1];
+	b->solidPlanes = new float[np * 4 + 1];
+	b->solidTop = new unsigned char[np + 1];
+	if ( in->numVolumes > 0 ) {
+		memcpy( b->solidFirst, in->volFirstPlane, in->numVolumes * sizeof( int ) );
+		memcpy( b->solidNum, in->volNumPlanes, in->numVolumes * sizeof( int ) );
+		memcpy( b->solidBounds, in->volBounds, in->numVolumes * 6 * sizeof( float ) );
+	}
+	if ( planes > 0 ) {
+		memcpy( b->solidPlanes, in->planes, planes * 4 * sizeof( float ) );
+		memcpy( b->solidTop, in->planeTop, planes );
+	}
+	b->seeds = new float[ns * 3 + 1];
+	if ( in->numSeeds > 0 ) {
+		memcpy( b->seeds, in->seeds, in->numSeeds * 3 * sizeof( float ) );
+	}
+	o->volFirstPlane = b->solidFirst;
+	o->volNumPlanes = b->solidNum;
+	o->volBounds = b->solidBounds;
+	o->planes = b->solidPlanes;
+	o->planeTop = b->solidTop;
+	o->seeds = b->seeds;
+	b->solids = o;
+}
+
+static int NavBuildTile( NavBuildState *b, int tx, int ty, unsigned *hash, int *totalSize, int *polys, char *err, int errSize ) {
+	rcContext ctx( false );
+	const rcConfig &base = b->base;
+	const oaxNavParams_t *p = &b->p;
+	const float *wmin = b->wmin, *wmax = b->wmax;
+	const float tileSize = b->tileSize;
+	const int tileBits = b->tileBits;
+	const int numVerts = b->numVerts, numTris = b->numTris, numVols = b->numVols, numLinks = b->numLinks;
+	const float *rv = b->rv, *triBounds = b->triBounds;
+	const int *tris = b->tris;
+	int *tileTris = b->tileTris;
+	const unsigned char *walk = b->walk, *areas = b->areas, *volId = b->volId;
+	const oaxNavArea_t *vols = b->vols;
+	const oaxNavSolids_t *solids = b->solids;
+	float *conVerts = b->conVerts, *conRad = b->conRad;
+	unsigned short *conFlags = b->conFlags;
+	unsigned char *conAreas = b->conAreas, *conDir = b->conDir;
+	unsigned int *conIds = b->conIds;
+	int i;
+
+	(void)wmax;
+			rcConfig cfg = base;
+			float tmin[3], tmax[3], emin[2], emax[2];
+			const float pad = base.borderSize * base.cs;
+			int n = 0, anyWalk = 0, ntri;
+			rcHeightfield *hf = NULL;
+			rcCompactHeightfield *chf = NULL;
+			rcContourSet *cset = NULL;
+			rcPolyMesh *pmesh = NULL;
+			rcPolyMeshDetail *dmesh = NULL;
+			unsigned char *data = NULL;
+			int dataSize = 0, tileOk = 0, restStart = 0, added = 0;
+			dtNavMeshCreateParams cp;
+
+			// Q3 bounds of this tile, and with the border
+			tmin[0] = wmin[0] + tx * tileSize;
+			tmin[1] = wmin[1] + ty * tileSize;
+			tmin[2] = wmin[2];
+			tmax[0] = tmin[0] + tileSize;
+			tmax[1] = tmin[1] + tileSize;
+			tmax[2] = wmax[2];
+			emin[0] = tmin[0] - pad;
+			emin[1] = tmin[1] - pad;
+			emax[0] = tmax[0] + pad;
+			emax[1] = tmax[1] + pad;
+			for ( i = 0; i < numTris; i++ ) {
+				const float *b = &triBounds[i * 4];
+				if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
+					continue;
+				}
+				tileTris[n * 3 + 0] = tris[i * 3 + 0];
+				tileTris[n * 3 + 1] = tris[i * 3 + 1];
+				tileTris[n * 3 + 2] = tris[i * 3 + 2];
+				anyWalk |= walk[i];
+				n++;
+			}
+			if ( !anyWalk ) {
+				return 0;
+			}
+			ntri = n;
+			{
+				// the areas of the gathered triangles, in the same order
+				unsigned char *tAreas = new unsigned char[ntri];
+				n = 0;
+				for ( i = 0; i < numTris; i++ ) {
+					const float *b = &triBounds[i * 4];
+					if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
+						continue;
+					}
+					tAreas[n++] = areas[i];
+				}
+
+				cfg.width = NAV_TILE_CELLS + cfg.borderSize * 2;
+				cfg.height = NAV_TILE_CELLS + cfg.borderSize * 2;
+				{
+					float qmin[3], qmax[3];
+					qmin[0] = emin[0];
+					qmin[1] = emin[1];
+					qmin[2] = tmin[2];
+					qmax[0] = emax[0];
+					qmax[1] = emax[1];
+					qmax[2] = tmax[2];
+					ToRc( qmin, cfg.bmin );
+					ToRc( qmax, cfg.bmax );
+				}
+				hf = rcAllocHeightfield();
+				chf = rcAllocCompactHeightfield();
+				cset = rcAllocContourSet();
+				pmesh = rcAllocPolyMesh();
+				dmesh = rcAllocPolyMeshDetail();
+				if ( !hf || !chf || !cset || !pmesh || !dmesh ) {
+					Fail( err, errSize, "out of memory" );
+				} else if ( !rcCreateHeightfield( &ctx, *hf, cfg.width, cfg.height, cfg.bmin, cfg.bmax, cfg.cs, cfg.ch ) ) {
+					Fail( err, errSize, "rcCreateHeightfield failed" );
+				} else {
+					int t0 = Sys_Milliseconds(), t1;
+					if ( !rcRasterizeTriangles( &ctx, rv, numVerts, tileTris, tAreas, ntri, *hf, cfg.walkableClimb ) ) {
+						Fail( err, errSize, "rcRasterizeTriangles failed" );
+					} else {
+						t1 = Sys_Milliseconds();
+						navMsRaster += t1 - t0;
+						if ( solids && solids->numVolumes > 0 && !NavFillSolids( *hf, solids, emin, emax, cfg.walkableClimb ) ) {
+							Fail( err, errSize, "navmesh solid fill: out of memory" );
+						} else {
+							tileOk = 1;
+						}
+						navMsFill += Sys_Milliseconds() - t1;
+					}
+				}
+				delete[] tAreas;
+			}
+			if ( !tileOk ) {
+				goto tileDone;
+			}
+			tileOk = 0;
+			restStart = Sys_Milliseconds();
+			if ( solids && solids->openAt ) {
+				NavDropOpaqueTops( *hf, solids );
+			}
+			rcFilterLowHangingWalkableObstacles( &ctx, cfg.walkableClimb, *hf );
+			rcFilterLedgeSpans( &ctx, cfg.walkableHeight, cfg.walkableClimb, *hf );
+			rcFilterWalkableLowHeightSpans( &ctx, cfg.walkableHeight, *hf );
+			if ( !rcBuildCompactHeightfield( &ctx, cfg.walkableHeight, cfg.walkableClimb, *hf, *chf ) ) {
+				Fail( err, errSize, "rcBuildCompactHeightfield failed" );
+				goto tileDone;
+			}
+			rcFreeHeightField( hf );
+			hf = NULL;
+			if ( !rcErodeWalkableArea( &ctx, cfg.walkableRadius, *chf ) ) {
+				Fail( err, errSize, "rcErodeWalkableArea failed" );
+				goto tileDone;
+			}
+			// cost volumes: the walkable surface inside (or up to a step below) the box
+			for ( i = 0; i < numVols; i++ ) {
+				float lo[3], hi[3], q[3];
+				if ( vols[i].dynamic && !b->volOn[i] ) {
+					continue;	// a navmesh obstacle that is open now
+				}
+				rcVcopy( q, vols[i].mins );
+				q[2] -= p->agentClimb;
+				ToRc( q, lo );
+				ToRc( vols[i].maxs, hi );
+				rcMarkBoxArea( &ctx, lo, hi, volId[i], *chf );
+			}
+			if ( !rcBuildDistanceField( &ctx, *chf ) ||
+				!rcBuildRegions( &ctx, *chf, cfg.borderSize, cfg.minRegionArea, cfg.mergeRegionArea ) ) {
+				Fail( err, errSize, "rcBuildRegions failed" );
+				goto tileDone;
+			}
+			if ( !rcBuildContours( &ctx, *chf, cfg.maxSimplificationError, cfg.maxEdgeLen, *cset ) ) {
+				Fail( err, errSize, "rcBuildContours failed" );
+				goto tileDone;
+			}
+			if ( !rcBuildPolyMesh( &ctx, *cset, cfg.maxVertsPerPoly, *pmesh ) ) {
+				Fail( err, errSize, "rcBuildPolyMesh failed" );
+				goto tileDone;
+			}
+			if ( !rcBuildPolyMeshDetail( &ctx, *pmesh, *chf, cfg.detailSampleDist, cfg.detailSampleMaxError, *dmesh ) ) {
+				Fail( err, errSize, "rcBuildPolyMeshDetail failed" );
+				goto tileDone;
+			}
+			if ( pmesh->npolys <= 0 ) {
+				tileOk = 1;		// nothing walkable here after all
+				goto tileDone;
+			}
+			if ( pmesh->nverts >= 0xffff || pmesh->npolys >= ( 1 << ( 22 - tileBits ) ) ) {
+				Fail( err, errSize, "too many navmesh vertices or polygons for one tile" );
+				goto tileDone;
+			}
+			for ( i = 0; i < pmesh->npolys; i++ ) {
+				unsigned char a = pmesh->areas[i];
+				pmesh->flags[i] = a == NAV_AREA_WALK ? OAXNAV_FLAG_WALK :
+					( a >= 1 && a <= NAV_AREA_HAZARD_MAX ) ? OAXNAV_FLAG_WALK | OAXNAV_FLAG_HAZARD : 0;
+			}
+			memset( &cp, 0, sizeof( cp ) );
+			cp.verts = pmesh->verts;
+			cp.vertCount = pmesh->nverts;
+			cp.polys = pmesh->polys;
+			cp.polyAreas = pmesh->areas;
+			cp.polyFlags = pmesh->flags;
+			cp.polyCount = pmesh->npolys;
+			cp.nvp = pmesh->nvp;
+			cp.detailMeshes = dmesh->meshes;
+			cp.detailVerts = dmesh->verts;
+			cp.detailVertsCount = dmesh->nverts;
+			cp.detailTris = dmesh->tris;
+			cp.detailTriCount = dmesh->ntris;
+			cp.offMeshConVerts = conVerts;
+			cp.offMeshConRad = conRad;
+			cp.offMeshConFlags = conFlags;
+			cp.offMeshConAreas = conAreas;
+			cp.offMeshConDir = conDir;
+			cp.offMeshConUserID = conIds;
+			cp.offMeshConCount = numLinks > 0 ? numLinks : 0;
+			cp.walkableHeight = p->agentHeight;
+			cp.walkableRadius = p->agentRadius;
+			cp.walkableClimb = p->agentClimb;
+			cp.tileX = tx;
+			cp.tileY = ty;
+			cp.tileLayer = 0;
+			rcVcopy( cp.bmin, pmesh->bmin );
+			rcVcopy( cp.bmax, pmesh->bmax );
+			cp.cs = cfg.cs;
+			cp.ch = cfg.ch;
+			cp.buildBvTree = true;
+			if ( !dtCreateNavMeshData( &cp, &data, &dataSize ) ) {
+				Fail( err, errSize, "dtCreateNavMeshData failed" );
+				goto tileDone;
+			}
+			if ( dtStatusFailed( navMesh->addTile( data, dataSize, DT_TILE_FREE_DATA, 0, NULL ) ) ) {
+				dtFree( data );
+				Fail( err, errSize, "dtNavMesh addTile failed" );
+				goto tileDone;
+			}
+			for ( i = 0; i < dataSize; i++ ) {
+				*hash = ( *hash ^ data[i] ) * 16777619U;
+			}
+			*totalSize += dataSize;
+			*polys += pmesh->npolys;
+			navStatTiles++;
+			added = 1;
+			tileOk = 1;
+tileDone:
+			if ( restStart ) {
+				navMsRest += Sys_Milliseconds() - restStart;
+			}
+			rcFreeHeightField( hf );
+			rcFreeCompactHeightfield( chf );
+			rcFreeContourSet( cset );
+			rcFreePolyMesh( pmesh );
+			rcFreePolyMeshDetail( dmesh );
+			if ( !tileOk ) {
+				return -1;
+			}
+			return added;
+}
+
+/*
+=================
 OAXNav_BuildEx
 
 Tiles of NAV_TILE_CELLS cells across, over the walkable geometry's bounds
@@ -351,8 +705,6 @@ the tile its start lies in, links landings in that tile and its neighbours,
 and dtNavMesh::connectFarOffMeshLinks (oax patch) the rest.
 =================
 */
-#define NAV_TILE_CELLS	256
-#define NAV_MAX_TILES	4096
 
 int OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const unsigned char *walkable,
 		int numTris, const oaxNavParams_t *p, const oaxNavLink_t *links, int numLinks,
@@ -405,8 +757,8 @@ int OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const uns
 		walk[i] = walkable[i];
 		for ( k = 0; k < numVols && walk[i]; k++ ) {
 			int c, a, in = 1;
-			if ( vols[k].cost >= 0.0f ) {
-				continue;
+			if ( vols[k].cost >= 0.0f || vols[k].dynamic ) {
+				continue;	// a navmesh obstacle keeps its floor: it may open
 			}
 			for ( c = 0; c < 3 && in; c++ ) {
 				const float *v = verts + tris[i * 3 + c] * 3;
@@ -559,6 +911,63 @@ int OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const uns
 		}
 	}
 
+	// the build's inputs stay for tile rebuilds (OAXNav_SetVolumeActive):
+	// the caller frees its geometry, so the triangles, solid volumes and
+	// seeds are copied; the arrays made here change hands
+	NavBuildFree();
+	navBuild = new NavBuildState;
+	memset( navBuild, 0, sizeof( *navBuild ) );
+	{
+		NavBuildState *b = navBuild;
+		b->base = base;
+		b->p = *p;
+		rcVcopy( b->wmin, wmin );
+		rcVcopy( b->wmax, wmax );
+		b->tileSize = tileSize;
+		b->tileBits = tileBits;
+		b->tw = tw;
+		b->th = th;
+		b->numVerts = numVerts;
+		b->numTris = numTris;
+		b->rv = rv;
+		b->tris = new int[numTris * 3 + 1];
+		memcpy( b->tris, tris, numTris * 3 * sizeof( int ) );
+		b->walk = walk;
+		b->areas = areas;
+		b->triBounds = triBounds;
+		b->tileTris = tileTris;
+		b->numVols = numVols;
+		b->vols = new oaxNavArea_t[numVols > 0 ? numVols : 1];
+		if ( numVols > 0 ) {
+			memcpy( b->vols, vols, numVols * sizeof( oaxNavArea_t ) );
+		}
+		b->volId = volId;
+		b->volOn = new unsigned char[numVols > 0 ? numVols : 1];
+		memset( b->volOn, 0, numVols > 0 ? numVols : 1 );	// obstacles open for the first build
+		b->numLinks = numLinks;
+		b->conVerts = conVerts;
+		b->conRad = conRad;
+		b->conFlags = conFlags;
+		b->conAreas = conAreas;
+		b->conDir = conDir;
+		b->conIds = conIds;
+		b->built = new unsigned char[tw * th];
+		memset( b->built, 0, tw * th );
+		if ( solids ) {
+			NavCopySolids( b, solids );
+		}
+		rv = NULL;
+		walk = NULL;
+		areas = NULL;
+		triBounds = NULL;
+		tileTris = NULL;
+		volId = NULL;
+		conVerts = conRad = NULL;
+		conFlags = NULL;
+		conAreas = conDir = NULL;
+		conIds = NULL;
+	}
+
 	/*
 	The tiles to build: with seed points (the spawn points), only tiles the
 	walkers can reach: the seeds' tiles, then the neighbours a built tile's
@@ -588,217 +997,16 @@ int OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const uns
 	while ( queueHead < queueTail ) {
 		{
 			const int tileIndex = tileQueue[queueHead++];
-			rcConfig cfg = base;
-			float tmin[3], tmax[3], emin[2], emax[2];
-			const float pad = base.borderSize * base.cs;
-			int n = 0, anyWalk = 0, ntri;
-			rcHeightfield *hf = NULL;
-			rcCompactHeightfield *chf = NULL;
-			rcContourSet *cset = NULL;
-			rcPolyMesh *pmesh = NULL;
-			rcPolyMeshDetail *dmesh = NULL;
-			unsigned char *data = NULL;
-			int dataSize = 0, tileOk = 0, restStart = 0, added = 0;
 			const int tx = tileIndex % tw, ty = tileIndex / tw;
-			dtNavMeshCreateParams cp;
+			const int r = NavBuildTile( navBuild, tx, ty, &hash, &totalSize, &polys, err, errSize );
+			const int added = r > 0;
 
-			// Q3 bounds of this tile, and with the border
-			tmin[0] = wmin[0] + tx * tileSize;
-			tmin[1] = wmin[1] + ty * tileSize;
-			tmin[2] = wmin[2];
-			tmax[0] = tmin[0] + tileSize;
-			tmax[1] = tmin[1] + tileSize;
-			tmax[2] = wmax[2];
-			emin[0] = tmin[0] - pad;
-			emin[1] = tmin[1] - pad;
-			emax[0] = tmax[0] + pad;
-			emax[1] = tmax[1] + pad;
-			for ( i = 0; i < numTris; i++ ) {
-				const float *b = &triBounds[i * 4];
-				if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
-					continue;
-				}
-				tileTris[n * 3 + 0] = tris[i * 3 + 0];
-				tileTris[n * 3 + 1] = tris[i * 3 + 1];
-				tileTris[n * 3 + 2] = tris[i * 3 + 2];
-				anyWalk |= walk[i];
-				n++;
-			}
-			if ( !anyWalk ) {
-				continue;
-			}
-			ntri = n;
-			{
-				// the areas of the gathered triangles, in the same order
-				unsigned char *tAreas = new unsigned char[ntri];
-				n = 0;
-				for ( i = 0; i < numTris; i++ ) {
-					const float *b = &triBounds[i * 4];
-					if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
-						continue;
-					}
-					tAreas[n++] = areas[i];
-				}
-
-				cfg.width = NAV_TILE_CELLS + cfg.borderSize * 2;
-				cfg.height = NAV_TILE_CELLS + cfg.borderSize * 2;
-				{
-					float qmin[3], qmax[3];
-					qmin[0] = emin[0];
-					qmin[1] = emin[1];
-					qmin[2] = tmin[2];
-					qmax[0] = emax[0];
-					qmax[1] = emax[1];
-					qmax[2] = tmax[2];
-					ToRc( qmin, cfg.bmin );
-					ToRc( qmax, cfg.bmax );
-				}
-				hf = rcAllocHeightfield();
-				chf = rcAllocCompactHeightfield();
-				cset = rcAllocContourSet();
-				pmesh = rcAllocPolyMesh();
-				dmesh = rcAllocPolyMeshDetail();
-				if ( !hf || !chf || !cset || !pmesh || !dmesh ) {
-					Fail( err, errSize, "out of memory" );
-				} else if ( !rcCreateHeightfield( &ctx, *hf, cfg.width, cfg.height, cfg.bmin, cfg.bmax, cfg.cs, cfg.ch ) ) {
-					Fail( err, errSize, "rcCreateHeightfield failed" );
-				} else {
-					int t0 = Sys_Milliseconds(), t1;
-					if ( !rcRasterizeTriangles( &ctx, rv, numVerts, tileTris, tAreas, ntri, *hf, cfg.walkableClimb ) ) {
-						Fail( err, errSize, "rcRasterizeTriangles failed" );
-					} else {
-						t1 = Sys_Milliseconds();
-						navMsRaster += t1 - t0;
-						if ( solids && solids->numVolumes > 0 && !NavFillSolids( *hf, solids, emin, emax, cfg.walkableClimb ) ) {
-							Fail( err, errSize, "navmesh solid fill: out of memory" );
-						} else {
-							tileOk = 1;
-						}
-						navMsFill += Sys_Milliseconds() - t1;
-					}
-				}
-				delete[] tAreas;
-			}
-			if ( !tileOk ) {
-				goto tileDone;
-			}
-			tileOk = 0;
-			restStart = Sys_Milliseconds();
-			if ( solids && solids->openAt ) {
-				NavDropOpaqueTops( *hf, solids );
-			}
-			rcFilterLowHangingWalkableObstacles( &ctx, cfg.walkableClimb, *hf );
-			rcFilterLedgeSpans( &ctx, cfg.walkableHeight, cfg.walkableClimb, *hf );
-			rcFilterWalkableLowHeightSpans( &ctx, cfg.walkableHeight, *hf );
-			if ( !rcBuildCompactHeightfield( &ctx, cfg.walkableHeight, cfg.walkableClimb, *hf, *chf ) ) {
-				Fail( err, errSize, "rcBuildCompactHeightfield failed" );
-				goto tileDone;
-			}
-			rcFreeHeightField( hf );
-			hf = NULL;
-			if ( !rcErodeWalkableArea( &ctx, cfg.walkableRadius, *chf ) ) {
-				Fail( err, errSize, "rcErodeWalkableArea failed" );
-				goto tileDone;
-			}
-			// cost volumes: the walkable surface inside (or up to a step below) the box
-			for ( i = 0; i < numVols; i++ ) {
-				float lo[3], hi[3], q[3];
-				rcVcopy( q, vols[i].mins );
-				q[2] -= p->agentClimb;
-				ToRc( q, lo );
-				ToRc( vols[i].maxs, hi );
-				rcMarkBoxArea( &ctx, lo, hi, volId[i], *chf );
-			}
-			if ( !rcBuildDistanceField( &ctx, *chf ) ||
-				!rcBuildRegions( &ctx, *chf, cfg.borderSize, cfg.minRegionArea, cfg.mergeRegionArea ) ) {
-				Fail( err, errSize, "rcBuildRegions failed" );
-				goto tileDone;
-			}
-			if ( !rcBuildContours( &ctx, *chf, cfg.maxSimplificationError, cfg.maxEdgeLen, *cset ) ) {
-				Fail( err, errSize, "rcBuildContours failed" );
-				goto tileDone;
-			}
-			if ( !rcBuildPolyMesh( &ctx, *cset, cfg.maxVertsPerPoly, *pmesh ) ) {
-				Fail( err, errSize, "rcBuildPolyMesh failed" );
-				goto tileDone;
-			}
-			if ( !rcBuildPolyMeshDetail( &ctx, *pmesh, *chf, cfg.detailSampleDist, cfg.detailSampleMaxError, *dmesh ) ) {
-				Fail( err, errSize, "rcBuildPolyMeshDetail failed" );
-				goto tileDone;
-			}
-			if ( pmesh->npolys <= 0 ) {
-				tileOk = 1;		// nothing walkable here after all
-				goto tileDone;
-			}
-			if ( pmesh->nverts >= 0xffff || pmesh->npolys >= ( 1 << ( 22 - tileBits ) ) ) {
-				Fail( err, errSize, "too many navmesh vertices or polygons for one tile" );
-				goto tileDone;
-			}
-			for ( i = 0; i < pmesh->npolys; i++ ) {
-				unsigned char a = pmesh->areas[i];
-				pmesh->flags[i] = a == NAV_AREA_WALK ? OAXNAV_FLAG_WALK :
-					( a >= 1 && a <= NAV_AREA_HAZARD_MAX ) ? OAXNAV_FLAG_WALK | OAXNAV_FLAG_HAZARD : 0;
-			}
-			memset( &cp, 0, sizeof( cp ) );
-			cp.verts = pmesh->verts;
-			cp.vertCount = pmesh->nverts;
-			cp.polys = pmesh->polys;
-			cp.polyAreas = pmesh->areas;
-			cp.polyFlags = pmesh->flags;
-			cp.polyCount = pmesh->npolys;
-			cp.nvp = pmesh->nvp;
-			cp.detailMeshes = dmesh->meshes;
-			cp.detailVerts = dmesh->verts;
-			cp.detailVertsCount = dmesh->nverts;
-			cp.detailTris = dmesh->tris;
-			cp.detailTriCount = dmesh->ntris;
-			cp.offMeshConVerts = conVerts;
-			cp.offMeshConRad = conRad;
-			cp.offMeshConFlags = conFlags;
-			cp.offMeshConAreas = conAreas;
-			cp.offMeshConDir = conDir;
-			cp.offMeshConUserID = conIds;
-			cp.offMeshConCount = numLinks > 0 ? numLinks : 0;
-			cp.walkableHeight = p->agentHeight;
-			cp.walkableRadius = p->agentRadius;
-			cp.walkableClimb = p->agentClimb;
-			cp.tileX = tx;
-			cp.tileY = ty;
-			cp.tileLayer = 0;
-			rcVcopy( cp.bmin, pmesh->bmin );
-			rcVcopy( cp.bmax, pmesh->bmax );
-			cp.cs = cfg.cs;
-			cp.ch = cfg.ch;
-			cp.buildBvTree = true;
-			if ( !dtCreateNavMeshData( &cp, &data, &dataSize ) ) {
-				Fail( err, errSize, "dtCreateNavMeshData failed" );
-				goto tileDone;
-			}
-			if ( dtStatusFailed( navMesh->addTile( data, dataSize, DT_TILE_FREE_DATA, 0, NULL ) ) ) {
-				dtFree( data );
-				Fail( err, errSize, "dtNavMesh addTile failed" );
-				goto tileDone;
-			}
-			for ( i = 0; i < dataSize; i++ ) {
-				hash = ( hash ^ data[i] ) * 16777619U;
-			}
-			totalSize += dataSize;
-			polys += pmesh->npolys;
-			navStatTiles++;
-			added = 1;
-			tileOk = 1;
-tileDone:
-			if ( restStart ) {
-				navMsRest += Sys_Milliseconds() - restStart;
-			}
-			rcFreeHeightField( hf );
-			rcFreeCompactHeightfield( chf );
-			rcFreeContourSet( cset );
-			rcFreePolyMesh( pmesh );
-			rcFreePolyMeshDetail( dmesh );
-			if ( !tileOk ) {
+			if ( r < 0 ) {
 				OAXNav_Free();
 				goto done;
+			}
+			if ( added ) {
+				navBuild->built[tileIndex] = 1;
 			}
 			if ( added && solids && solids->numSeeds > 0 ) {
 				// queue what this tile opens onto
@@ -870,6 +1078,14 @@ tileDone:
 	navDataSize = totalSize;
 	navHash = hash;
 	ok = navPolys;
+	// navmesh obstacles (closed doors) start closed: the first build had them
+	// open so the tiles behind them were reached and built, and its hash is
+	// the map's own
+	for ( i = 0; i < numVols; i++ ) {
+		if ( vols[i].dynamic ) {
+			OAXNav_SetVolumeActive( i, 1 );
+		}
+	}
 
 done:
 	delete[] tileState;
@@ -887,6 +1103,67 @@ done:
 	delete[] conDir;
 	delete[] conIds;
 	return ok;
+}
+
+/*
+=================
+OAXNav_SetVolumeActive
+
+A navmesh obstacle (a cost volume added as dynamic: a door that does not
+open on approach) carves its walkable surface while active. Turning one on
+or off rebuilds the tiles it reaches (of those the first build made), then
+the far off-mesh landings. Returns the tiles rebuilt.
+=================
+*/
+int OAXNav_SetVolumeActive( int vol, int active ) {
+	NavBuildState *b = navBuild;
+	float lo[2], hi[2];
+	int tx0, ty0, tx1, ty1, tx, ty, n = 0, polys = 0, size = 0;
+	unsigned hash = 0;
+	char err[128];
+
+	if ( !b || !navMesh || vol < 0 || vol >= b->numVols || !b->vols[vol].dynamic ) {
+		return 0;
+	}
+	active = active ? 1 : 0;
+	if ( b->volOn[vol] == active ) {
+		return 0;
+	}
+	b->volOn[vol] = (unsigned char)active;
+	// the tiles whose build (with its border) can see the volume
+	{
+		const float pad = b->base.borderSize * b->base.cs + b->p.agentRadius;
+		lo[0] = b->vols[vol].mins[0] - pad;
+		lo[1] = b->vols[vol].mins[1] - pad;
+		hi[0] = b->vols[vol].maxs[0] + pad;
+		hi[1] = b->vols[vol].maxs[1] + pad;
+	}
+	tx0 = (int)floorf( ( lo[0] - b->wmin[0] ) / b->tileSize );
+	ty0 = (int)floorf( ( lo[1] - b->wmin[1] ) / b->tileSize );
+	tx1 = (int)floorf( ( hi[0] - b->wmin[0] ) / b->tileSize );
+	ty1 = (int)floorf( ( hi[1] - b->wmin[1] ) / b->tileSize );
+	for ( ty = ty0 > 0 ? ty0 : 0; ty <= ty1 && ty < b->th; ty++ ) {
+		for ( tx = tx0 > 0 ? tx0 : 0; tx <= tx1 && tx < b->tw; tx++ ) {
+			const dtMeshTile *t;
+
+			if ( !b->built[tx + ty * b->tw] ) {
+				continue;
+			}
+			t = navMesh->getTileAt( tx, ty, 0 );
+			if ( t ) {
+				navMesh->removeTile( navMesh->getTileRef( t ), NULL, NULL );
+			}
+			if ( NavBuildTile( b, tx, ty, &hash, &size, &polys, err, sizeof( err ) ) < 0 ) {
+				continue;	// out of memory: the tile stays out
+			}
+			n++;
+		}
+	}
+	if ( n ) {
+		navMesh->resetFarOffMeshLinks();
+		navLinks = CountConnectedLinks();
+	}
+	return n;
 }
 
 int OAXNav_LinkCount( void ) {

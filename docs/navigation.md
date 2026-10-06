@@ -108,12 +108,26 @@ little above the floor; the floor below each is used.
 | Key | Meaning |
 | --- | --- |
 | `target` | the other end (its `targetname`) |
-| `kind` | `jump` (default: a plain jump), `drop` (walk off an edge), or `translocator` |
+| `kind` | `jump` (default: a plain jump), `drop` (walk off an edge), `swim` (through water: a dive, an underwater hop, the climb onto a bank; the bot swims toward the end in three dimensions, rising with jump), or `translocator` |
 | `bidir 1` | usable both ways (default one way) |
 | `radius` | how far from a walkable polygon an end may be (default 32) |
 
 `translocator` routes are rule-gated: bots use them only while
-`g_oaxTranslocator` is on.
+`g_oaxTranslocator` is on. A `swim` end may float in deep water: its floor
+is looked for up to 768 units down (the bottom), where other ends get 256.
+
+### Doors (navmesh obstacles)
+
+The navmesh ignores movers, so a shut door is open floor to it. A game
+module can mark boxes as obstacles (`G_OAX_NAV_ADDBLOCKER` before the
+commit; `G_OAX_NAV_SETBLOCKER` to open and close one). While an obstacle is
+on, its box carves the walkable surface, and the tiles it reaches (only the
+ones the first build made) are rebuilt when it changes, in a few
+milliseconds each; the far landings of off-mesh links are reconnected after
+a rebuild. Obstacles are off for the first build, so the floor behind a shut
+door is reached and built, and the navmesh hash stays the map's own; they
+turn on right after. The oax game marks the doors Assault objectives open
+(oax-gamecode docs/assault.md).
 
 ## The translocator rule
 
@@ -136,6 +150,10 @@ while on). Classic play stays the default (roadmap principle 5).
   falls into a nodrop volume, and after 20 s.
 
 ## Link kinds and syscalls
+
+Obstacles: `G_OAX_NAV_ADDBLOCKER (mins, maxs)` returns the blocker's index
+(queued, like a cost volume; on after the commit); `G_OAX_NAV_SETBLOCKER
+(index, on)` returns the tiles rebuilt.
 
 Game syscalls 1094-1097 (`code/qcommon/oax.h`, token `nav`):
 

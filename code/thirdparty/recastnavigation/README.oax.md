@@ -27,6 +27,13 @@ Kept minimal; each patched line is marked "oax patch".
    connectExtOffMeshLinks for one connection, without the side test); the
    engine calls it once after adding every tile.
 
+3. `dtNavMesh::resetFarOffMeshLinks()` (same files): removeTile unlinks
+   only the removed tile's 8 neighbours, so far landings into it (and their
+   two-way links back) would be left pointing at a tile that is gone. The
+   method removes every link to a polygon more than one tile away or in a
+   missing tile, then calls connectFarOffMeshLinks again. The engine calls
+   it after rebuilding tiles (a door's navmesh obstacle opening or closing).
+
 Not patched but avoided: rcMarkWalkableTriangles and
 rcClearUnwalkableTriangles take the slope as an angle and call host
 `cosf`; the engine marks walkable triangles itself with an exact normal-z

@@ -112,7 +112,15 @@ function track(v) {
     const [id, , state] = o.split(' ');
     if (Number(state) === 2 && !(id in R.fell)) R.fell[id] = Math.round((R.limit - Number(v.g_as_left)) / 1000);
   }
-  if (Number(v.g_as_phase) === 2) R.outcome = Number(v.g_as_outcome);
+  if (Number(v.g_as_phase) === 2) {
+    R.outcome = Number(v.g_as_outcome);
+    // the final objective's fall ends the round: g_as_left reads 0 in that
+    // sample, so its time comes from the round's own clock
+    const took = Number(v.g_as_r1time);
+    if (R.outcome === 1 && took > 0) {
+      for (const id in R.fell) if (R.fell[id] === Math.round(R.limit / 1000)) R.fell[id] = Math.round(took / 1000);
+    }
+  }
   // round 1's result shows for 7 s; on a heavy map the samples can miss
   // it, so round 2 fills it in from the time round 1 took (-1 failed)
   const r1 = Number(v.g_as_r1time);

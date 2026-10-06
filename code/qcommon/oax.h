@@ -93,6 +93,10 @@ typedef enum {
 	G_OAX_NAV_COMMIT = 1096,         // ( void ) -> polygon count: rebuilds the navmesh with the queued links and volumes
 	G_OAX_NAV_FINDPATHEX = 1097,     // ( start, goal, float *points, int *links, int maxPoints, int *flags, int include, int exclude )
 	                                 //   -> points; links[i] = link index starting at point i (next point is its end) or -1
+	G_OAX_NAV_ADDBLOCKER = 1098,     // ( const vec3_t mins, const vec3_t maxs ) -> blocker index, -1 full; queued for
+	                                 //   G_OAX_NAV_COMMIT: a navmesh obstacle (a door that does not open on approach),
+	                                 //   carving the walkable surface in the box while on; on after the commit
+	G_OAX_NAV_SETBLOCKER = 1099,     // ( int index, int on ) -> tiles rebuilt: the obstacle on (closed) or off (open)
 
 	// 1100-1109 entity collision (sv_game_oax.c, token "ent_obb")
 	G_OAX_ENT_SET_OBB = 1100,        // ( int entnum, const float *obb or 0 ): center[3] (from r.currentOrigin), axis[3][3], halfExtents[3]
