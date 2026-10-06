@@ -55,6 +55,7 @@ cvar_t *r_ulightAreaCull;
 cvar_t *r_ulightSpecular;
 cvar_t *r_ulightShadowBias;
 cvar_t *r_ulightDebug;
+cvar_t *r_ulightCasterDump;
 cvar_t *r_dlightShadows;
 cvar_t *r_shadowMapSizeU;
 static cvar_t *r_ulightStencil;     // registered again at each renderer start (latched)
@@ -67,7 +68,10 @@ image_t *ulightImages_flat;
 image_t *ulightImages_white;
 image_t *ulightImages_black;
 
-#define MAX_ULIGHT_SURFS 65536
+// a big converted map's view: 60+ lights with hundreds of casters each, plus
+// the ambient list and each light's lit surfaces; a full pool leaves the
+// later lights with nothing to light (statSurfsFull counts the views)
+#define MAX_ULIGHT_SURFS 262144
 
 // per-frame pools (the frontend runs every view of a frame before the backend)
 static drawSurf_t ulSurfs[MAX_ULIGHT_SURFS];
@@ -219,6 +223,8 @@ void R_ULightInit( void ) {
 	ri.Cvar_SetDescription( r_ulightUE1Floor, "UE1 lights: light units taken off each lamp's own contribution (UE1 loses about one display unit per lamp; 0.0075 fitted with the gain, docs/lights.md), read when the map loads." );
 	r_ulightShadowBias = ri.Cvar_Get( "r_ulightShadowBias", "0.004", CVAR_CHEAT );
 	r_ulightDebug = ri.Cvar_Get( "r_ulightDebug", "0", CVAR_CHEAT );
+	r_ulightCasterDump = ri.Cvar_Get( "r_ulightCasterDump", "-1", CVAR_CHEAT | CVAR_TEMP );
+	ri.Cvar_SetDescription( r_ulightCasterDump, "Print the shadow casters of the map light with this entity-lump ordinal once (the next view that lights with it), then reset to -1." );
 	r_dlightShadows = ri.Cvar_Get( "r_dlightShadows", "0", CVAR_ARCHIVE );
 	ri.Cvar_SetDescription( r_dlightShadows, "Unified lighting: dynamic lights (rockets, muzzle flashes) cast shadows." );
 	r_shadowMapSizeU = ri.Cvar_Get( "r_ulightShadowMapSize", "512", CVAR_ARCHIVE | CVAR_LATCH );
@@ -1737,6 +1743,57 @@ qboolean R_ULightCastersWanted( void ) {
 	return model != ULIGHT_LIGHTMAP && ulw.numLights > 0 && r_ulightShadows->integer;
 }
 
+/*
+=================
+R_ULightDumpCasters
+
+r_ulightCasterDump: one light's shadow casters as the console sees them,
+for finding what shadows a surface (shader, entity, bounds). World
+surfaces come from the light's own list (every opaque surface in its
+volume that is not oaxNoShadow); entities from the view.
+=================
+*/
+static void R_ULightDumpCasters( const uLight_t *l, const uViewLight_t *vl ) {
+	int k;
+
+	ri.Printf( PRINT_ALL, "ulight casters: light %i at %.0f %.0f %.0f, %i casters (%i static), shadows %s\n", l->entityNum,
+		l->parms.origin[0], l->parms.origin[1], l->parms.origin[2], vl->numCaster, vl->shadowSize, vl->shadows ? "on" : "off" );
+	for ( k = vl->firstCaster; k < vl->firstCaster + vl->numCaster; k++ ) {
+		const drawSurf_t *ds = &ulSurfs[k];
+		int entityNum, fogNum, dlighted, pshadowed;
+		shader_t *sh;
+		vec3_t lo, hi;
+
+		R_DecomposeSort( ds->sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
+		VectorClear( lo );
+		VectorClear( hi );
+		if ( entityNum == REFENTITYNUM_WORLD && ( *ds->surface == SF_FACE || *ds->surface == SF_GRID || *ds->surface == SF_TRIANGLES ) ) {
+			const srfBspSurface_t *srf = (const srfBspSurface_t *)ds->surface;
+			VectorCopy( srf->cullBounds[0], lo );
+			VectorCopy( srf->cullBounds[1], hi );
+		}
+		ri.Printf( PRINT_ALL, "  %s %s%s %.0f %.0f %.0f .. %.0f %.0f %.0f\n", sh->name,
+			entityNum == REFENTITYNUM_WORLD ? "world" : va( "entity %i", entityNum ), sh->isSky ? " sky" : "",
+			lo[0], lo[1], lo[2], hi[0], hi[1], hi[2] );
+	}
+}
+
+// r_ulightCasterDump: the player's own view only (not a portal, a sky portal
+// room or a probe capture, which light with the same list)
+static qboolean R_ULightDumpView( void ) {
+	return !tr.viewParms.isPortal && !( tr.viewParms.flags & VPF_NOCUBEMAPS ) && !( tr.refdef.rdflags & RDF_OAX_SKYPORTAL );
+}
+
+// r_ulightCasterDump: why the dumped light drew nothing in this view
+static void R_ULightDumpSkip( const uLight_t *l, const char *why ) {
+	if ( r_ulightCasterDump->integer >= 0 && l->entityNum == r_ulightCasterDump->integer && R_ULightDumpView() ) {
+		ri.Printf( PRINT_ALL, "ulight casters: light %i at %.0f %.0f %.0f (radius %.0f %.0f %.0f, bounds %.0f %.0f %.0f .. %.0f %.0f %.0f, %i frustum verts, phys %i spot %.2f) skipped: %s\n", l->entityNum,
+			l->parms.origin[0], l->parms.origin[1], l->parms.origin[2], l->parms.lightRadius[0], l->parms.lightRadius[1], l->parms.lightRadius[2],
+			l->bounds[0][0], l->bounds[0][1], l->bounds[0][2], l->bounds[1][0], l->bounds[1][1], l->bounds[1][2], l->numFrustumVerts, l->parms.phys.physical, l->parms.phys.spotScale, why );
+		ri.Cvar_Set( "r_ulightCasterDump", "-1" );
+	}
+}
+
 int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 	static vec3_t entMins[MAX_REFENTITIES], entMaxs[MAX_REFENTITIES];
 	static int entState[MAX_REFENTITIES];
@@ -1869,18 +1926,22 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		int k;
 
 		if ( !l->on || l->numFrustumVerts < 4 ) {
+			R_ULightDumpSkip( l, l->on ? "no frustum" : "off" );
 			continue;
 		}
 		if ( !LightAreaVisible( l ) ) {
+			R_ULightDumpSkip( l, "its areas are not visible from the view (r_ulightAreaCull)" );
 			continue;
 		}
 		if ( R_CullBox( l->bounds ) == CULL_OUT ) {
+			R_ULightDumpSkip( l, "its bounds are outside the view frustum" );
 			continue;
 		}
 		vl = &view->lights[view->numLights];
 		Com_Memset( vl, 0, sizeof( *vl ) );
 		if ( r_ulightScissor->integer ) {
 			if ( !R_LightScissor( l, vl->scissor ) ) {
+				R_ULightDumpSkip( l, "its scissor is empty" );
 				continue;
 			}
 		} else {
@@ -1940,6 +2001,47 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		}
 		vl->numLit = ulNumSurfs - vl->firstLit;
 		if ( !vl->numLit ) {
+			if ( r_ulightCasterDump->integer >= 0 && l->entityNum == r_ulightCasterDump->integer && R_ULightDumpView() ) {
+				// the view's world surfaces inside the light's box, and why each is not lit
+				int n = 0;
+				{
+					const mnode_t *ll = PointInLeaf( l->globalLightOrigin );
+					ri.Printf( PRINT_ALL, "  light leaf: cluster %i area %i, bounds %.0f %.0f %.0f .. %.0f %.0f %.0f, contents %x; light areas %i\n",
+						ll->cluster, ll->area, ll->mins[0], ll->mins[1], ll->mins[2], ll->maxs[0], ll->maxs[1], ll->maxs[2], ll->contents, l->numAreas );
+				}
+				for ( k = 0; k < numVS && n < 12; k++ ) {
+					const viewSurf_t *vs = &viewSurfs[k];
+					int entityNum, fogNum, dlighted, pshadowed, s;
+					shader_t *sh;
+					const srfBspSurface_t *bs = (const srfBspSurface_t *)vs->ds->surface;
+					if ( vs->worldIndex < 0 || bs->numVerts <= 0 || !BoxInLight( l, bs->verts[0].xyz, bs->verts[0].xyz ) ) {
+						continue;	// only surfaces with a vertex inside the light's box
+					}
+					s = vs->worldIndex;
+					R_DecomposeSort( vs->ds->sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
+					{
+						// where the surface is, and whether the light's PVS sees its leaf
+						const srfBspSurface_t *srf = (const srfBspSurface_t *)vs->ds->surface;
+						const mnode_t *sl = srf->numVerts > 0 ? PointInLeaf( srf->verts[0].xyz ) : NULL;
+						const mnode_t *ll = PointInLeaf( l->globalLightOrigin );
+						const byte *pvs = ( tr.world->vis && ll->cluster >= 0 ) ? tr.world->vis + ll->cluster * tr.world->clusterBytes : NULL;
+						ri.Printf( PRINT_ALL, "  surface vertex %.0f %.0f %.0f in leaf cluster %i area %i: %s the light's PVS; %i verts\n",
+							srf->numVerts > 0 ? srf->verts[0].xyz[0] : 0, srf->numVerts > 0 ? srf->verts[0].xyz[1] : 0, srf->numVerts > 0 ? srf->verts[0].xyz[2] : 0,
+							sl ? sl->cluster : -2, sl ? sl->area : -2,
+							!pvs ? "(no PVS)" : ( sl && sl->cluster >= 0 && ( pvs[sl->cluster >> 3] & ( 1 << ( sl->cluster & 7 ) ) ) ) ? "IN" : "NOT in", srf->numVerts );
+					}
+					ri.Printf( PRINT_ALL, "  view surface: %s%s (entity %i, world %i, type %i) %s%.0f %.0f %.0f .. %.0f %.0f %.0f: %s, %s, mask %x vs light %x%s\n",
+						sh->name, vs->interaction ? "" : " (no interaction stage)", vs->entityNum, s, (int)*vs->ds->surface,
+						vs->hasBounds ? "" : "(no bounds) ",
+						vs->bounds[0][0], vs->bounds[0][1], vs->bounds[0][2], vs->bounds[1][0], vs->bounds[1][1], vs->bounds[1][2],
+						s >= 0 && ( lightSurfBits[j][s >> 3] & ( 1 << ( s & 7 ) ) ) ? "in the light's PVS walk" : "NOT reached by the light's PVS walk",
+						s >= 0 && ( lightFacingBits[j][s >> 3] & ( 1 << ( s & 7 ) ) ) ? "facing" : "NOT facing (or not reached)",
+						vs->mask, l->parms.lightMask, sh->cullType == CT_TWO_SIDED ? ", two-sided" : "" );
+					n++;
+				}
+			}
+			R_ULightDumpSkip( l, va( "none of its %i world surfaces (or any entity) is in this view (surface pool %i of %i used%s)",
+				l->numWorldSurfs, ulNumSurfs, MAX_ULIGHT_SURFS, ulNumSurfs >= MAX_ULIGHT_SURFS ? ": FULL" : "" ) );
 			continue;
 		}
 
@@ -1987,6 +2089,10 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 			}
 		}
 		vl->numCaster = ulNumSurfs - vl->firstCaster;
+		if ( r_ulightCasterDump->integer >= 0 && l->entityNum == r_ulightCasterDump->integer && R_ULightDumpView() ) {
+			R_ULightDumpCasters( l, vl );
+			ri.Cvar_Set( "r_ulightCasterDump", "-1" );
+		}
 
 		view->numLights++;
 		if ( ulw.statVisible < 48 ) {
@@ -1998,6 +2104,16 @@ int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 		ulw.statVisible++;
 	}
 
+	if ( ulNumSurfs > ulw.statSurfs ) {
+		ulw.statSurfs = ulNumSurfs;
+	}
+	if ( ulNumSurfs >= MAX_ULIGHT_SURFS ) {
+		ulw.statSurfsFull++;
+		if ( !ulw.warnedSurfsFull ) {
+			ulw.warnedSurfsFull = qtrue;
+			ri.Printf( PRINT_WARNING, "unified lighting: the view's surface pool (%i) is full; lights past it light nothing this frame\n", MAX_ULIGHT_SURFS );
+		}
+	}
 	ulNumViews++;
 	return ulNumViews;
 }
@@ -2034,6 +2150,8 @@ void R_ULightPublishStats( int frontEndMsec, int backEndMsec ) {
 	ri.DebugSet( "r_ulights_visible", va( "%d", ulw.statVisible ) );
 	ri.DebugSet( "r_ulights_visible_ids", ulw.statVisibleIds[0] ? ulw.statVisibleIds : "-" );
 	ri.DebugSet( "r_ulight_draws", va( "%d", ulw.statDraws ) );
+	ri.DebugSet( "r_ulight_surfs", va( "%d", ulw.statSurfs ) );
+	ri.DebugSet( "r_ulight_surfs_full", va( "%d", ulw.statSurfsFull ) );
 	ri.DebugSet( "r_shadow_passes", va( "%d", ulw.statShadowPasses ) );
 	ri.DebugSet( "r_shadow_cache_hits", va( "%d", ulw.statShadowCacheHits ) );
 	ri.DebugSet( "r_stencil_tris", va( "%d", ulw.statStencilTris ) );

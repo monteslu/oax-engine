@@ -57,6 +57,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_ulightScissor` | 1 | cheat | Scissor each unified light to its screen rectangle; 0 draws it over the whole viewport. |
 | `r_ulightAreaCull` | 1 | cheat | Skip static unified lights whose areas are not in the visible area mask; 0 draws them all. |
 | `r_ulightSpecular` | 1 | archive | Specular from unified lights; 0 turns it off for every light. |
+| `r_ulightCasterDump` | -1 | cheat | Print the shadow casters of the unified light with this entity-lump ordinal once (the next view that lights with it), or why that view skipped it, then reset to -1. |
 | `r_ulightUE1Floor` | 0.0075 | read at map load | UE1-profile lights: light units taken off each lamp's own contribution before the lamps add (UE1 loses about one display unit per lamp; fitted with the profile's gain, docs/lights.md). 0 is the plain curve. |
 | `r_ulightDebug` | 0 | cheat | Registered but currently read by nothing (no effect). |
 | `r_dlightShadows` | 0 | archive | Under unified lighting, dynamic lights (rockets, muzzle flashes) cast shadows. |

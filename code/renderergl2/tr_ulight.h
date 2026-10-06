@@ -259,6 +259,9 @@ typedef struct {
 	// stats published as debug values
 	int         statVisible;
 	int         statDraws;
+	int         statSurfs;          // the most surfaces a view used of the pool this frame
+	int         statSurfsFull;      // views whose pool filled (lights past it unlit)
+	qboolean    warnedSurfsFull;
 	int         statShadowPasses;
 	int         statShadowCacheHits;
 	int         statStencilTris;
