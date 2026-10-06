@@ -258,7 +258,7 @@ int R_CullLocalBox(vec3_t localBounds[2]) {
 	vec3_t          v;
 	vec3_t          worldBounds[2];
 
-	if(r_nocull->integer)
+	if(r_nocull->integer || tr.oaxCasterPass)
 	{
 		return CULL_CLIP;
 	}
@@ -293,6 +293,10 @@ int R_CullBox(vec3_t worldBounds[2]) {
 	cplane_t       *frust;
 	qboolean        anyClip;
 	int             r, numPlanes;
+
+	// oax: the shadow-caster pass (R_RenderView) culls nothing
+	if ( tr.oaxCasterPass )
+		return CULL_CLIP;
 
 	numPlanes = (tr.viewParms.flags & VPF_FARPLANEFRUSTUM) ? 5 : 4;
 
@@ -380,6 +384,9 @@ int R_CullPointAndRadiusEx( const vec3_t pt, float radius, const cplane_t* frust
 */
 int R_CullPointAndRadius( const vec3_t pt, float radius )
 {
+	// oax: the shadow-caster pass (R_RenderView) culls nothing
+	if ( tr.oaxCasterPass )
+		return CULL_CLIP;
 	return R_CullPointAndRadiusEx(pt, radius, tr.viewParms.frustum, (tr.viewParms.flags & VPF_FARPLANEFRUSTUM) ? 5 : 4);
 }
 
@@ -1799,6 +1806,48 @@ void R_DebugGraphics( void ) {
 
 /*
 ================
+R_OAXAddCasterEntities
+
+The entities R_GenerateDrawSurfs culled (none of their surfaces among the
+view's), added again with culling off, for unified lighting's shadow
+casters (R_ULightAddView keeps the ones inside a light). Not for shadow map
+views or views unified lighting does not light.
+================
+*/
+void R_OAXAddCasterEntities( int firstDrawSurf, int numDrawSurfs ) {
+	static byte seen[MAX_REFENTITIES];
+	int i;
+
+	if ( !r_drawentities->integer || !R_ULightCastersWanted() ) {
+		return;
+	}
+	if ( ( tr.viewParms.flags & ( VPF_SHADOWMAP | VPF_DEPTHSHADOW ) ) || ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		return;
+	}
+	Com_Memset( seen, 0, tr.refdef.num_entities );
+	for ( i = firstDrawSurf; i < numDrawSurfs && i - firstDrawSurf < MAX_DRAWSURFS; i++ ) {
+		int entityNum, fogNum, dlighted, pshadowed;
+		shader_t *sh;
+
+		R_DecomposeSort( tr.refdef.drawSurfs[i & DRAWSURF_MASK].sort, &entityNum, &sh, &fogNum, &dlighted, &pshadowed );
+		if ( entityNum < tr.refdef.num_entities ) {
+			seen[entityNum] = 1;
+		}
+	}
+	tr.oaxCasterPass = qtrue;
+	for ( i = 0; i < tr.refdef.num_entities; i++ ) {
+		trRefEntity_t *ent = &tr.refdef.entities[i];
+
+		if ( seen[i] || ( ent->e.renderfx & ( RF_NOSHADOW | RF_FIRST_PERSON | RF_DEPTHHACK ) ) ) {
+			continue;
+		}
+		R_AddEntitySurface( i );
+	}
+	tr.oaxCasterPass = qfalse;
+}
+
+/*
+================
 R_RenderView
 
 A view may be either the actual camera view,
@@ -1830,8 +1879,17 @@ void R_RenderView (viewParms_t *parms) {
 
 	R_GenerateDrawSurfs();
 
-	// unified lighting: the lights this view sees and their surfaces
-	tr.viewParms.ulightView = R_ULightAddView( firstDrawSurf, tr.refdef.numDrawSurfs );
+	// unified lighting: the lights this view sees and their surfaces; the
+	// entities the view culled are added again as shadow casters only (a
+	// door or a gun out of frame still shadows the floor in frame), and leave
+	// the view's own list once unified lighting has them
+	{
+		int numVisible = tr.refdef.numDrawSurfs;
+
+		R_OAXAddCasterEntities( firstDrawSurf, numVisible );
+		tr.viewParms.ulightView = R_ULightAddView( firstDrawSurf, numVisible, tr.refdef.numDrawSurfs );
+		tr.refdef.numDrawSurfs = numVisible;
+	}
 
 	// if we overflowed MAX_DRAWSURFS, the drawsurfs
 	// wrapped around in the buffer and we will be missing

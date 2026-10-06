@@ -1671,6 +1671,7 @@ typedef struct {
 
 	int                     numCubemaps;
 	qboolean               oaxProbesPending;  // oaxMetal probes to capture at the next frame (tr_cmds.c)
+	qboolean               oaxCasterPass;     // R_OAXAddCasterEntities: culling off, the surfaces are shadow casters only
 	cubemap_t               *cubemaps;
 
 	trRefEntity_t			*currentEntity;
@@ -1991,6 +1992,7 @@ void R_RenderPshadowMaps(const refdef_t *fd);
 void R_RenderSunShadowMaps(const refdef_t *fd, int level);
 void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene );
 void R_RenderMissingCubemaps( void );
+void R_OAXAddCasterEntities( int firstDrawSurf, int numDrawSurfs );
 
 void R_AddMD3Surfaces( trRefEntity_t *e );
 void R_AddNullModelSurfaces( trRefEntity_t *e );

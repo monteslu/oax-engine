@@ -1723,7 +1723,21 @@ surfaces each one lights and shadows. Returns the view index + 1, 0 if the
 view has no unified lighting.
 =================
 */
-int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
+/*
+=================
+R_ULightCastersWanted
+
+Whether a view should add the entities it culled as shadow casters
+(R_OAXAddCasterEntities): unified or hybrid lighting with shadows on.
+=================
+*/
+qboolean R_ULightCastersWanted( void ) {
+	int model = R_ULightLightingModel();
+
+	return model != ULIGHT_LIGHTMAP && ulw.numLights > 0 && r_ulightShadows->integer;
+}
+
+int R_ULightAddView( int firstDrawSurf, int numVisible, int numDrawSurfs ) {
 	static vec3_t entMins[MAX_REFENTITIES], entMaxs[MAX_REFENTITIES];
 	static int entState[MAX_REFENTITIES];
 	int model = R_ULightLightingModel();
@@ -1779,6 +1793,9 @@ int R_ULightAddView( int firstDrawSurf, int numDrawSurfs ) {
 		vs->worldIndex = -1;
 		vs->hasBounds = qfalse;
 		vs->interaction = R_ULightInteractionStage( sh ) >= 0;
+		if ( i >= numVisible ) {
+			vs->interaction = qfalse;	// an entity out of view: a shadow caster only
+		}
 		vs->metal = vs->interaction && sh->oaxMetal;
 		vs->caster = !sh->oaxNoShadow;
 		if ( entityNum == REFENTITYNUM_WORLD ) {
