@@ -1345,6 +1345,13 @@ int OAXNav_FindPathEx( const float start[3], const float goal[3], const float ha
 	filter.setIncludeFlags( (unsigned short)include );
 	filter.setExcludeFlags( (unsigned short)exclude );
 	sref = Nearest( start, halfExtents, s, &filter );
+	if ( !sref ) {
+		// a walker standing where the mesh has no polygon (on a bench the
+		// agent radius eroded the floor away from, 16 units of obstacle plus
+		// 16 of erosion): look twice as far for where to step down to
+		float wide[3] = { halfExtents[0] * 2.0f, halfExtents[1] * 2.0f, halfExtents[2] };
+		sref = Nearest( start, wide, s, &filter );
+	}
 	gref = Nearest( goal, halfExtents, g, &filter );
 	if ( !sref || !gref ) {
 		return 0;
