@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "cm_terrain.h"
 #ifndef BSPC
 #include "oax.h"
+#include "oax_overlay.h"
 #endif
 
 #ifdef BSPC
@@ -444,10 +445,38 @@ void CMod_LoadBrushSides (lump_t *l)
 CMod_LoadEntityString
 =================
 */
-void CMod_LoadEntityString( lump_t *l ) {
+void CMod_LoadEntityString( lump_t *l, const char *mapFile ) {
 	cm.entityString = Hunk_Alloc( l->filelen, h_high );
 	cm.numEntityChars = l->filelen;
 	Com_Memcpy (cm.entityString, cmod_base + l->fileofs, l->filelen);
+
+	// the map's sidecar (maps/<name>.oaxmap, oax_overlay.h): lights, worldspawn
+	// keys and entities added without recompiling the BSP; com_oaxEnhanced 0
+	// loads the map as it came
+	if ( mapFile && mapFile[0] && Cvar_VariableIntegerValue( "com_oaxEnhanced" ) ) {
+		char path[MAX_QPATH];
+		union { char *c; void *v; } ovl;
+		int len;
+
+		OAX_OverlayPath( mapFile, path, sizeof( path ) );
+		len = FS_ReadFile( path, &ovl.v );
+		if ( ovl.c ) {
+			int need = OAX_OverlayMerge( cm.entityString, cm.numEntityChars, ovl.c, NULL, 0 );
+
+			if ( need > 0 ) {
+				char *merged = Hunk_Alloc( need + 1, h_high );
+
+				OAX_OverlayMerge( cm.entityString, cm.numEntityChars, ovl.c, merged, need + 1 );
+				cm.entityString = merged;
+				cm.numEntityChars = need + 1;
+				Com_DPrintf( "map overlay %s: %i entities added\n", path, OAX_OverlayCountAdded( ovl.c ) );
+			} else {
+				Com_Printf( S_COLOR_YELLOW "WARNING: map overlay %s does not parse, ignored\n", path );
+			}
+			FS_FreeFile( ovl.v );
+		}
+		(void)len;
+	}
 }
 
 /*
@@ -590,6 +619,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	name = mapName;
 
 #ifndef BSPC
+	Cvar_SetDescription( Cvar_Get( "com_oaxEnhanced", "1", CVAR_ARCHIVE ), "1: maps load their sidecar (maps/<name>.oaxmap: lights, sky, fog and grading added to the stock BSP) and the oax edition's enhancements; 0: stock maps exactly as they came. Read when a map loads." );
 	cm_noAreas = Cvar_Get ("cm_noAreas", "0", CVAR_CHEAT);
 	cm_noCurves = Cvar_Get ("cm_noCurves", "0", CVAR_CHEAT);
 	cm_playerCurveClip = Cvar_Get ("cm_playerCurveClip", "1", CVAR_ARCHIVE|CVAR_CHEAT );
@@ -662,7 +692,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
 	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
-	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES]);
+	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES], name);
 	CMod_LoadVisibility( &header.lumps[LUMP_VISIBILITY] );
 	CMod_LoadPatches( &header.lumps[LUMP_SURFACES], &header.lumps[LUMP_DRAWVERTS] );
 

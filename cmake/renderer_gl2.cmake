@@ -103,7 +103,7 @@ list(APPEND RENDERER_GL2_BINARY_SOURCES
 
 if(USE_RENDERER_DLOPEN)
     # the terrain sampler; a statically linked renderer gets it from the engine
-    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES} ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/oax_surfaces.c)
+    list(APPEND RENDERER_GL2_BINARY_SOURCES ${DYNAMIC_RENDERER_SOURCES} ${SOURCE_DIR}/qcommon/oax_terrain.c ${SOURCE_DIR}/qcommon/oax_surfaces.c ${SOURCE_DIR}/qcommon/oax_overlay.c)
 
     add_library(${RENDERER_GL2_BINARY} SHARED ${RENDERER_GL2_BINARY_SOURCES})
 

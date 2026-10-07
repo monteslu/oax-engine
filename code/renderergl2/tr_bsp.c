@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define JSON_IMPLEMENTATION
 #include "../qcommon/json.h"
+#include "../qcommon/oax_overlay.h"
 #undef JSON_IMPLEMENTATION
 
 /*
@@ -2288,6 +2289,29 @@ void R_LoadEntities( lump_t *l ) {
 	// store for reference by the cgame
 	w->entityString = ri.Hunk_Alloc( l->filelen + 1, h_low );
 	strcpy( w->entityString, p );
+
+	// the map's sidecar (maps/<name>.oaxmap, oax_overlay.h), merged the same
+	// way the collision model does it, so the renderer sees its lights and
+	// world keys; com_oaxEnhanced 0 loads the map as it came
+	if ( ri.Cvar_VariableIntegerValue( "com_oaxEnhanced" ) ) {
+		char path[MAX_QPATH];
+		union { char *c; void *v; } ovl;
+
+		OAX_OverlayPath( w->name, path, sizeof( path ) );
+		ri.FS_ReadFile( path, &ovl.v );
+		if ( ovl.c ) {
+			int need = OAX_OverlayMerge( w->entityString, (int)strlen( w->entityString ), ovl.c, NULL, 0 );
+
+			if ( need > 0 ) {
+				char *merged = ri.Hunk_Alloc( need + 1, h_low );
+
+				OAX_OverlayMerge( w->entityString, (int)strlen( w->entityString ), ovl.c, merged, need + 1 );
+				w->entityString = merged;
+				p = merged;
+			}
+			ri.FS_FreeFile( ovl.v );
+		}
+	}
 	w->entityParsePoint = w->entityString;
 
 	token = COM_ParseExt( &p, qtrue );

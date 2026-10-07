@@ -166,6 +166,7 @@ Mostly cheat/temp cvars for tests; see [test-hooks.md](test-hooks.md). Not meant
 | `r_oaxSurfaceIdDump` | 0 | cheat, temp | Write a whole-frame surface and material id map for the next N frames (`surfids/frame<n>.txt` and the debug blob); counts down to 0. |
 | `r_oaxSurfaceIdOpaque` | 0 | cheat, temp | Surface ids: only opaque surfaces take pixels. |
 | `s_meter` | 0 | temp | 1 meters the final sound mix and publishes debug value `s_meter` = `peak tail_ms peak_ms`; setting it again restarts the measurement. |
+| `com_oaxEnhanced` | 1 | archive | 1: maps load their sidecar (`maps/<name>.oaxmap`: lights, lighting model, sky, fog and grading added to a stock BSP, docs/map-format.md) and the oax edition's enhancements; 0: stock maps exactly as they came. Read when a map loads. |
 | `com_errorQuit` | (unset) | user-created | 1 makes any error except a plain disconnect end the process (native exits with code 3) instead of returning to the menu. Set with `+set`. |
 | `padscript_minstart` | (unset) | user-created | Earliest server level time (ms) at which a pad script may start, so builds that reach the map at different times start it at the same level time. |
 | `r_imageprogram_result` | (unset) | written by engine | Output of the `imageprogram` command: `WxH hash` (FNV-1a of the RGBA bytes) or `failed`. |

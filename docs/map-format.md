@@ -24,8 +24,9 @@ one axis, and reverse every polygon's winding with it).
 4. [OAX_SURFACES (version 1)](#oax_surfaces-version-1)
 5. [OAX_COLLISION (version 1)](#oax_collision-version-1)
 6. [The hull](#the-hull)
-7. [Building a map](#building-a-map)
-8. [Versioning](#versioning)
+7. [Map overlay (the sidecar)](#map-overlay-the-sidecar)
+8. [Building a map](#building-a-map)
+9. [Versioning](#versioning)
 
 ## The BSPX block
 
@@ -303,6 +304,47 @@ result as debug values:
 | `cm_surf_floating` | surfaces with no solid within `cm_surfGap` units (default 8) behind the centroid, not `OSF_DETAIL` |
 | `cm_surf_buried_ids`, `cm_surf_floating_ids` | the first 16 offenders as `index:sourceId` pairs |
 | `cm_surf_hash` | FNV-1a hash of the lump bytes |
+
+## Map overlay (the sidecar)
+
+A map can ship a **sidecar**, `maps/<name>.oaxmap`, in any pk3 or loose in the
+game directory. It holds entity blocks in the entity lump's own text format
+(`{ "key" "value" }`, with `//` and `/* */` comments) and is merged onto the
+map's entity string when the map loads, by the collision model (so the server
+and the game module see it) and by the renderer (so it sees the lights and
+world keys). An existing BSP, such as a stock OpenArena map, gets lights, a
+lighting model, sky, fog and grading without being recompiled or edited.
+
+- A block whose `classname` is `worldspawn` sets its keys on the map's
+  worldspawn: a key the map has is replaced, a new one is added.
+- Every other block is appended after the map's own entities, so the ordinals
+  of the map's entities (the numbers `r_ulightCasterDump` and the light
+  tools use) never change.
+- The sidecar cannot remove or edit a map's own entities, brushes or surfaces,
+  and it does not touch collision: a map plays the same with or without it.
+- A sidecar that does not parse (unbalanced braces) is ignored with a
+  warning.
+
+`com_oaxEnhanced` (archive, default 1) switches the sidecar off: with 0 the
+map loads as it came, exactly. It is read when a map loads.
+
+A stock map is made to light dynamically like this (hybrid keeps its
+lightmaps and adds shadowed realtime lights, docs/lights.md):
+
+    {
+    "classname" "worldspawn"
+    "oax_lighting" "hybrid"
+    "oax_shadowmode" "maps"
+    }
+    {
+    "classname" "rtlight"
+    "origin" "0 0 200"
+    "oax_radius" "600"
+    "_color" "1 0.8 0.5"
+    }
+
+The content tools (`misc/oacontent`) generate sidecars; the merge itself is
+`code/qcommon/oax_overlay.c`. Test: `map-overlay` on `oax_overlay`.
 
 ## Building a map
 

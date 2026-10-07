@@ -13,6 +13,7 @@ set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/cm_terrain.c
     ${SOURCE_DIR}/qcommon/oax_terrain.c
     ${SOURCE_DIR}/qcommon/oax_surfaces.c
+    ${SOURCE_DIR}/qcommon/oax_overlay.c
     ${SOURCE_DIR}/qcommon/cm_oaxsurf.c
     ${SOURCE_DIR}/qcommon/cm_navgeom.c
     ${SOURCE_DIR}/qcommon/cmd.c
