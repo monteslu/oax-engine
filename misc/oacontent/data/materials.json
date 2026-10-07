@@ -1,0 +1,4 @@
+{
+  "_about": "Per-shader overrides for the material classifier (tools/materials.mjs). A key is a shader name; the value is { \"class\": \"metal\"|\"water\"|\"noshadow\"|\"sunsky\"|\"none\", \"args\": [...] , \"why\": \"...\" }. \"none\" keeps a shader exactly as it is. An override wins over every rule.",
+  "overrides": {}
+}

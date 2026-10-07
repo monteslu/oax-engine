@@ -109,11 +109,20 @@ export class Bsp {
       const b = this.buf, l = this.lumps[LUMP.SURFACES], out = [];
       for (let o = l.ofs; o < l.ofs + l.len; o += 104) {
         const r = (k) => b.readInt32LE(o + k * 4);
-        out.push({ shader: r(0), fog: r(1), type: r(2), firstVert: r(3), numVerts: r(4), firstIndex: r(5), numIndexes: r(6), lightmap: r(7), patchWidth: r(24), patchHeight: r(25) });
+        const f = (k) => b.readFloatLE(o + k * 4);
+        out.push({
+          shader: r(0), fog: r(1), type: r(2), firstVert: r(3), numVerts: r(4), firstIndex: r(5), numIndexes: r(6),
+          lightmap: r(7), lmX: r(8), lmY: r(9), lmW: r(10), lmH: r(11),
+          lmOrigin: [f(12), f(13), f(14)], lmVecs: [[f(15), f(16), f(17)], [f(18), f(19), f(20)], [f(21), f(22), f(23)]],
+          patchWidth: r(24), patchHeight: r(25),
+        });
       }
       return out;
     });
   }
+
+  // one 128 x 128 page of the lightmap lump as a Buffer of RGB bytes
+  lightmapPage(i) { const l = this.lumps[LUMP.LIGHTMAPS]; return this.buf.subarray(l.ofs + i * 49152, l.ofs + (i + 1) * 49152); }
 
   get numLightmaps() { return this.lumps[LUMP.LIGHTMAPS].len / (128 * 128 * 3); }
 
@@ -192,14 +201,51 @@ export class Bsp {
   // whose contents intersect `mask` block (solid by default: player clip is
   // invisible and blocks no light), sky brushes count as hits with sky: true.
   // Brush entities (doors, movers) are not part of the world.
+  // the world brushes by 256-unit cells of the xy plane, for rays that would
+  // otherwise test every brush
+  #buildGrid() {
+    const CELL = 256;
+    const m = this.models[0];
+    const gx0 = Math.floor(m.mins[0] / CELL) - 1, gy0 = Math.floor(m.mins[1] / CELL) - 1;
+    const gw = Math.ceil((m.maxs[0] - m.mins[0]) / CELL) + 3, gh = Math.ceil((m.maxs[1] - m.mins[1]) / CELL) + 3;
+    const cells = Array.from({ length: gw * gh }, () => []);
+    this._bbs.forEach((e, bi) => {
+      const bb = e[1];
+      const x0 = Math.max(0, Math.floor(Math.max(bb[0], m.mins[0] - CELL) / CELL) - gx0), x1 = Math.min(gw - 1, Math.floor(Math.min(bb[3], m.maxs[0] + CELL) / CELL) - gx0);
+      const y0 = Math.max(0, Math.floor(Math.max(bb[1], m.mins[1] - CELL) / CELL) - gy0), y1 = Math.min(gh - 1, Math.floor(Math.min(bb[4], m.maxs[1] + CELL) / CELL) - gy0);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells[y * gw + x].push(bi);
+    });
+    this._grid = { CELL, gx0, gy0, gw, gh, cells, stamp: new Int32Array(this._bbs.length), n: 0 };
+  }
+
+  #brushesAlong(from, end) {
+    const g = this._grid;
+    g.n++;
+    const out = [];
+    const len = Math.hypot(end[0] - from[0], end[1] - from[1]);
+    const steps = Math.max(1, Math.ceil(len / (g.CELL / 2)));
+    for (let k = 0; k <= steps; k++) {
+      const x = from[0] + (end[0] - from[0]) * (k / steps), y = from[1] + (end[1] - from[1]) * (k / steps);
+      const cx = Math.floor(x / g.CELL) - g.gx0, cy = Math.floor(y / g.CELL) - g.gy0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const X = cx + dx, Y = cy + dy;
+        if (X < 0 || Y < 0 || X >= g.gw || Y >= g.gh) continue;
+        for (const bi of g.cells[Y * g.gw + X]) if (g.stamp[bi] !== g.n) { g.stamp[bi] = g.n; out.push(bi); }
+      }
+    }
+    return out;
+  }
+
   ray(from, dir, maxT = 100000, mask = CONTENTS.SOLID) {
     this._worldBrushes ||= (() => { const m = this.models[0]; const a = []; for (let i = 0; i < m.numBrushes; i++) a.push(m.firstBrush + i); return a; })();
     this._bbs ||= this._worldBrushes.map((i) => [i, this.brushBounds(i)]);
+    if (!this._grid && this.useGrid !== false && this._bbs.length > 200) this.#buildGrid();
     const end = [from[0] + dir[0] * maxT, from[1] + dir[1] * maxT, from[2] + dir[2] * maxT];
     const lo = [Math.min(from[0], end[0]), Math.min(from[1], end[1]), Math.min(from[2], end[2])];
     const hi = [Math.max(from[0], end[0]), Math.max(from[1], end[1]), Math.max(from[2], end[2])];
     let best = null;
-    for (const [i, bb] of this._bbs) {
+    const list = this._grid && this.useGrid !== false ? this.#brushesAlong(from, end).map((bi) => this._bbs[bi]) : this._bbs;
+    for (const [i, bb] of list) {
       if (bb[3] < lo[0] || bb[0] > hi[0] || bb[4] < lo[1] || bb[1] > hi[1] || bb[5] < lo[2] || bb[2] > hi[2]) continue;
       const sh = this.shaders[this.brushes[i].shader];
       if (!(sh.contents & mask) && !this.isSky(this.brushes[i].shader)) continue;

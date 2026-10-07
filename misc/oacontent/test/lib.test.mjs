@@ -99,3 +99,23 @@ test('bsp: a stock map reads, with sane geometry and an upward ray', { skip: !ha
   const hit = bsp.upRay([(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, mn[2] + 1]);
   assert.ok(hit === null || typeof hit.z === 'number');
 });
+
+test('bsp: the spatial grid gives the same rays as testing every brush', { skip: !haveOA }, () => {
+  const cs = new ContentSet();
+  const m = cs.maps().find((x) => x.name === 'oa_dm6') || cs.maps()[0];
+  const bsp = new Bsp(cs.read(m.path), m.path);
+  const w = bsp.models[0];
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  let hits = 0;
+  for (let i = 0; i < 400; i++) {
+    const p = [0, 1, 2].map((a) => w.mins[a] + rnd() * (w.maxs[a] - w.mins[a]));
+    const az = rnd() * Math.PI * 2, el = (rnd() - 0.5) * 2;
+    const d = [Math.cos(az) * Math.cos(el), Math.sin(az) * Math.cos(el), Math.sin(el)];
+    bsp.useGrid = true; const a = bsp.ray(p, d, 2000);
+    bsp.useGrid = false; const b = bsp.ray(p, d, 2000);
+    assert.equal(!!a, !!b);
+    if (a) { hits++; assert.ok(Math.abs(a.t - b.t) < 1e-6); }   // coincident brushes tie: which one is reported may differ
+  }
+  assert.ok(hits > 50);
+});

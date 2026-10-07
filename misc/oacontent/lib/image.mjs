@@ -54,3 +54,34 @@ export function meanColor(img) {
   for (let i = 0; i < n; i++) { s[0] += img.data[i * 4]; s[1] += img.data[i * 4 + 1]; s[2] += img.data[i * 4 + 2]; }
   return s.map((v) => +(v / n / 255).toFixed(4));
 }
+
+// A PNG encoder with no dependencies: 8 bit RGB or RGBA, scanlines filtered
+// with Sub, deflated. data is Buffer/Uint8Array of width*height*4 RGBA bytes
+// (alpha dropped when alpha is false).
+import zlib from 'node:zlib';
+import { crc32 } from './zip.mjs';
+
+export function pngEncode(width, height, rgba, { alpha = true } = {}) {
+  const bpp = alpha ? 4 : 3;
+  const raw = Buffer.alloc((width * bpp + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const ro = y * (width * bpp + 1);
+    raw[ro] = 1;                                         // filter: Sub
+    for (let x = 0; x < width; x++) {
+      for (let c = 0; c < bpp; c++) {
+        const v = rgba[(y * width + x) * 4 + c];
+        const left = x > 0 ? rgba[(y * width + x - 1) * 4 + c] : 0;
+        raw[ro + 1 + x * bpp + c] = (v - left) & 255;
+      }
+    }
+  }
+  const chunk = (type, body) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(body.length);
+    const td = Buffer.concat([Buffer.from(type, 'latin1'), body]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = alpha ? 6 : 2;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+}
