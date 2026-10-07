@@ -240,12 +240,15 @@ static bool NavAddCappedSpan( rcHeightfield &hf, int x, int z, unsigned int smin
 
 // fill the volumes' column spans (sampled at column centres) into hf
 static bool NavFillSolids( rcHeightfield &hf, const oaxNavSolids_t *sol, const float *tileMinQ3,
-		const float *tileMaxQ3, int thr ) {
+		const float *tileMaxQ3, int thr, const unsigned char *skip ) {
 	const float ich = 1.0f / hf.ch, by = hf.bmax[1] - hf.bmin[1];
 	int v;
 
 	for ( v = 0; v < sol->numVolumes; v++ ) {
 		const float *b = &sol->volBounds[v * 6];
+		if ( skip && skip[v] ) {
+			continue;	// an included model that is out
+		}
 		const float *pl = &sol->planes[sol->volFirstPlane[v] * 4];
 		const unsigned char *topFlag = &sol->planeTop[sol->volFirstPlane[v]];
 		const int np = sol->volNumPlanes[v];
@@ -380,6 +383,13 @@ struct NavBuildState {
 	unsigned char			*solidTop;
 	unsigned char			*built;		// tiles of the first build, by index
 	int						tileBits;
+	// included models (movers at rest): per triangle its model or -1, per
+	// solid volume 1 to leave it out, per model in (1) or out
+	int						numModels;
+	int						*mFirstTri, *mNumTris, *mFirstVol, *mNumVols;
+	float					*mBounds;
+	short					*triModel;
+	unsigned char			*volSkip, *modelOn;
 };
 static NavBuildState *navBuild;
 
@@ -410,6 +420,14 @@ static void NavBuildFree( void ) {
 	delete[] b->solidBounds;
 	delete[] b->solidPlanes;
 	delete[] b->solidTop;
+	delete[] b->mFirstTri;
+	delete[] b->mNumTris;
+	delete[] b->mFirstVol;
+	delete[] b->mNumVols;
+	delete[] b->mBounds;
+	delete[] b->triModel;
+	delete[] b->volSkip;
+	delete[] b->modelOn;
 	delete[] b->built;
 	delete b;
 	navBuild = NULL;
@@ -468,6 +486,8 @@ static int NavBuildTile( NavBuildState *b, int tx, int ty, unsigned *hash, int *
 	int *tileTris = b->tileTris;
 	const unsigned char *walk = b->walk, *areas = b->areas, *volId = b->volId;
 	const oaxNavArea_t *vols = b->vols;
+	const short *triModel = b->triModel;
+	const unsigned char *modelOn = b->modelOn, *volSkip = b->volSkip;
 	const oaxNavSolids_t *solids = b->solids;
 	float *conVerts = b->conVerts, *conRad = b->conRad;
 	unsigned short *conFlags = b->conFlags;
@@ -504,6 +524,9 @@ static int NavBuildTile( NavBuildState *b, int tx, int ty, unsigned *hash, int *
 				const float *b = &triBounds[i * 4];
 				if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
 					continue;
+				}
+				if ( triModel && triModel[i] >= 0 && !modelOn[triModel[i]] ) {
+					continue;	// a mover that has left its rest pose
 				}
 				tileTris[n * 3 + 0] = tris[i * 3 + 0];
 				tileTris[n * 3 + 1] = tris[i * 3 + 1];
@@ -556,7 +579,7 @@ static int NavBuildTile( NavBuildState *b, int tx, int ty, unsigned *hash, int *
 					} else {
 						t1 = Sys_Milliseconds();
 						navMsRaster += t1 - t0;
-						if ( solids && solids->numVolumes > 0 && !NavFillSolids( *hf, solids, emin, emax, cfg.walkableClimb ) ) {
+						if ( solids && solids->numVolumes > 0 && !NavFillSolids( *hf, solids, emin, emax, cfg.walkableClimb, volSkip ) ) {
 							Fail( err, errSize, "navmesh solid fill: out of memory" );
 						} else {
 							tileOk = 1;
@@ -956,6 +979,36 @@ int OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const uns
 		if ( solids ) {
 			NavCopySolids( b, solids );
 		}
+		// the included models: all in for the first build
+		{
+			const int nm = solids && solids->numModels > 0 ? solids->numModels : 0;
+			const int nsv = solids && solids->numVolumes > 0 ? solids->numVolumes : 0;
+			b->numModels = nm;
+			b->mFirstTri = new int[nm + 1];
+			b->mNumTris = new int[nm + 1];
+			b->mFirstVol = new int[nm + 1];
+			b->mNumVols = new int[nm + 1];
+			b->mBounds = new float[nm * 6 + 1];
+			b->modelOn = new unsigned char[nm + 1];
+			b->triModel = new short[numTris > 0 ? numTris : 1];
+			b->volSkip = new unsigned char[nsv + 1];
+			memset( b->volSkip, 0, nsv + 1 );
+			for ( i = 0; i < numTris; i++ ) {
+				b->triModel[i] = -1;
+			}
+			for ( i = 0; i < nm; i++ ) {
+				int t;
+				b->mFirstTri[i] = solids->modelFirstTri[i];
+				b->mNumTris[i] = solids->modelNumTris[i];
+				b->mFirstVol[i] = solids->modelFirstVol[i];
+				b->mNumVols[i] = solids->modelNumVols[i];
+				memcpy( &b->mBounds[i * 6], &solids->modelBounds[i * 6], 6 * sizeof( float ) );
+				b->modelOn[i] = 1;
+				for ( t = b->mFirstTri[i]; t < b->mFirstTri[i] + b->mNumTris[i] && t < numTris; t++ ) {
+					b->triModel[t] = (short)i;
+				}
+			}
+		}
 		rv = NULL;
 		walk = NULL;
 		areas = NULL;
@@ -1164,6 +1217,64 @@ int OAXNav_SetVolumeActive( int vol, int active ) {
 		navLinks = CountConnectedLinks();
 	}
 	return n;
+}
+
+// the tiles whose build (with its border) can see a Q3 xy box, rebuilt
+static int NavRebuildBox( NavBuildState *b, const float *mins, const float *maxs ) {
+	float lo[2], hi[2];
+	int tx0, ty0, tx1, ty1, tx, ty, n = 0, polys = 0, size = 0;
+	unsigned hash = 0;
+	char err[128];
+	const float pad = b->base.borderSize * b->base.cs + b->p.agentRadius;
+
+	lo[0] = mins[0] - pad;
+	lo[1] = mins[1] - pad;
+	hi[0] = maxs[0] + pad;
+	hi[1] = maxs[1] + pad;
+	tx0 = (int)floorf( ( lo[0] - b->wmin[0] ) / b->tileSize );
+	ty0 = (int)floorf( ( lo[1] - b->wmin[1] ) / b->tileSize );
+	tx1 = (int)floorf( ( hi[0] - b->wmin[0] ) / b->tileSize );
+	ty1 = (int)floorf( ( hi[1] - b->wmin[1] ) / b->tileSize );
+	for ( ty = ty0 > 0 ? ty0 : 0; ty <= ty1 && ty < b->th; ty++ ) {
+		for ( tx = tx0 > 0 ? tx0 : 0; tx <= tx1 && tx < b->tw; tx++ ) {
+			const dtMeshTile *t;
+
+			if ( !b->built[tx + ty * b->tw] ) {
+				continue;
+			}
+			t = navMesh->getTileAt( tx, ty, 0 );
+			if ( t ) {
+				navMesh->removeTile( navMesh->getTileRef( t ), NULL, NULL );
+			}
+			if ( NavBuildTile( b, tx, ty, &hash, &size, &polys, err, sizeof( err ) ) < 0 ) {
+				continue;	// out of memory: the tile stays out
+			}
+			n++;
+		}
+	}
+	if ( n ) {
+		navMesh->resetFarOffMeshLinks();
+		navLinks = CountConnectedLinks();
+	}
+	return n;
+}
+
+int OAXNav_SetModelActive( int model, int active ) {
+	NavBuildState *b = navBuild;
+	int v;
+
+	if ( !b || !navMesh || model < 0 || model >= b->numModels ) {
+		return 0;
+	}
+	active = active ? 1 : 0;
+	if ( b->modelOn[model] == active ) {
+		return 0;
+	}
+	b->modelOn[model] = (unsigned char)active;
+	for ( v = b->mFirstVol[model]; v < b->mFirstVol[model] + b->mNumVols[model] && b->solids && v < b->solids->numVolumes; v++ ) {
+		b->volSkip[v] = (unsigned char)!active;
+	}
+	return NavRebuildBox( b, &b->mBounds[model * 6], &b->mBounds[model * 6 + 3] );
 }
 
 int OAXNav_LinkCount( void ) {

@@ -35,7 +35,7 @@ export class Session {
         body: JSON.stringify(args),
         // one romdev call should take seconds; a hang should fail fast, not
         // sit for minutes (ROMDEV_TIMEOUT_MS raises it for a slow host)
-        signal: AbortSignal.timeout(Number(process.env.ROMDEV_TIMEOUT_MS || 60000)),
+        signal: AbortSignal.timeout(Number(process.env.ROMDEV_TIMEOUT_MS || 180000)),   // a cart load on a loaded box can pass a minute
       });
     } catch (e) {
       throw new RomdevUnavailable(`romdev unreachable at ${ROMDEV_URL}: ${e.message}`);

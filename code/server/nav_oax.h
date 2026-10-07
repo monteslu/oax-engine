@@ -101,6 +101,11 @@ typedef struct {
 	// from these are built. None: every tile with walkable geometry.
 	const float			*seeds;
 	int					numSeeds;
+	// inline models included as floor (movers at rest): each a range of the
+	// triangles and of the volumes, switchable with OAXNav_SetModelActive
+	int					numModels;
+	const int			*modelFirstTri, *modelNumTris, *modelFirstVol, *modelNumVols;
+	const float			*modelBounds;	// 6 per model
 } oaxNavSolids_t;
 
 // The same with off-mesh links, cost volumes and solid volumes (any may be
@@ -109,6 +114,9 @@ typedef struct {
 // Turns a dynamic cost volume (a navmesh obstacle) on or off, rebuilding the
 // tiles it reaches; obstacles start on. Returns the tiles rebuilt.
 int		OAXNav_SetVolumeActive( int vol, int active );
+// Puts an included model (a mover) into or out of the mesh, rebuilding the
+// tiles it reaches; models start in. Returns the tiles rebuilt.
+int		OAXNav_SetModelActive( int model, int active );
 
 int		OAXNav_BuildEx( const float *verts, int numVerts, const int *tris, const unsigned char *walkable,
 			int numTris, const oaxNavParams_t *params, const oaxNavLink_t *links, int numLinks,

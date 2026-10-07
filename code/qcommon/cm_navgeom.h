@@ -26,6 +26,8 @@ cm_navgeom.h: collision geometry as triangles for the navmesh builder
 #ifndef CM_NAVGEOM_H
 #define CM_NAVGEOM_H
 
+#define NAV_GEOM_MAX_MODELS	64
+
 typedef struct {
 	float			*verts;		// numVerts * 3
 	int				numVerts;
@@ -44,9 +46,21 @@ typedef struct {
 	unsigned char	*planeTop;		// a walkable cap: normal z >= 0.7, not sky, not under terrain, open
 	int				closedFaces;	// upward faces with no open air in front (not walkable)
 	int				buriedBrushes;	// brushes with no face in open air (no volume)
+
+	// inline models included as floor (movers at their rest pose,
+	// CM_OAXNavGeometryEx): each one's triangles and volumes are a
+	// contiguous range at the end, so the builder can leave a model out
+	int				numModels;
+	int				modelFirstTri[NAV_GEOM_MAX_MODELS], modelNumTris[NAV_GEOM_MAX_MODELS];
+	int				modelFirstVol[NAV_GEOM_MAX_MODELS], modelNumVols[NAV_GEOM_MAX_MODELS];
+	float			modelBounds[NAV_GEOM_MAX_MODELS * 6];
 } oaxNavGeometry_t;
 
 int		CM_OAXNavGeometry( oaxNavGeometry_t *g );
+// the same with inline models (brush entities) added as solid floor at an
+// origin each: movers that stand still until something in the game moves
+// them (a landing deck, a ramp)
+int		CM_OAXNavGeometryEx( oaxNavGeometry_t *g, const int *models, const float *origins, int numModels );
 // 0 when p is in opaque space (a leaf with no cluster: structural solid or the void)
 int		CM_OAXNavOpenAt( const float p[3] );
 void	CM_OAXNavGeometryFree( oaxNavGeometry_t *g );

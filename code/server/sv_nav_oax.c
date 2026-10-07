@@ -66,6 +66,11 @@ static cvar_t *sv_navLinks;
 #define NAV_MAX_AREAS	256
 
 static int			navBuildPending;	// the map wants a navmesh that is not built yet
+// inline models the game includes as floor (movers at rest), queued for the build
+#define NAV_MAX_MODELS	NAV_GEOM_MAX_MODELS
+static int			navPendingModels[NAV_MAX_MODELS];
+static float		navPendingModelOrigins[NAV_MAX_MODELS * 3];
+static int			navNumPendingModels;
 static oaxNavLink_t	navPendingLinks[NAV_MAX_LINKS];
 static int			navNumPendingLinks;
 static oaxNavArea_t	navPendingAreas[NAV_MAX_AREAS];
@@ -91,6 +96,8 @@ void SV_OAXNavMapLoaded( const char *mapname ) {
 	navBuildPending = 0;
 	navNumPendingLinks = 0;
 	navNumPendingAreas = 0;
+	navNumPendingModels = 0;
+	Com_DebugSetInt( "sv_nav_models", 0 );
 	Com_DebugSetInt( "sv_nav_polys", 0 );
 	Com_DebugSet( "sv_nav_hash", "none" );
 	Com_DebugSet( "sv_nav_links", "0/0" );
@@ -177,7 +184,7 @@ static int SV_OAXNavBuild( const oaxNavLink_t *links, int numLinks, const oaxNav
 	char err[128];
 	int polys, tiles, gridTiles, solidColumns, opaqueTops;
 
-	if ( !CM_OAXNavGeometry( &g ) ) {
+	if ( !CM_OAXNavGeometryEx( &g, navPendingModels, navPendingModelOrigins, navNumPendingModels ) ) {
 		CM_OAXNavGeometryFree( &g );
 		return 0;
 	}
@@ -197,6 +204,12 @@ static int SV_OAXNavBuild( const oaxNavLink_t *links, int numLinks, const oaxNav
 	solids.planes = g.planes;
 	solids.planeTop = g.planeTop;
 	solids.openAt = CM_OAXNavOpenAt;
+	solids.numModels = g.numModels;
+	solids.modelFirstTri = g.modelFirstTri;
+	solids.modelNumTris = g.modelNumTris;
+	solids.modelFirstVol = g.modelFirstVol;
+	solids.modelNumVols = g.modelNumVols;
+	solids.modelBounds = g.modelBounds;
 	solids.seeds = seeds;
 	solids.numSeeds = SV_OAXNavSeeds( seeds, NAV_MAX_SEEDS );
 	polys = OAXNav_BuildEx( g.verts, g.numVerts, g.tris, g.walkable, g.numTris, &p, links, numLinks, areas, numAreas,
@@ -215,6 +228,10 @@ static int SV_OAXNavBuild( const oaxNavLink_t *links, int numLinks, const oaxNav
 	}
 	Com_DebugSetInt( "sv_nav_tiles", tiles );
 	Com_DebugSetInt( "sv_nav_seeds", solids.numSeeds );
+	Com_DebugSetInt( "sv_nav_models", g.numModels );
+	if ( navNumPendingModels ) {
+		Com_DPrintf( "navmesh: %i floor models in (%i queued)\n", g.numModels, navNumPendingModels );
+	}
 	Com_DebugSetInt( "sv_nav_grid_tiles", gridTiles );
 	Com_DebugSetInt( "sv_nav_volumes", g.numVolumes );
 	Com_DebugSetInt( "sv_nav_closed_faces", g.closedFaces );
@@ -412,11 +429,33 @@ static qboolean SV_OAXNavCalls( intptr_t *args, intptr_t *ret ) {
 		*ret = OAXNav_SetVolumeActive( args[1], args[2] );
 		return qtrue;
 
+	case G_OAX_NAV_ADDMODEL:
+		// an inline model (a brush entity) as floor at an origin: a mover at
+		// its rest pose that players stand and walk on until the game moves
+		// it; queued for G_OAX_NAV_COMMIT, its index for G_OAX_NAV_SETMODEL
+		VM_CheckBlock( args[2], sizeof( vec3_t ), "NAVMODEL" );
+		*ret = -1;
+		if ( navNumPendingModels >= NAV_MAX_MODELS || args[1] <= 0 ) {
+			return qtrue;
+		}
+		navPendingModels[navNumPendingModels] = args[1];
+		VectorCopy( (float *)VMA( 2 ), &navPendingModelOrigins[navNumPendingModels * 3] );
+		*ret = navNumPendingModels++;
+		Com_DPrintf( "navmesh: floor model *%i at %.0f %.0f %.0f queued (%i)\n", (int)args[1],
+			navPendingModelOrigins[( navNumPendingModels - 1 ) * 3], navPendingModelOrigins[( navNumPendingModels - 1 ) * 3 + 1],
+			navPendingModelOrigins[( navNumPendingModels - 1 ) * 3 + 2], navNumPendingModels );
+		return qtrue;
+
+	case G_OAX_NAV_SETMODEL:
+		SV_OAXNavEnsure();
+		*ret = OAXNav_SetModelActive( args[1], args[2] );
+		return qtrue;
+
 	case G_OAX_NAV_COMMIT:
 		// the one build of a map with authored intent; with none (or
 		// sv_navLinks 0) the plain build, if it is still pending, or the
 		// existing mesh. A built mesh is rebuilt only for new intent.
-		if ( ( navNumPendingLinks || navNumPendingAreas ) && sv_navLinks->integer &&
+		if ( ( navNumPendingLinks || navNumPendingAreas || navNumPendingModels ) && sv_navLinks->integer &&
 			( navBuildPending || OAXNav_PolyCount() > 0 ) ) {
 			navBuildPending = 0;
 			*ret = SV_OAXNavBuild( navPendingLinks, navNumPendingLinks, navPendingAreas, navNumPendingAreas );
@@ -426,6 +465,7 @@ static qboolean SV_OAXNavCalls( intptr_t *args, intptr_t *ret ) {
 		}
 		navNumPendingLinks = 0;
 		navNumPendingAreas = 0;
+		navNumPendingModels = 0;
 		return qtrue;
 
 	case G_OAX_NAV_FINDPATHEX: {

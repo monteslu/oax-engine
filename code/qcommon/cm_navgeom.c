@@ -133,7 +133,7 @@ merge into solid instead of standing as floors in mid-air. A plane caps
 walkably when its face is walkable (normal z >= 0.7, not sky, not under
 terrain).
 */
-static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top ) {
+static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top, const float *origin ) {
 	oaxNavGeometry_t *g = b->g;
 	int i;
 
@@ -154,8 +154,8 @@ static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top 
 	g->volFirstPlane[g->numVolumes] = g->numPlanes;
 	g->volNumPlanes[g->numVolumes] = brush->numsides;
 	for ( i = 0; i < 3; i++ ) {
-		g->volBounds[g->numVolumes * 6 + i] = brush->bounds[0][i];
-		g->volBounds[g->numVolumes * 6 + 3 + i] = brush->bounds[1][i];
+		g->volBounds[g->numVolumes * 6 + i] = brush->bounds[0][i] + ( origin ? origin[i] : 0.0f );
+		g->volBounds[g->numVolumes * 6 + 3 + i] = brush->bounds[1][i] + ( origin ? origin[i] : 0.0f );
 	}
 	for ( i = 0; i < brush->numsides; i++ ) {
 		const cplane_t *pl = brush->sides[i].plane;
@@ -163,7 +163,7 @@ static void AddVolume( navBuild_t *b, cbrush_t *brush, const unsigned char *top 
 		q[0] = pl->normal[0];
 		q[1] = pl->normal[1];
 		q[2] = pl->normal[2];
-		q[3] = pl->dist;
+		q[3] = pl->dist + ( origin ? DotProduct( pl->normal, origin ) : 0.0f );
 		g->planeTop[g->numPlanes] = top[i];
 		g->numPlanes++;
 	}
@@ -257,10 +257,12 @@ static qboolean FaceOpen( const winding_t *w, const vec3_t normal, float dist ) 
 	return qfalse;
 }
 
-static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
+// origin: the brush shifted there (an inline model at its entity origin), or NULL
+static void AddBrush( navBuild_t *b, cbrush_t *brush, const float *origin ) {
 	int i, j;
 	qboolean anyOpen = qfalse;
 	unsigned char top[1024];
+	float dist;
 
 	if ( brush->numsides > (int)sizeof( top ) ) {
 		Com_Error( ERR_DROP, "CM_OAXNavGeometry: a brush with %i sides", brush->numsides );
@@ -275,19 +277,21 @@ static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 		if ( side->surfaceFlags & SURF_SKY ) {
 			continue;
 		}
-		w = BaseWindingForPlane( side->plane->normal, side->plane->dist );
+		dist = side->plane->dist + ( origin ? DotProduct( side->plane->normal, origin ) : 0.0f );
+		w = BaseWindingForPlane( side->plane->normal, dist );
 		for ( j = 0; j < brush->numsides && w; j++ ) {
 			cplane_t *p = brush->sides[j].plane;
+			float pd = p->dist + ( origin ? DotProduct( p->normal, origin ) : 0.0f );
 			vec3_t n;
 			if ( j == i ) {
 				continue;
 			}
 			// ignore a plane that duplicates this side (bevels can)
-			if ( DotProduct( p->normal, side->plane->normal ) > 0.999f && fabs( p->dist - side->plane->dist ) < 0.01f ) {
+			if ( DotProduct( p->normal, side->plane->normal ) > 0.999f && fabs( pd - dist ) < 0.01f ) {
 				continue;
 			}
 			VectorNegate( p->normal, n );
-			ChopWindingInPlace( &w, n, -p->dist, 0.0f );
+			ChopWindingInPlace( &w, n, -pd, 0.0f );
 		}
 		if ( !w ) {
 			continue;
@@ -297,7 +301,7 @@ static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 			// structural solid or faces the void) is no floor: it would only
 			// widen the build to the whole hull of an imported map
 			float nz = side->plane->normal[2];
-			qboolean open = FaceOpen( w, side->plane->normal, side->plane->dist );
+			qboolean open = FaceOpen( w, side->plane->normal, dist );
 			anyOpen |= open;
 			if ( nz >= NAV_MIN_WALK_NORMAL && !open ) {
 				nz = 0.0f;
@@ -311,7 +315,7 @@ static void AddBrush( navBuild_t *b, cbrush_t *brush ) {
 	// a brush with no face in open air lies wholly in opaque space: its
 	// columns hold no walkable span to merge away, so it needs no fill
 	if ( anyOpen ) {
-		AddVolume( b, brush, top );
+		AddVolume( b, brush, top, origin );
 	} else {
 		b->buriedBrushes++;
 	}
@@ -367,9 +371,13 @@ Fills g (free it with CM_OAXNavGeometryFree). Returns the triangle count.
 =================
 */
 int CM_OAXNavGeometry( oaxNavGeometry_t *g ) {
+	return CM_OAXNavGeometryEx( g, NULL, NULL, 0 );
+}
+
+int CM_OAXNavGeometryEx( oaxNavGeometry_t *g, const int *models, const float *origins, int numModels ) {
 	navBuild_t b;
 	byte *seen;
-	int i, k, t, ci, cj;
+	int i, k, t, ci, cj, m;
 
 	Com_Memset( g, 0, sizeof( *g ) );
 	Com_Memset( &b, 0, sizeof( b ) );
@@ -405,7 +413,7 @@ int CM_OAXNavGeometry( oaxNavGeometry_t *g ) {
 	}
 	for ( i = 0; i < cm.numBrushes; i++ ) {
 		if ( seen[i] && ( cm.brushes[i].contents & ( CONTENTS_SOLID | CONTENTS_PLAYERCLIP ) ) ) {
-			AddBrush( &b, &cm.brushes[i] );
+			AddBrush( &b, &cm.brushes[i], NULL );
 		}
 	}
 	Z_Free( seen );
@@ -437,6 +445,34 @@ int CM_OAXNavGeometry( oaxNavGeometry_t *g ) {
 		if ( CM_OAXCollisionTri( t, tri ) & ( CONTENTS_SOLID | CONTENTS_PLAYERCLIP ) ) {
 			AddTriangle( &b, tri );
 		}
+	}
+
+	// inline models as floor, each a range of triangles and volumes at the
+	// end (the builder leaves a model out once the game moves it)
+	for ( m = 0; m < numModels && g->numModels < NAV_GEOM_MAX_MODELS; m++ ) {
+		int mi = models[m], n = g->numModels;
+		const float *o = &origins[m * 3];
+		cLeaf_t *leaf;
+
+		if ( mi <= 0 || mi >= cm.numSubModels ) {
+			continue;
+		}
+		leaf = &cm.cmodels[mi].leaf;
+		g->modelFirstTri[n] = g->numTris;
+		g->modelFirstVol[n] = g->numVolumes;
+		for ( k = 0; k < leaf->numLeafBrushes; k++ ) {
+			int bn = cm.leafbrushes[leaf->firstLeafBrush + k];
+			if ( bn >= 0 && bn < cm.numBrushes && ( cm.brushes[bn].contents & ( CONTENTS_SOLID | CONTENTS_PLAYERCLIP ) ) ) {
+				AddBrush( &b, &cm.brushes[bn], o );
+			}
+		}
+		g->modelNumTris[n] = g->numTris - g->modelFirstTri[n];
+		g->modelNumVols[n] = g->numVolumes - g->modelFirstVol[n];
+		for ( i = 0; i < 3; i++ ) {
+			g->modelBounds[n * 6 + i] = cm.cmodels[mi].mins[i] + o[i];
+			g->modelBounds[n * 6 + 3 + i] = cm.cmodels[mi].maxs[i] + o[i];
+		}
+		g->numModels++;
 	}
 
 	g->closedFaces = b.closedFaces;

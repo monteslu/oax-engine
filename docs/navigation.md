@@ -118,7 +118,8 @@ is looked for up to 768 units down (the bottom), where other ends get 256.
 
 ### Doors (navmesh obstacles)
 
-The navmesh ignores movers, so a shut door is open floor to it. A game
+The navmesh ignores movers (but see `navfloor` below), so a shut door is
+open floor to it. A game
 module can mark boxes as obstacles (`G_OAX_NAV_ADDBLOCKER` before the
 commit; `G_OAX_NAV_SETBLOCKER` to open and close one). While an obstacle is
 on, its box carves the walkable surface, and the tiles it reaches (only the
@@ -128,6 +129,18 @@ a rebuild. Obstacles are off for the first build, so the floor behind a shut
 door is reached and built, and the navmesh hash stays the map's own; they
 turn on right after. The oax game marks the doors Assault objectives open
 (oax-gamecode docs/assault.md).
+
+### Movers as floor (`navfloor`)
+
+The navmesh ignores movers, so a mover players stand on, a landing deck or a
+ramp that waits at rest until the game moves it, has no polygons: no route
+starts or ends on it. A brush entity with `navfloor 1` (any mover class;
+a mover team takes it from its master) joins the mesh at its spawn pose as
+solid floor (`G_OAX_NAV_ADDMODEL` before the commit, with the model and its
+origin), and leaves it when it moves off that pose (`G_OAX_NAV_SETMODEL`),
+rebuilding the tiles it reaches like an obstacle does. Doors an objective
+opens are obstacles, never floor. Debug values: `g_nav_floor_count`,
+`g_nav_floors` (one digit per floor, 1 in the mesh), `sv_nav_models`.
 
 ## The translocator rule
 
@@ -154,6 +167,9 @@ while on). Classic play stays the default (roadmap principle 5).
 Obstacles: `G_OAX_NAV_ADDBLOCKER (mins, maxs)` returns the blocker's index
 (queued, like a cost volume; on after the commit); `G_OAX_NAV_SETBLOCKER
 (index, on)` returns the tiles rebuilt.
+Floor movers: `G_OAX_NAV_ADDMODEL (modelIndex, origin)` returns the model's index
+(queued; in the mesh after the commit); `G_OAX_NAV_SETMODEL (index, on)` takes it
+out (the mover moved) or puts it back, rebuilding the tiles it reaches.
 
 Game syscalls 1094-1097 (`code/qcommon/oax.h`, token `nav`):
 
