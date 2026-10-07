@@ -343,6 +343,18 @@ lightmaps and adds shadowed realtime lights, docs/lights.md):
     "_color" "1 0.8 0.5"
     }
 
+### Map keys for stock maps
+
+Worldspawn keys the renderer reads for maps that were not built for it (a
+sidecar sets them; a map's own worldspawn can too):
+
+| key | value | effect |
+| --- | --- | --- |
+| `oax_lighting` | `hybrid` | the map keeps its baked lightmaps and adds shadowed realtime `rtlight` entities (docs/lights.md) |
+| `oax_lightmapscale` | 0 to 4, default 1 | scales the baked light (lightmaps and light grid) at load, so realtime lights placed where the bake had its own do not double the light |
+| `oax_smoothnormals` | degrees, 0 to 89, default 0 (off) | angle-limited smoothing of the vertex normals of the world's flat faces and triangle soups: vertices at one position take the average of the normals within the angle of their own, so a low-poly curve shades smoothly under dynamic lights and a hard edge stays hard. Patches are untouched; geometry and collision are unchanged |
+| `oax_subdivisions` | 0 to 64, default 0 (use `r_subdivisions`) | patch tessellation for this map: the largest edge length of a tessellated segment, so lower is finer (the cvar's default is 4) |
+
 The content tools (`misc/oacontent`) generate sidecars; the merge itself is
 `code/qcommon/oax_overlay.c`. Test: `map-overlay` on `oax_overlay`.
 

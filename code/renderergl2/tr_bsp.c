@@ -96,6 +96,12 @@ static void HSVtoRGB( float h, float s, float v, float rgb[3] )
 	}
 }
 
+// worldspawn keys of the oax edition (docs/map-format.md, "Map keys for
+// stock maps"), read by R_LoadEntities before the lightmaps and surfaces load
+static float	oaxLightmapScale = 1.0f;	// oax_lightmapscale: the baked light, scaled (hybrid maps)
+static float	oaxSmoothAngle = 0.0f;		// oax_smoothnormals: degrees, 0 off
+float			r_oaxSubdivisionsOverride;	// oax_subdivisions: patch tessellation for this map, 0 the cvar's
+
 /*
 ===============
 R_ColorShiftLightingBytes
@@ -112,6 +118,11 @@ static	void R_ColorShiftLightingBytes( byte in[4], byte out[4] ) {
 	r = in[0] << shift;
 	g = in[1] << shift;
 	b = in[2] << shift;
+	if ( oaxLightmapScale != 1.0f ) {
+		r = (int)( r * oaxLightmapScale );
+		g = (int)( g * oaxLightmapScale );
+		b = (int)( b * oaxLightmapScale );
+	}
 	
 	// normalize by color instead of saturating to white
 	if ( ( r | g | b ) > 255 ) {
@@ -140,7 +151,7 @@ R_ColorShiftLightingFloats
 static void R_ColorShiftLightingFloats(float in[4], float out[4])
 {
 	float	r, g, b;
-	float   scale = (1 << (r_mapOverBrightBits->integer - tr.overbrightBits)) / 255.0f;
+	float   scale = (1 << (r_mapOverBrightBits->integer - tr.overbrightBits)) / 255.0f * oaxLightmapScale;
 
 	r = in[0] * scale;
 	g = in[1] * scale;
@@ -2283,6 +2294,9 @@ void R_LoadEntities( lump_t *l ) {
 	w->lightGridSize[2] = 128;
 	VectorSet( w->oaxSkyAmbient, -1, -1, -1 );
 	VectorSet( w->oaxSkyLight, -1, -1, -1 );
+	oaxLightmapScale = 1.0f;
+	oaxSmoothAngle = 0.0f;
+	r_oaxSubdivisionsOverride = 0.0f;
 
 	p = (char *)(fileBase + l->fileofs);
 
@@ -2366,6 +2380,20 @@ void R_LoadEntities( lump_t *l ) {
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
+			continue;
+		}
+
+		// oax: per-map keys for stock maps (a sidecar sets them, oax_overlay.h)
+		if ( !Q_stricmp( keyname, "oax_lightmapscale" ) ) {
+			oaxLightmapScale = Com_Clamp( 0.0f, 4.0f, atof( value ) );
+			continue;
+		}
+		if ( !Q_stricmp( keyname, "oax_smoothnormals" ) ) {
+			oaxSmoothAngle = Com_Clamp( 0.0f, 89.0f, atof( value ) );
+			continue;
+		}
+		if ( !Q_stricmp( keyname, "oax_subdivisions" ) ) {
+			r_oaxSubdivisionsOverride = Com_Clamp( 0.0f, 64.0f, atof( value ) );
 			continue;
 		}
 
@@ -2699,6 +2727,99 @@ void R_RenderMissingCubemaps(void)
 }
 
 
+/*
+=================
+R_OAXSmoothWorldNormals
+
+oax_smoothnormals <degrees>: angle-limited vertex normal smoothing over the
+world's flat faces and triangle soups, so a low-poly curve (an octagonal
+pillar, a faceted arch) shades smoothly under dynamic lights with no change to
+the geometry. Vertices at the same position (to 1/8 unit) share a group; each
+takes the average of the group's normals that are within the angle of its
+own, so a hard edge stays hard. Patches are left alone: they are smooth
+already. Collision is untouched.
+=================
+*/
+typedef struct {
+	long long	key;
+	srfVert_t	*v;
+	vec3_t		n;
+} smoothEntry_t;
+
+static int SmoothCompare( const void *a, const void *b ) {
+	long long ka = ( (const smoothEntry_t *)a )->key, kb = ( (const smoothEntry_t *)b )->key;
+
+	return ka < kb ? -1 : ka > kb;
+}
+
+static void R_OAXSmoothWorldNormals( float angle ) {
+	smoothEntry_t *e;
+	int i, k, n = 0, groups = 0, changed = 0;
+	const float cosLimit = cosf( DEG2RAD( angle ) );
+
+	for ( k = 0; k < s_worldData.numsurfaces; k++ ) {
+		srfBspSurface_t *s = (srfBspSurface_t *)s_worldData.surfaces[k].data;
+
+		if ( s->surfaceType == SF_FACE || s->surfaceType == SF_TRIANGLES ) {
+			n += s->numVerts;
+		}
+	}
+	if ( !n ) {
+		return;
+	}
+	e = ri.Malloc( sizeof( *e ) * n );
+	n = 0;
+	for ( k = 0; k < s_worldData.numsurfaces; k++ ) {
+		srfBspSurface_t *s = (srfBspSurface_t *)s_worldData.surfaces[k].data;
+
+		if ( s->surfaceType != SF_FACE && s->surfaceType != SF_TRIANGLES ) {
+			continue;
+		}
+		for ( i = 0; i < s->numVerts; i++ ) {
+			long long q[3];
+			int a;
+
+			for ( a = 0; a < 3; a++ ) {
+				q[a] = (long long)floorf( s->verts[i].xyz[a] * 8.0f + 0.5f ) + 0x100000;
+			}
+			e[n].key = ( q[0] << 42 ) ^ ( q[1] << 21 ) ^ q[2];
+			e[n].v = &s->verts[i];
+			R_VaoUnpackNormal( e[n].n, s->verts[i].normal );
+			n++;
+		}
+	}
+	qsort( e, n, sizeof( *e ), SmoothCompare );
+	for ( i = 0; i < n; ) {
+		int j = i + 1, a, b;
+
+		while ( j < n && e[j].key == e[i].key ) {
+			j++;
+		}
+		if ( j - i > 1 ) {
+			groups++;
+			for ( a = i; a < j; a++ ) {
+				vec3_t sum;
+				int used = 0;
+
+				VectorClear( sum );
+				for ( b = i; b < j; b++ ) {
+					if ( DotProduct( e[a].n, e[b].n ) >= cosLimit ) {
+						VectorAdd( sum, e[b].n, sum );
+						used++;
+					}
+				}
+				if ( used > 1 && VectorNormalize( sum ) > 0.0f && DotProduct( sum, e[a].n ) < 0.9999f ) {
+					R_VaoPackNormal( e[a].v->normal, sum );
+					changed++;
+				}
+			}
+		}
+		i = j;
+	}
+	ri.Free( e );
+	ri.Printf( PRINT_DEVELOPER, "oax_smoothnormals %.0f: %i shared positions, %i vertex normals smoothed\n", angle, groups, changed );
+}
+
 void R_CalcVertexLightDirs( void )
 {
 	int i, k;
@@ -2832,6 +2953,12 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadSubmodels (&header->lumps[LUMP_MODELS]);
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
+
+	// oax_smoothnormals: smooth the flat faces before the light directions
+	// and the vertex buffers are built from them
+	if ( oaxSmoothAngle > 0.0f ) {
+		R_OAXSmoothWorldNormals( oaxSmoothAngle );
+	}
 
 	// determine vertex light directions
 	R_CalcVertexLightDirs();

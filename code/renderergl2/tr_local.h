@@ -1873,6 +1873,7 @@ extern	cvar_t	*r_noportals;
 extern	cvar_t	*r_portalOnly;
 
 extern	cvar_t	*r_subdivisions;
+extern	float	r_oaxSubdivisionsOverride;	// oax_subdivisions (tr_bsp.c), 0 uses r_subdivisions
 extern	cvar_t	*r_lodCurveError;
 extern	cvar_t	*r_skipBackEnd;
 
