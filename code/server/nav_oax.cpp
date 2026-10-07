@@ -547,6 +547,9 @@ static int NavBuildTile( NavBuildState *b, int tx, int ty, unsigned *hash, int *
 					if ( b[2] < emin[0] || b[0] > emax[0] || b[3] < emin[1] || b[1] > emax[1] ) {
 						continue;
 					}
+					if ( triModel && triModel[i] >= 0 && !modelOn[triModel[i]] ) {
+						continue;	// the same filter as the gather above
+					}
 					tAreas[n++] = areas[i];
 				}
 
