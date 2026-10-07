@@ -39,7 +39,7 @@ when the spawn view exceeds the draw budget; it also proves its identity
 check can fail by comparing two different maps.
 
 Libraries are in `lib/` (zip, bsp, shader, md3, image, entities, packs).
-Tests: `node --test misc/oacontent/test/`.
+Tests: `node --test misc/oacontent/test/lib.test.mjs`.
 
 The engine side (the `maps/<name>.oaxmap` sidecar, `com_oaxEnhanced`) is
 documented in docs/map-format.md ("Map overlay").
