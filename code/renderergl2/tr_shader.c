@@ -3230,7 +3230,8 @@ R_OAXFinishMaterialKeywords
 oaxTint goes on every active stage that carries the surface colour: not a
 lightmap-only stage (the lightmap would be tinted a second time), not a
 detail stage (a tinted modulate would move its neutral value) and not an
-additive one (a glow keeps its own colour). detailFade fades to the
+additive one (a glow keeps its own colour) unless the shader is a lit
+blended surface (oaxLitBlend: water adds, but it is the surface's colour). detailFade fades to the
 blend's neutral value: 0.5 for 2x modulate (dst*src + src*dst), 1 for a
 filter (dst*src), 0 for add; other blends fade their alpha.
 =================
@@ -3248,7 +3249,9 @@ static void R_OAXFinishMaterialKeywords( void ) {
 		src = pStage->stateBits & GLS_SRCBLEND_BITS;
 		dst = pStage->stateBits & GLS_DSTBLEND_BITS;
 		if ( shader.oaxHasTint && !pStage->bundle[0].isLightmap && !pStage->isDetail
-			&& !( src == GLS_SRCBLEND_ONE && dst == GLS_DSTBLEND_ONE ) ) {
+			&& ( shader.oaxLitBlend || !( src == GLS_SRCBLEND_ONE && dst == GLS_DSTBLEND_ONE ) ) ) {
+			// (a lit blended surface adds too, but carries the surface colour:
+			// its water is tinted like an opaque surface, tr_surfworld.c)
 			pStage->oaxTinted = qtrue;
 			VectorCopy( shader.oaxTint, pStage->oaxTint );
 		}
