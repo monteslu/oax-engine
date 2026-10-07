@@ -44,8 +44,21 @@ more details.
 
 #if defined(ULIGHT_DEPTH)
 
+#if defined(ULIGHT_DEPTH_MASKED)
+uniform sampler2D u_DiffuseMap;
+uniform vec4      u_ULightAlphaTest;   // x: threshold, y: 1 keeps alpha >= x (> x at 0), -1 keeps alpha < x
+varying vec2      var_TexCoords;
+#endif
+
 void main()
 {
+#if defined(ULIGHT_DEPTH_MASKED)
+	// an alpha-tested surface shadows with its opaque texels only
+	float a = texture2D(u_DiffuseMap, var_TexCoords).a;
+	bool keep = u_ULightAlphaTest.y > 0.0 ? (u_ULightAlphaTest.x > 0.0 ? a >= u_ULightAlphaTest.x : a > 0.0) : a < u_ULightAlphaTest.x;
+	if (!keep)
+		discard;
+#endif
 	gl_FragColor = vec4(0.0);
 }
 

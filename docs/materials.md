@@ -15,6 +15,15 @@ surface asks for the same per surface with `OSF_NOSHADOW`
 (docs/map-format.md). Stencil volumes of the world come from BSP brushes,
 so only a brush's own shader can keep a brush from casting there.
 
+## Alpha-tested surfaces shadow with their opaque texels
+
+A surface whose stage is alpha tested (`alphaFunc`, a masked surface-world
+surface) casts the shadow of the texels that pass the test only: a grate
+lets light through its holes, foliage through the gaps between its leaves.
+The shadow depth pass samples the stage's diffuse map with the same test
+(GE80, GT0 or LT80). Surfaces without an alpha test cast their whole
+polygon.
+
 ## Sky faces as shadow casters
 
 A face with `surfaceparm sky` is never lit, but it blocks every point and

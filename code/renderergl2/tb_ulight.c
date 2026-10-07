@@ -57,7 +57,8 @@ uLightBackend_t ulb;
 #define UPROG_PHYSICAL    3     // step 7.5 B: physical lights (interaction_fp ULIGHT_PHYSICAL)
 #define UPROG_AMBIENTZONE 4     // step 7.5 B: ambient from the vertex color (zone ambient)
 #define UPROG_REFLECT     5     // oaxMetal: the probe reflection (interaction_fp ULIGHT_REFLECT)
-#define UPROG_MODES       6
+#define UPROG_DEPTHMASK   6     // shadow map depth of an alpha-tested surface: its holes let light through
+#define UPROG_MODES       7
 
 #define UANIM_NONE   0
 #define UANIM_VERTEX 1
@@ -77,6 +78,7 @@ typedef struct {
 	GLint           physLight, physLight2, physCurveCount, physSpot, physFloor;
 	GLint           physCurve[ULIGHT_MAX_FALLOFF_POINTS];
 	GLint           texCube, metalParms, reflectLod, gridLightDir, gridLight;
+	GLint           alphaTest;      // UPROG_DEPTHMASK: u_ULightAlphaTest (threshold, sense)
 } uProgram_t;
 
 static uProgram_t uprogs[UPROG_MODES][3][3];
@@ -125,6 +127,9 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	}
 	if ( mode == UPROG_DEPTH ) {
 		Q_strcat( extra, sizeof( extra ), "#define ULIGHT_DEPTH\n" );
+	} else if ( mode == UPROG_DEPTHMASK ) {
+		Q_strcat( extra, sizeof( extra ), "#define ULIGHT_DEPTH\n#define ULIGHT_DEPTH_MASKED\n" );
+		attribs |= ATTR_TEXCOORD;
 	} else {
 		attribs |= ATTR_TANGENT | ATTR_TEXCOORD;
 		if ( mode == UPROG_AMBIENT ) {
@@ -141,7 +146,7 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	if ( anim == UANIM_VERTEX ) {
 		Q_strcat( extra, sizeof( extra ), "#define USE_VERTEX_ANIMATION\n" );
 		attribs |= ATTR_POSITION2 | ATTR_NORMAL2;
-		if ( mode != UPROG_DEPTH ) {
+		if ( mode != UPROG_DEPTH && mode != UPROG_DEPTHMASK ) {
 			attribs |= ATTR_TANGENT2;
 		}
 	} else if ( anim == UANIM_BONE ) {
@@ -195,6 +200,7 @@ static void InitProgram( int mode, int anim, int shadow ) {
 	p->reflectLod = qglGetUniformLocation( prog, "u_ReflectLod" );
 	p->gridLightDir = qglGetUniformLocation( prog, "u_GridLightDir" );
 	p->gridLight = qglGetUniformLocation( prog, "u_GridLight" );
+	p->alphaTest = qglGetUniformLocation( prog, "u_ULightAlphaTest" );
 
 	GLSL_SetUniformInt( &p->sp, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP );
 	if ( p->texNormal >= 0 ) {
@@ -719,15 +725,55 @@ qboolean RB_ULightStageIterator( shaderCommands_t *input ) {
 	}
 
 	if ( ulb.mode == ULB_DEPTH ) {
-		if ( input->shader->sort > SS_OPAQUE ) {
+		shaderStage_t *masked = NULL;
+		int s;
+
+		if ( input->shader->sort > SS_OPAQUE && !input->shader->oaxLitBlend ) {
 			return qtrue;
 		}
-		p = PickProgram( UPROG_DEPTH, USHADOW_NONE );
+		// an alpha-tested surface (a grate, a lattice, foliage) casts the
+		// shadow of its opaque texels only: the depth pass samples its
+		// diffuse map and discards the holes
+		for ( s = 0; s < MAX_SHADER_STAGES && input->xstages[s]; s++ ) {
+			if ( input->xstages[s]->active && ( input->xstages[s]->stateBits & GLS_ATEST_BITS ) && input->xstages[s]->bundle[TB_DIFFUSEMAP].image[0] ) {
+				masked = input->xstages[s];
+				break;
+			}
+		}
+		p = masked ? PickProgram( UPROG_DEPTHMASK, USHADOW_NONE ) : NULL;
+		if ( !p ) {
+			masked = NULL;
+			p = PickProgram( UPROG_DEPTH, USHADOW_NONE );
+		}
 		if ( !p ) {
 			return qtrue;
 		}
 		GLSL_BindProgram( &p->sp );
 		SetCommonUniforms( p, input );
+		if ( masked ) {
+			vec4_t texMatrix[8];
+			vec4_t at;
+
+			ComputeTexMods( masked, TB_DIFFUSEMAP, texMatrix );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX0, texMatrix[0] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX1, texMatrix[1] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX2, texMatrix[2] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX3, texMatrix[3] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX4, texMatrix[4] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX5, texMatrix[5] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX6, texMatrix[6] );
+			GLSL_SetUniformVec4( &p->sp, UNIFORM_DIFFUSETEXMATRIX7, texMatrix[7] );
+			// x: the threshold, y: 1 keeps alpha >= x (GE_80, GT_0), -1 keeps alpha < x (LT_80)
+			switch ( masked->stateBits & GLS_ATEST_BITS ) {
+			case GLS_ATEST_GT_0:  VectorSet4( at, 0.0f, 1.0f, 0, 0 ); break;
+			case GLS_ATEST_LT_80: VectorSet4( at, 0.5f, -1.0f, 0, 0 ); break;
+			default:              VectorSet4( at, 0.5f, 1.0f, 0, 0 ); break;
+			}
+			if ( p->alphaTest >= 0 ) {
+				qglProgramUniform4fEXT( p->sp.program, p->alphaTest, at[0], at[1], at[2], at[3] );
+			}
+			R_BindAnimatedImageToTMU( &masked->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP );
+		}
 		GL_Cull( CT_TWO_SIDED );
 		GL_State( GLS_DEPTHMASK_TRUE );
 		R_DrawElements( input->numIndexes, input->firstIndex );

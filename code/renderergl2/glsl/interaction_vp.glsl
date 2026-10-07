@@ -29,10 +29,18 @@ more details.
 // carries the zone ambient), USE_VERTEX_ANIMATION,
 // USE_BONE_ANIMATION (MAX_GLSL_BONES).
 
+// ULIGHT_TEXCOORDS: the texture coordinates are needed (every pass but the
+// plain shadow depth one; the masked depth pass samples the diffuse alpha)
+#if !defined(ULIGHT_DEPTH) || defined(ULIGHT_DEPTH_MASKED)
+#define ULIGHT_TEXCOORDS
+#endif
+
 attribute vec3 attr_Position;
 attribute vec3 attr_Normal;
 #if !defined(ULIGHT_DEPTH)
 attribute vec4 attr_Tangent;
+#endif
+#if defined(ULIGHT_TEXCOORDS)
 attribute vec4 attr_TexCoord0;
 #endif
 
@@ -56,7 +64,7 @@ uniform int    u_DeformGen;
 uniform float  u_DeformParams[5];
 uniform float  u_Time;
 
-#if !defined(ULIGHT_DEPTH)
+#if defined(ULIGHT_TEXCOORDS)
 uniform vec4   u_DiffuseTexMatrix0;
 uniform vec4   u_DiffuseTexMatrix1;
 uniform vec4   u_DiffuseTexMatrix2;
@@ -67,6 +75,8 @@ uniform vec4   u_DiffuseTexMatrix6;
 uniform vec4   u_DiffuseTexMatrix7;
 
 varying vec2   var_TexCoords;
+#endif
+#if !defined(ULIGHT_DEPTH)
 varying vec3   var_Position;
 varying vec3   var_Normal;
 varying vec4   var_Tangent;     // w: bitangent sign
@@ -111,7 +121,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 	return pos + normal * (base + func * amplitude);
 }
 
-#if !defined(ULIGHT_DEPTH)
+#if defined(ULIGHT_TEXCOORDS)
 vec2 ModTexCoords(vec2 st, vec3 position, vec4 texMatrix[8])
 {
 	vec2 st2 = st;
@@ -165,7 +175,7 @@ void main()
   #endif
 #endif
 
-#if !defined(ULIGHT_DEPTH)
+#if defined(ULIGHT_TEXCOORDS)
 	position = DeformPosition(position, normal, attr_TexCoord0.st);
 #else
 	position = DeformPosition(position, normal, vec2(0.0));
@@ -179,7 +189,7 @@ void main()
 	gl_Position.z = min(gl_Position.z, gl_Position.w * 0.999999);
 #endif
 
-#if !defined(ULIGHT_DEPTH)
+#if defined(ULIGHT_TEXCOORDS)
 	vec4 texMatrix[8];
 	texMatrix[0] = u_DiffuseTexMatrix0;
 	texMatrix[1] = u_DiffuseTexMatrix1;
@@ -190,7 +200,8 @@ void main()
 	texMatrix[6] = u_DiffuseTexMatrix6;
 	texMatrix[7] = u_DiffuseTexMatrix7;
 	var_TexCoords = ModTexCoords(attr_TexCoord0.st, position, texMatrix);
-
+#endif
+#if !defined(ULIGHT_DEPTH)
 	var_Position = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 	var_Normal   = (u_ModelMatrix * vec4(normal,   0.0)).xyz;
 	var_Tangent  = vec4((u_ModelMatrix * vec4(tangent, 0.0)).xyz, attr_Tangent.w);
