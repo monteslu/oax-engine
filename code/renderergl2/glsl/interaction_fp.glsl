@@ -197,6 +197,8 @@ uniform int       u_PhysCurveCount;
 
 float PhysFalloff(float x)
 {
+	if (u_PhysLight2.x > 3.5)
+		return 0.5 + 0.5 * cos(3.14159265 * clamp(x, 0.0, 1.0));
 	if (u_PhysLight2.x > 2.5)
 		return 1.0 - smoothstep(0.0, 1.0, x);
 	if (u_PhysLight2.x > 1.5)

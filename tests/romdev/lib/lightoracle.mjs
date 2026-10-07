@@ -12,7 +12,7 @@
 // falloff 'smooth': 1 - smoothstep(d / R), no ceiling (fitted in linear space);
 // 'line' with lineZero and capK is the profile fitted in the reference renderer's display space
 // before (kept for controls)
-export const UE1 = { falloff: 'smooth', gain: 0.01265, floor: 0.0075, lineZero: 0.89, capK: 115 };
+export const UE1 = { falloff: 'smooth', gain: 0.0128, floor: 0.010, lineZero: 0.89, capK: 115 };
 const Q3 = { pointScale: 7500, linearScale: 1 / 8000, minDist: 16 };
 
 export function ue1Level(brightness) {
@@ -129,6 +129,7 @@ export function falloff(f, x, sample) {
   if (f.mode === 'invsq') { const r = Math.max(x, f.min); return (f.min * f.min) / (r * r); }
   if (f.mode === 'image') return sample(x);
   if (f.mode === 'smooth') { const t = Math.min(1, Math.max(0, x)); return 1 - t * t * (3 - 2 * t); }
+  if (f.mode === 'cos') { const t = Math.min(1, Math.max(0, x)); return 0.5 + 0.5 * Math.cos(Math.PI * t); }
   const p = f.points;
   if (x <= p[0][0]) return p[0][1];
   for (let i = 1; i < p.length; i++) {

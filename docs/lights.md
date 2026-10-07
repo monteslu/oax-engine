@@ -74,13 +74,13 @@ number), `ue1_LightEffect` (`LE_None`), `ue1_LightPeriod` (32),
 | --- | --- | --- |
 | radius | `25 * (LightRadius + 1)` | `Actor::WorldLightRadius()`, UE1 SDK AActor.h |
 | falloff | `1 - smoothstep(x)` (`3x^2 - 2x^3`), zero at the radius, no ceiling | measured in linear space, below |
-| intensity | `0.01265 * LightBrightness` | measured; fitted with the floor, below |
+| intensity | `0.0128 * LightBrightness` | measured; fitted with the floor, below |
 | color | FGetHSV hue and saturation, unnormalised: hue wheel linear (red 0, green 85, blue 170), saturation blends toward white (255 white); hue 0 is RED | UE1 |
 | angular | Lambert; `LE_NonIncidence`: none | |
 | mask | 1; `bSpecialLit`: 2 | |
 | off | `LT_None`, or brightness 0 | |
 | level brightness | worldspawn `ue1_LevelBrightness` b: intensity x b | measured, below |
-| per-lamp floor | each lamp's own light less 0.0075 (about one display unit), not below 0, before the lamps add (`r_ulightUE1Floor`) | measured, below |
+| per-lamp floor | each lamp's own light less 0.010 (about one and a half display units), not below 0, before the lamps add (`r_ulightUE1Floor`) | measured, below |
 
 Measured in linear space (2026-10-02). UE1 test maps were baked with
 the UE1 editor's lighting build (driven by an external converter's
@@ -116,13 +116,27 @@ to 0.67), the floor that also fits the dimmer lamps' tails on the
 calibration rig (LightBrightness 64 at LightRadius 64, 120 at 32: tail rms
 0.83 to 0.12 display units, paired lamps on UE1's sum).
 
+Refit (2026-10-07) on the converter's rigs, UE1 lamps shot straight down at
+a floor 200 below them (LightBrightness 64 to 180, LightRadius 12 to 255)
+and face on at a wall 300 from lamps 1950 up (255 at 128 and 202), binned
+by d / R and N.L: 0.01265 / 0.0075 read 0.3 to 0.9 grey high from 0.7 to
+0.9 R on every lamp but the 12-radius one, and 1 to 2% low within 0.5 R of
+the bright lamps. One lamp's 0.3 grey is inside the fit's noise; a scenery
+surface lit by 40 lamps, three quarters of them past 0.7 R, reads 1.1x.
+The engine now takes gain 0.0128 and floor 0.010: the rigs' tails come
+within 0.3 grey (most within 0.1), the near-field deficit halves, and the
+433 cells read rms 1.19 with no bin biased past 0.2 grey from 0.1 R out
+(`misc/tools/ue1-tail-fit.mjs`, which also scores an earlier tail end and
+other falloff shapes: a tail ending before R or a raised cosine fits the
+cells no better and the rigs worse).
+
 The profile fitted before (a line to 0.89 R, a ceiling at 115 level / B of
 the peak, gain 0.02778, ceiling scaling with LevelInfo Brightness^0.65) was
 fitted to shots that had passed the reference OpenGL renderer's display curve (its
 default settings: Brightness 1.0 and GammaOffset 0.1, see "Display curve" below): the curve's
 compressive top imitated the ceiling. On the linear points it is off by
 mean |log| 0.62; `ulight-ue1-calib` keeps it as the control that must
-fail. A lamp lights up to `0.01265 * LightBrightness` (1.21 for a 96 lamp),
+fail. A lamp lights up to `0.0128 * LightBrightness` (1.23 for a 96 lamp),
 so a near lamp needs `oax_overbright 2` to show above 1x.
 
 `LightType` time functions, as effects (35 ticks a second): `LT_Pulse`

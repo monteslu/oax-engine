@@ -60,12 +60,18 @@ inside it.
 // 0), six lamps from LightRadius 12 to 255 (325 to 6400 units): every lamp
 // is light = gain * LightBrightness * (1 - smoothstep(d / R)) * N.L with R
 // = WorldLightRadius() and no ceiling, less a per-lamp floor (r_ulightUE1Floor,
-// 0.0075) fitted with the gain (rms 1.14 grey over 433 calibration cells,
-// misc/tools/ue1-light-calib.mjs). The line with a ceiling fitted before was
-// the renderer's display curve, not UE1's lighting.
+// 0.010) fitted with the gain. The 433 corridor and hall cells alone fit
+// 0.01265 / 0.0075 (rms 1.14, misc/tools/ue1-light-calib.mjs); the
+// converter's floor and wall rigs (lamps 200 and 1950 up, LightBrightness 64
+// to 255, radius 32 to 255) read that model 0.3 to 0.9 grey high in the tail
+// (0.7 to 0.9 R) and 1 to 2% low near bright lamps, which a 40-lamp scenery
+// surface turns into 1.1x; 0.0128 / 0.010 brings the rigs within 0.3 grey
+// in the tail and halves the near-field deficit, at rms 1.19 on the cells
+// (misc/tools/ue1-tail-fit.mjs; docs/lights.md). The line with a ceiling
+// fitted before was the renderer's display curve, not UE1's lighting.
 //
 // light (1.0 = the texture at 1x) per unit of LightBrightness
-#define UE1_GAIN        0.01265f
+#define UE1_GAIN        0.0128f
 
 // q3map2 (light.c, q3map2.h)
 #define Q3_POINTSCALE   7500.0f
@@ -210,11 +216,11 @@ static void ProfileUE1( const spawnArgs_t *a, uLightParms_t *p ) {
 
 	// Actor::WorldLightRadius() = 25 * (LightRadius + 1) (469 SDK AActor.h)
 	ph->radius = 25.0f * ( (int)radius + 1 );
-	ph->falloffMode = ULF_SMOOTH;
+	ph->falloffMode = !Q_stricmp( r_ulightUE1Falloff->string, "cos" ) ? ULF_COS : ULF_SMOOTH;
 	ph->numPoints = 0;
 	// LevelInfo.Brightness (worldspawn ue1_LevelBrightness): a plain gain in
 	// linear space (1.50x and 2.00x measured at 1.5 and 2)
-	ph->intensity = UE1_GAIN * brightness * ulw.ue1LevelBrightness;
+	ph->intensity = ( r_ulightUE1Gain->value > 0.0f ? r_ulightUE1Gain->value : UE1_GAIN ) * brightness * ulw.ue1LevelBrightness;
 	ph->cap = 0;
 	ph->capKnee = 0;
 	R_UE1Color( KeyFloat( a, "ue1_LightHue", 0 ), KeyFloat( a, "ue1_LightSaturation", 255 ), ph->color );

@@ -60,7 +60,9 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_ulightSpecular` | 1 | archive | Specular from unified lights; 0 turns it off for every light. |
 | `r_ulightOnly` | -1 | cheat | Draw only the map light with this entity-lump ordinal (the ambient stays); -1 all. For measuring one lamp's contribution at a point. |
 | `r_ulightCasterDump` | -1 | cheat | Print the shadow casters of the unified light with this entity-lump ordinal once (the next view that lights with it), or why that view skipped it, then reset to -1. |
-| `r_ulightUE1Floor` | 0.0075 | read at map load | UE1-profile lights: light units taken off each lamp's own contribution before the lamps add (UE1 loses about one display unit per lamp; fitted with the profile's gain, docs/lights.md). 0 is the plain curve. |
+| `r_ulightUE1Floor` | 0.010 | read at map load | UE1-profile lights: light units taken off each lamp's own contribution before the lamps add (UE1 loses about one display unit per lamp; fitted with the profile's gain, docs/lights.md). 0 is the plain curve. |
+| `r_ulightUE1Gain` | 0.0128 | read at map load | UE1-profile lights: light (1 = the texture at 1x) per unit of LightBrightness (docs/lights.md). |
+| `r_ulightUE1Falloff` | smooth | read at map load | UE1-profile falloff over d / R: `smooth` (1 - smoothstep, measured) or `cos` (the raised cosine, a refit candidate the rigs rejected; kept for measurement). |
 | `r_ulightDebug` | 0 | cheat | Registered but currently read by nothing (no effect). |
 | `r_dlightShadows` | 0 | archive | Under unified lighting, dynamic lights (rockets, muzzle flashes) cast shadows. |
 | `r_guiSize` | 512 | archive | Pixel size (clamped 64-2048) of the square texture each in-world GUI draws into; its 640x480 screen is scaled to fit. |

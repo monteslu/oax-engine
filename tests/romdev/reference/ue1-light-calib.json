@@ -313,7 +313,7 @@
   "minCount": 15
  },
  "fit": {
-  "gain": 0.01265,
+  "gain": 0.0128,
   "falloff": "1 - smoothstep(d / R), less the floor per lamp",
   "model": {
    "rms": 1.14,
@@ -333,7 +333,13 @@
    "cells": 433,
    "litCells": 298
   },
-  "floor": 0.0075
+  "floor": 0.01,
+  "cellsOnly": {
+   "gain": 0.01265,
+   "floor": 0.0075,
+   "note": "the fit on these cells alone"
+  },
+  "note": "engine constants after the 2026-10-07 refit on the converter calibration rigs (docs/lights.md); the cells read rms 1.19 with them"
  },
  "cells": [
   {

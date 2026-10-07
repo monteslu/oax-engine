@@ -119,6 +119,7 @@ void        R_StageExprColor( shader_t *sh, int stageNum, const float *parms, fl
 #define ULF_IMAGE       1       // red channel of an image at (x, 0.5)
 #define ULF_INVSQ       2       // (m / max(x, m))^2, m = invsqMin
 #define ULF_SMOOTH      3       // 1 - smoothstep(x) (UE1, measured)
+#define ULF_COS         4       // (1 + cos(pi x)) / 2, the raised cosine (UE1 refit candidate, r_ulightUE1Falloff)
 
 #define ULIGHT_MAX_FALLOFF_POINTS 16
 
@@ -303,6 +304,8 @@ extern uLightBackend_t ulb;
 extern cvar_t *r_ulight;
 extern cvar_t *r_ulightShadows;
 extern cvar_t *r_ulightLitBlend;
+extern cvar_t *r_ulightUE1Falloff;
+extern cvar_t *r_ulightUE1Gain;
 extern cvar_t *r_ulightOnly;
 extern cvar_t *r_ulightUE1Floor;
 extern cvar_t *r_ulightShadowMode;

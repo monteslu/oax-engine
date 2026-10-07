@@ -5,7 +5,7 @@
 // many defending bots held their posts.
 //
 //   node misc/tools/assault-botmatch.mjs --map <name> --home <fs_homepath>
-//     [--basepath <dir with baseoa>] [--binary <ioquake3>] [--bots 4]
+//     [--basepath <dir with baseoa>] [--binary <ioquake3>] [--dedicated] [--bots 4]
 //     [--skill 3] [--vehicles 1] [--time <round seconds>] [--rounds 1|2]
 //     [--sample 300] [--max-minutes 20] [--expect complete] [--json out.json]
 //
@@ -38,7 +38,10 @@ if (!map || !home) {
   process.exit(2);
 }
 const basepath = opt('basepath', process.env.OA_BASEOA ? path.dirname(process.env.OA_BASEOA) : '/usr/share/games/openarena');
-const binary = opt('binary', path.join(repo, 'build-native', 'Release', 'ioquake3'));
+// --dedicated: the dedicated server binary, no renderer (bots need none;
+// a heavy map's client can run ten times slower than real time)
+const dedicated = process.argv.includes('--dedicated');
+const binary = opt('binary', path.join(repo, 'build-native', 'Release', dedicated ? 'ioq3ded' : 'ioquake3'));
 const bots = Number(opt('bots', 4));
 const skill = Number(opt('skill', 3));
 const rounds = Number(opt('rounds', 2));
@@ -82,8 +85,9 @@ fs.rmSync(path.join(game, 'ioq3.pid'), { force: true });
 const args = [
   '+set', 'fs_basepath', basepath, '+set', 'com_basegame', 'baseoa', '+set', 'fs_homepath', home,
   '+set', 'sv_pure', '0', '+set', 'com_introplayed', '1', '+set', 'g_gametype', '14', '+set', 'bot_enable', '1',
-  '+set', 'g_oaxVehicles', opt('vehicles', '1'), '+set', 'r_mode', '-1', '+set', 'r_customwidth', '640',
-  '+set', 'r_customheight', '360', '+set', 'r_fullscreen', '0', '+set', 'com_maxfps', '125', '+set', 's_volume', '0',
+  '+set', 'g_oaxVehicles', opt('vehicles', '1'),
+  ...(dedicated ? ['+set', 'dedicated', '1'] : ['+set', 'r_mode', '-1', '+set', 'r_customwidth', '640',
+    '+set', 'r_customheight', '360', '+set', 'r_fullscreen', '0', '+set', 'com_maxfps', '125', '+set', 's_volume', '0']),
   ...(opt('time') ? ['+set', 'g_oaxAssaultTime', opt('time')] : []),
   '+devmap', map, '+exec', `${tag}.cfg`,
 ];
