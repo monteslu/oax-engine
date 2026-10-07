@@ -40,16 +40,17 @@ export function makeHome(dir, { files = {}, packs = [] } = {}) {
 const CLEAN = ['r_oaxProfile 1', 'bot_enable 0', 'cg_drawGun 0', 'cg_draw2D 0', 'cg_drawFPS 0', 'g_doWarmup 0', 'con_notifytime 0', 'r_fixedShaderTime 100', 'cg_drawCrosshair 0'];
 
 // eyes: [{ eye: [x, y, z], angles: [pitch, yaw, roll] }]; returns when the client has quit
-export function renderEyes({ map, eyes, home, baseoa = DEFAULT_BASEOA, size = [640, 360], cvars = {}, settle = 20, timeoutMs = 900000, gpu = false, binary = NATIVE, log = 'native.log' }) {
+export function renderEyes({ map, eyes, home, baseoa = DEFAULT_BASEOA, size = [640, 360], cvars = {}, settle = 20, timeoutMs = 900000, gpu = false, binary = NATIVE, log = 'native.log', clean = CLEAN }) {
   const game = path.join(home, 'baseoa');
   fs.rmSync(path.join(game, 'screenshots'), { recursive: true, force: true });
   fs.mkdirSync(path.join(game, 'screenshots'), { recursive: true });
   fs.rmSync(path.join(game, 'ioq3.pid'), { force: true });
   // the cheat cvars of the clean view only take once the map has loaded
-  const lines = ['fixedtime 16', 'wait 150', ...CLEAN, 'wait 10'];
+  const lines = ['fixedtime 16', 'wait 150', ...clean, 'wait 10'];
   eyes.forEach((e, i) => {
     const n = String(i).padStart(3, '0');
-    lines.push(`cl_overrideView "${e.eye.map((v) => +v.toFixed(2)).join(' ')} ${e.angles.map((v) => +v.toFixed(2)).join(' ')}"`, `wait ${settle}`, `screenshot tour_${n}`, 'wait 2', `debugvalues tourv_${n}.txt`, 'wait 1');
+    if (e.cmd) lines.push(e.cmd);
+    lines.push(`cl_overrideView "${e.eye.map((v) => +v.toFixed(2)).join(' ')} ${e.angles.map((v) => +v.toFixed(2)).join(' ')}"`, `wait ${e.settle ?? settle}`, `screenshot tour_${n}`, 'wait 2', `debugvalues tourv_${n}.txt`, 'wait 1');
   });
   lines.push('quit');
   fs.writeFileSync(path.join(game, 'tour.cfg'), lines.join('\n') + '\n');

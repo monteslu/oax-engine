@@ -16,7 +16,27 @@ Node ESM (ImageMagick for pixel work). Run everything through the driver:
 | `tour` | T2 | camera tours, renders, metrics, contact sheets (the baseline) |
 | `pack` | T8 | builds and validates the overlay pk3, load tests, licence manifest |
 | `safety` | T9 | gameplay identity, bot smoke and performance checks |
-| `fxpreview` | T6 | effect preview map and per-effect frames |
+| `fxpreview` | T6 | every particle decl rendered on the oax_fx map at fixed frames, with an empty-room control and a contact sheet |
+| `pilot` | | every tool in order on three maps, then pack, safety, and a before/after tour |
+
+## Typical run
+
+    oacontent lights && oacontent smooth && oacontent materials && oacontent textures
+    oacontent pack                      # build/pack/zzz-oax-enhanced.pk3 + manifest.json
+    oacontent pack --check some.pk3     # validate any pack
+    oacontent safety                    # identity, bot smoke, draw budget: stock vs stock + pack
+    oacontent tour --tag after --pack build-oacontent/pack/zzz-oax-enhanced.pk3
+    oacontent tour compare --a baseline --b after
+
+The game modules come from the sibling oa-gamecode build (`OA_QVM_DIR` to
+override); output goes under `build-oacontent/` (`OACONTENT_OUT`).
+
+`pack` merges the sidecar parts of each map (lights, smoothing, and hand edits
+in `data/sidecars/<map>.oaxmap`) into one file, and refuses anything outside
+`maps/`, `scripts/` and `textures/`. `safety` fails when the pack changes the
+navmesh hash, polygon count or item count, when a bot run logs an error, or
+when the spawn view exceeds the draw budget; it also proves its identity
+check can fail by comparing two different maps.
 
 Libraries are in `lib/` (zip, bsp, shader, md3, image, entities, packs).
 Tests: `node --test misc/oacontent/test/`.

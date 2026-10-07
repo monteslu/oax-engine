@@ -17,12 +17,19 @@
 //   d. hand edits: data/lights/<map>.json (add / remove / scale), applied last.
 //
 //   oacontent lights [--maps a,b] [--baseoa dir] [--out dir] [--lmscale 0.5]
-//                    [--mapsource dir] [--hotspots 24|--no-hotspots] [--max 64] [--texels 3000]
+//                    [--shadows 6] [--radius 512] [--gain 1] [--calibrate] [--mapsource dir] [--hotspots 24|--no-hotspots] [--max 64] [--texels 3000]
+// --calibrate: closed loop on the engine, scales all intensities of a map until
+// its mean brightness over a few views matches the stock map's (needs the
+// native client; see calibrateGain).
 // Output: <out>/lights/<map>.oaxmap and <out>/lights/report.{json,txt}.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ContentSet, DEFAULT_BASEOA } from '../lib/packs.mjs';
 import { Bsp, MST, SURF } from '../lib/bsp.mjs';
+import { OUT as OUTROOT } from '../lib/common.mjs';
+import { makeHome, renderEyes } from '../lib/render.mjs';
+import { cameras, frameMetrics } from './tour.mjs';
+import { readTga } from '../../../tests/romdev/lib/tga.mjs';
 import { loadShaders } from '../lib/shader.mjs';
 import { Entity, entity, parseEntities, serializeEntities } from '../lib/entities.mjs';
 import { parseMapSource } from '../lib/map.mjs';
@@ -292,12 +299,22 @@ export class Fit {
 // ---- the sidecar --------------------------------------------------------------
 
 const fmt = (v) => String(+v.toFixed(3));
-export function sidecar({ lmScale, lights, comment }) {
+// only the `shadows` brightest lights cast shadows (each is six shadow-map faces
+// plus a lit pass; the safety tool's draw budget is what bounds this)
+export function sidecar({ lmScale, lights, comment, shadows = 6, ambient = 0, radius = 512 }) {
+  const casters = new Set([...lights].sort((a, b) => b.light - a.light).slice(0, shadows));
   const ws = entity('worldspawn', { oax_lighting: 'hybrid', oax_lightmapscale: lmScale, oax_shadowmode: 'maps' });
+  // the fit's constant term is light the surface lights do not explain: it goes
+  // in as the map's ambient (1 = the texture at 1x, like a lightmap texel)
+  if (ambient > 0.005) ws.set('oax_ambient', `${fmt(ambient)} ${fmt(ambient)} ${fmt(ambient)}`);
   const ents = [ws];
   for (const l of lights) {
     const e = entity('rtlight', { origin: l.origin.map(Math.round).join(' '), oax_profile: 'q3', light: Math.round(l.light), _color: l.color.map(fmt).join(' ') });
     if (l.note) e.set('_note', l.note);
+    // the q3 envelope is sqrt(photons) and grows with every gain; a cap keeps a
+    // light's reach (and the draws it costs) bounded
+    if (radius && Math.sqrt(Math.max(l.light, 0) * Q3_POINTSCALE) > radius) e.set('oax_radius', radius);
+    if (!casters.has(l)) e.set('noshadows', '1');
     ents.push(e);
   }
   return `// ${comment}\n` + serializeEntities(ents);
@@ -331,6 +348,7 @@ export function recoverMap(cs, shaders, mapPath, opts = {}) {
   const name = path.basename(mapPath, '.bsp');
   const lmScale = Number(opts.lmscale ?? 0.5);
   const report = { name, source: null, lmScale };
+  let ambient = 0;
   let lights = [];
   const existing = parseEntities(bsp.entityText).filter((e) => e.classname === 'light').length;
   report.existingLightEntities = existing;
@@ -363,15 +381,53 @@ export function recoverMap(cs, shaders, mapPath, opts = {}) {
         report.hotspotLights = extra.length;
       }
       const fin = fit.stats();
+      ambient = Math.min(0.5, Math.max(0, fit.ambient));
       report.fit = { r2: +fin.r2.toFixed(3), ambient: +fin.ambient.toFixed(4), meanBaked: +fin.meanTarget.toFixed(4) };
     }
   }
+  if (opts.gain !== undefined) lights = lights.map((l) => ({ ...l, light: l.light * Number(opts.gain) }));
   const edited = handEdits(name, lights);
   lights = edited.lights;
   report.handEdits = edited.edits ? { add: (edited.edits.add || []).length, remove: (edited.edits.remove || []).length, scale: (edited.edits.scale || []).length } : null;
   report.lights = lights.length;
   report.totalIntensity = Math.round(lights.reduce((a, l) => a + l.light, 0));
-  return { report, lights, text: lights.length ? sidecar({ lmScale, lights, comment: `oacontent lights: ${name}, ${report.source}, ${lights.length} lights` }) : null };
+  return { report, lights, lmScale, ambient, shadows: Number(opts.shadows ?? 6), radius: Number(opts.radius ?? 512), text: lights.length ? sidecar({ lmScale, ambient, radius: Number(opts.radius ?? 512), shadows: Number(opts.shadows ?? 6), lights, comment: `oacontent lights: ${name}, ${report.source}, ${lights.length} lights` }) : null };
+}
+
+// Closed loop on the engine: the fitted intensities are in the oracle's units,
+// and what the renderer makes of them differs by a map-independent-ish factor
+// that is not worth deriving by hand. Render a few views of the stock map
+// (no sidecar) and of the sidecar at a gain, and move the gain (log-log
+// secant) until the mean luminance matches the stock map's.
+async function meanLuminance(cs, shaders, mapPath, name, text, eyes, dir) {
+  const files = text ? { [`maps/${name}.oaxmap`]: text } : {};
+  const home = makeHome(dir, { files });
+  await renderEyes({ map: name, eyes, home, size: [320, 180], settle: 12 });
+  const shots = path.join(home, 'baseoa', 'screenshots');
+  const ms = eyes.map((_, i) => path.join(shots, `tour_${String(i).padStart(3, '0')}.tga`)).filter((f) => fs.existsSync(f)).map((f) => frameMetrics(readTga(f)).mean);
+  return ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : NaN;
+}
+
+export async function calibrateGain(cs, shaders, mapPath, r, workDir, { eyes = 8, tol = 0.04, maxIter = 5 } = {}) {
+  const name = path.basename(mapPath, '.bsp');
+  const bsp = new Bsp(cs.read(mapPath));
+  const eyeList = cameras(bsp, shaders, { count: eyes * 4 }).slice(0, eyes);
+  const target = await meanLuminance(cs, shaders, mapPath, name, null, eyeList, path.join(workDir, `${name}-ref`));
+  const make = (g) => sidecar({ lmScale: r.lmScale, ambient: r.ambient, shadows: r.shadows, radius: r.radius, lights: r.lights.map((l) => ({ ...l, light: l.light * g })), comment: `oacontent lights: ${name}, gain ${g.toFixed(2)}` });
+  const tried = [];
+  let g = 4;
+  for (let i = 0; i < maxIter; i++) {
+    const m = await meanLuminance(cs, shaders, mapPath, name, make(g), eyeList, path.join(workDir, `${name}-g`));
+    tried.push({ gain: +g.toFixed(3), mean: +m.toFixed(2) });
+    if (!(m > 0) || Math.abs(m - target) / target < tol) break;
+    if (g >= 60 && tried.length > 1 && tried[tried.length - 2].gain >= 60) break;
+    const p = tried.length > 1 ? tried[tried.length - 2] : null;
+    // log-log secant on (gain, mean); with one point assume mean ~ gain^0.3
+    const slope = p && p.gain !== tried[tried.length - 1].gain && p.mean !== m ? Math.log(m / p.mean) / Math.log(g / p.gain) : 0.3;
+    g = Math.min(60, Math.max(0.25, g * Math.pow(target / m, 1 / Math.max(0.05, slope))));
+  }
+  const best = tried.reduce((a, b) => (Math.abs(a.mean - target) < Math.abs(b.mean - target) ? a : b));
+  return { gain: best.gain, target: +target.toFixed(2), reached: best.mean, tried, text: make(best.gain) };
 }
 
 export async function run(args) {
@@ -386,6 +442,11 @@ export async function run(args) {
     if (only && !only.has(m.name)) continue;
     try {
       const r = recoverMap(cs, shaders, m.path, args);
+      if (r.text && args.calibrate) {
+        const c = await calibrateGain(cs, shaders, m.path, r, path.join(OUTROOT, 'lights-calibrate'));
+        r.text = c.text; r.report.calibration = { gain: c.gain, targetMean: c.target, reachedMean: c.reached, tried: c.tried };
+        if (c.reached < c.target * 0.9) { r.report.note = `calibration short: ${c.reached} of ${c.target} mean (radius cap ${r.radius}); raise --radius or add lights`; console.log(`${m.name}: ${r.report.note}`); }
+      }
       if (r.text) fs.writeFileSync(path.join(out, `${m.name}.oaxmap`), r.text);
       rows.push(r.report);
     } catch (e) { rows.push({ name: m.name, error: e.message }); }

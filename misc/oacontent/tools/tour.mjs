@@ -3,7 +3,7 @@
 // makes is the "before" set: every map on the unmodified engine.
 //
 //   oacontent tour [--maps a,b] [--tag baseline] [--eyes 48] [--size 640x360]
-//                  [--jobs 2] [--sidecars dir] [--gpu] [--cvars a=1,b=2]
+//                  [--jobs 2] [--sidecars dir] [--pack file.pk3] [--gpu] [--cvars a=1,b=2]
 //       renders the tour of each map into <out>/tour/<tag>/<map>/ (eyes.json,
 //       metrics.json, frames/*.png, sheet.png) and <out>/tour/<tag>/summary.*
 //   oacontent tour compare --a baseline --b enhanced [--maps a,b]
@@ -11,6 +11,7 @@
 //       [A | B | difference x4] per map.
 //   oacontent tour cameras --maps a,b       prints the eyes without rendering
 //
+// --pack: adds an overlay pk3 (oacontent pack) to every run.
 // --sidecars <dir>: copies <dir>/<map>.oaxmap into the run (lights tool output).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -136,7 +137,7 @@ async function runTour(args) {
         const sc = path.join(args.sidecars, `${m.name}.oaxmap`);
         if (fs.existsSync(sc)) files[`maps/${m.name}.oaxmap`] = fs.readFileSync(sc);
       }
-      const home = makeHome(path.join(dir, 'home'), { files });
+      const home = makeHome(path.join(dir, 'home'), { files, packs: args.pack ? [path.resolve(String(args.pack))] : [] });
       const t1 = Date.now();
       const r = await renderEyes({ map: m.name, eyes, home, baseoa, size, cvars, gpu: !!args.gpu, timeoutMs: (Number(args.timeout) || 1200) * 1000 });
       const metrics = [];

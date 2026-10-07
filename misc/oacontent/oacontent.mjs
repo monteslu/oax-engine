@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from './lib/common.mjs';
 
-const COMMANDS = ['audit', 'skyexposure', 'lights', 'materials', 'textures', 'smooth', 'tour', 'pack', 'safety', 'fxpreview'];
+const COMMANDS = ['audit', 'skyexposure', 'lights', 'materials', 'textures', 'smooth', 'tour', 'pack', 'safety', 'fxpreview', 'pilot'];
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);

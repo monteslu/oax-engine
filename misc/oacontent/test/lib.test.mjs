@@ -119,3 +119,49 @@ test('bsp: the spatial grid gives the same rays as testing every brush', { skip:
   }
   assert.ok(hits > 50);
 });
+
+import { mergeSidecars, validate } from '../tools/pack.mjs';
+import { declNames } from '../tools/fxpreview.mjs';
+import { compareIdentity } from '../tools/safety.mjs';
+
+test('pack: sidecar parts merge into one worldspawn, keys later-wins, entities in order', () => {
+  const a = '{\n"classname" "worldspawn"\n"oax_lighting" "hybrid"\n"x" "1"\n}\n{\n"classname" "rtlight"\n"origin" "1 2 3"\n}\n';
+  const b = '{\n"classname" "worldspawn"\n"oax_smoothnormals" "45"\n"x" "2"\n}\n';
+  const ents = parseEntities(mergeSidecars([a, b]));
+  assert.equal(ents.length, 2);
+  assert.equal(ents[0].classname, 'worldspawn');
+  assert.equal(ents[0].get('oax_lighting'), 'hybrid');
+  assert.equal(ents[0].get('oax_smoothnormals'), '45');
+  assert.equal(ents[0].get('x'), '2');
+  assert.equal(ents[1].classname, 'rtlight');
+});
+
+test('pack: validate rejects what it must (control) and accepts a clean set', { skip: !haveOA }, () => {
+  const cs = new ContentSet([DEFAULT_BASEOA]);
+  const f = (name, text) => ({ name, data: Buffer.from(text) });
+  const good = [f('maps/oa_dm6.oaxmap', '{\n"classname" "worldspawn"\n}\n')];
+  assert.deepEqual(validate(good, cs), []);
+  const bad = validate([
+    f('maps/nonexistent_map.oaxmap', '{\n"classname" "worldspawn"\n}\n'),
+    f('maps/oa_dm6.oaxmap', '{\n"classname" "worldspawn"\n}\n{\n"classname" "worldspawn"\n}\n'),
+    f('scripts/x.shader', 'textures/a/b\n{\n'),
+    f('textures/nothing/here_n.png', 'x'),
+    f('models/evil.md3', 'x'),
+    f('maps/broken.oaxmap', '{ "a"'),
+  ], cs);
+  for (const re of [/no stock map nonexistent_map/, /more than one worldspawn/, /unbalanced braces/, /no diffuse/, /outside maps/, /broken/]) {
+    assert.ok(bad.some((b) => re.test(b)), `expected a problem matching ${re}: ${bad.join(' | ')}`);
+  }
+});
+
+test('fxpreview: decl names come from particle blocks only', () => {
+  assert.deepEqual(declNames('// particle fake {\nparticle oax/a {\n}\n  particle oax/b{\n}\n'), ['oax/a', 'oax/b']);
+});
+
+test('safety: identity comparison reports a differing key and ignores the others', () => {
+  const a = { sv_nav_polys: '10', sv_nav_hash: 'ab', g_items_total: '5', noise: '1' };
+  assert.deepEqual(compareIdentity(a, { ...a, noise: '2' }), []);
+  const d = compareIdentity(a, { ...a, sv_nav_hash: 'cd' });
+  assert.equal(d.length, 1);
+  assert.match(d[0], /sv_nav_hash/);
+});
