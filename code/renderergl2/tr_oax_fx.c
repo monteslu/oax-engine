@@ -99,6 +99,8 @@ ships use them, so no art is needed):
   *oaxring    white, alpha a soft thin ring (water ripples)
   *oaxtread   white, alpha chevron tread bars across a soft-edged band
               along t (tyre tracks)
+  *oaxvignette white, alpha 0 in the middle rising to 1 at the corners (hurt
+              and low-health screen feedback)
 =================
 */
 static float Falloff( float r ) {
@@ -112,9 +114,9 @@ static void CreateSpriteImages( void ) {
 	byte *data = ri.Hunk_AllocateTempMemory( S * S * 4 );
 	int x, y, k;
 
-	static const char *names[6] = { "*oaxsoft", "*oaxglow", "*oaxspark", "*oaxribbon", "*oaxring", "*oaxtread" };
+	static const char *names[7] = { "*oaxsoft", "*oaxglow", "*oaxspark", "*oaxribbon", "*oaxring", "*oaxtread", "*oaxvignette" };
 
-	for ( k = 0; k < 6; k++ ) {
+	for ( k = 0; k < 7; k++ ) {
 		for ( y = 0; y < S; y++ ) {
 			for ( x = 0; x < S; x++ ) {
 				float u = ( x + 0.5f ) / S * 2.0f - 1.0f, v = ( y + 0.5f ) / S * 2.0f - 1.0f;
@@ -137,6 +139,13 @@ static void CreateSpriteImages( void ) {
 
 					bar -= floor( bar );
 					a = ( bar < 0.55f ? 1.0f : 0.35f ) * Falloff( fabs( u ) * 1.05f );
+					break;
+				}
+				case 6: {
+					float r = sqrt( u * u + v * v ) / 1.4142f, t = ( r - 0.35f ) / 0.65f;
+
+					t = t < 0 ? 0 : t > 1 ? 1 : t;
+					a = t * t * ( 3.0f - 2.0f * t );
 					break;
 				}
 				default:
