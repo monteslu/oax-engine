@@ -2,7 +2,7 @@
 // against the same maps without the pack.
 //
 //   oacontent safety [--pack file.pk3] [--maps a,b] [--out dir] [--bots 4]
-//                    [--frames 600] [--budget 0] [--max-draws 2500] [--gpu]
+//                    [--frames 600] [--budget 0] [--max-draws 2500] [--max-gpu-ms 8] [--gpu]
 // Per map, two runs with bots playing (A: stock, B: stock + the pack):
 //   identity  the gameplay-visible debug values agree: navmesh polygons and
 //             hash (the collision geometry the bots path over), item count
@@ -11,6 +11,8 @@
 //             were added and the snapshot carries entities;
 //   budget    B's draw calls at the spawn view are under --max-draws; with --budget N
 //             B's mean frame time (r_oaxProfile) must also be within N times A's
+//             With --gpu, B's r_prof_gpu_ms (the profiler's GPU zone time; the frame time
+//             is the fixed 16 ms step and says nothing) must be under --max-gpu-ms (8).
 //             Frame time is REPORTED but not gated by default: the software
 //             rasteriser the display-free runs use is fill-bound and says little
 //             about a GPU (measure on hardware with --gpu --budget 2).
@@ -55,11 +57,11 @@ async function one(label, map, outDir, o) {
   const v = fs.existsSync(vf) ? parseDebugValues(fs.readFileSync(vf, 'utf8')) : {};
   const errors = log.split('\n').filter((l) => /^(ERROR|\*\*\*|Sys_Error|Com_Error)|segmentation|Assertion/i.test(l)).slice(0, 5);
   const bots = (log.match(/entered the game/g) || []).length;
-  return { code: r.code, signal: r.signal, values: v, errors, bots, frameMs: Number(v.r_prof_frame_ms ?? NaN), draws: Number(v.r_prof_draws ?? v.r_draw_calls ?? NaN), entities: Number(v.cl_snap_entities ?? NaN) };
+  return { code: r.code, signal: r.signal, values: v, errors, bots, frameMs: Number(v.r_prof_frame_ms ?? NaN), gpuMs: Number(v.r_prof_gpu_ms ?? NaN), draws: Number(v.r_prof_draws ?? v.r_draw_calls ?? NaN), entities: Number(v.cl_snap_entities ?? NaN) };
 }
 
 export async function run(args = {}) {
-  const o = { pack: path.resolve(args.pack || path.join(OUT, 'pack', 'zzz-oax-enhanced.pk3')), bots: Number(args.bots || 4), frames: Number(args.frames || 600), budget: Number(args.budget || 0), maxDraws: Number(args['max-draws'] || 2500), gpu: !!args.gpu };
+  const o = { pack: path.resolve(args.pack || path.join(OUT, 'pack', 'zzz-oax-enhanced.pk3')), bots: Number(args.bots || 4), frames: Number(args.frames || 600), budget: Number(args.budget || 0), maxDraws: Number(args['max-draws'] || 2500), maxGpuMs: Number(args['max-gpu-ms'] || 8), gpu: !!args.gpu };
   if (!fs.existsSync(o.pack)) { console.error(`no pack at ${o.pack} (oacontent pack first)`); return 2; }
   const outDir = path.resolve(args.out || path.join(OUT, 'safety'));
   const maps = String(args.maps || DEFAULT_MAPS.join(',')).split(',');
@@ -80,9 +82,10 @@ export async function run(args = {}) {
     }
     const ratioMs = b.frameMs / a.frameMs, ratioDraws = b.draws / a.draws;
     if (o.budget && ratioMs > o.budget) f.push(`budget: frame time x${ratioMs.toFixed(2)} (A ${a.frameMs} ms, B ${b.frameMs} ms)`);
+    if (o.gpu && b.gpuMs > o.maxGpuMs) f.push(`budget: ${b.gpuMs} ms of GPU time at the spawn view (limit ${o.maxGpuMs}; A ${a.gpuMs})`);
     if (b.draws > o.maxDraws) f.push(`budget: ${b.draws} draw calls at the spawn view (limit ${o.maxDraws}; A ${a.draws})`);
-    report.maps[map] = { A: { frameMs: a.frameMs, draws: a.draws, bots: a.bots, entities: a.entities }, B: { frameMs: b.frameMs, draws: b.draws, bots: b.bots, entities: b.entities }, ratioMs, ratioDraws, identityDiff: diff, failures: f };
-    rows.push(`${map}: identity ${diff.length ? 'DIFFERS' : 'same'}, bots ${a.bots}/${b.bots}, frame ${a.frameMs} -> ${b.frameMs} ms (x${ratioMs.toFixed(2)}), draws ${a.draws} -> ${b.draws}${f.length ? '  FAIL: ' + f.join(' ; ') : ''}`);
+    report.maps[map] = { A: { frameMs: a.frameMs, gpuMs: a.gpuMs, draws: a.draws, bots: a.bots, entities: a.entities }, B: { frameMs: b.frameMs, gpuMs: b.gpuMs, draws: b.draws, bots: b.bots, entities: b.entities }, ratioMs, ratioDraws, identityDiff: diff, failures: f };
+    rows.push(`${map}: identity ${diff.length ? 'DIFFERS' : 'same'}, bots ${a.bots}/${b.bots}, frame ${a.frameMs} -> ${b.frameMs} ms (x${ratioMs.toFixed(2)}), gpu ${a.gpuMs} -> ${b.gpuMs} ms, draws ${a.draws} -> ${b.draws}${f.length ? '  FAIL: ' + f.join(' ; ') : ''}`);
     failures.push(...f.map((x) => `${map}: ${x}`));
   }
   // self-test: two different maps must differ
