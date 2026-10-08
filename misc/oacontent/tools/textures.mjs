@@ -3,12 +3,14 @@
 // manifest of every derived file with its licence note.
 //
 //   oacontent textures [--baseoa dir] [--out dir] [--limit 400] [--budget-mb 60]
-//                      [--only substr] [--strength 0.35] [--upscaler "cmd {in} {out}"]
+//                      [--only substr] [--full-specular] [--full-normal] [--strength 0.35] [--upscaler "cmd {in} {out}"]
 // Output: <out>/textures/pack/textures/<name>_n.png and _s.png (the engine
 // loads <diffuse>_n and <diffuse>_s next to the diffuse image of a lightmapped
 // shader without being told; docs/materials.md), <out>/textures/manifest.json
 // and report.txt.
 //
+// Specular maps of 256 and up, and normal maps of 1024 and up, are written at half
+// size (--full-specular, --full-normal keep them).
 // The generated maps are a floor, not art: the normal map comes from the
 // diffuse's own luminance (a height guess, blurred a little, scaled to a
 // target mean slope), the specular from luminance and the material class
@@ -103,6 +105,16 @@ export function specularFrom(lum, w, h, cls) {
   return out;
 }
 
+// 2x2 box average (specular maps are smooth: half size costs a quarter of the bytes)
+export function halve(rgba, w, h) {
+  const W = w >> 1, H = h >> 1, out = new Uint8Array(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) for (let c = 0; c < 4; c++) {
+    const i = (2 * y * w + 2 * x) * 4 + c;
+    out[(y * W + x) * 4 + c] = (rgba[i] + rgba[i + 4] + rgba[i + w * 4] + rgba[i + w * 4 + 4] + 2) >> 2;
+  }
+  return { w: W, h: H, data: out };
+}
+
 function approvals() {
   const f = path.join(REPO, 'misc', 'oacontent', 'data', 'texture-approvals.json');
   return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : { upscale: [] };
@@ -136,8 +148,12 @@ export async function run(args) {
     const height = blur3(lum, img.width, img.height);
     const n = normalFromHeight(height, img.width, img.height, target);
     const cls = [...metalShaders].some((s) => s.includes(c.texture)) ? 'metal' : 'default';
-    const nPng = pngEncode(img.width, img.height, n.data, { alpha: false });
-    const sPng = pngEncode(img.width, img.height, specularFrom(lum, img.width, img.height, cls), { alpha: true });
+    let nrm = { w: img.width, h: img.height, data: n.data };
+    if (img.width >= 1024 && img.height >= 1024 && !args['full-normal']) nrm = halve(nrm.data, nrm.w, nrm.h);
+    const nPng = pngEncode(nrm.w, nrm.h, nrm.data, { alpha: false });
+    let spec = { w: img.width, h: img.height, data: specularFrom(lum, img.width, img.height, cls) };
+    if (img.width >= 256 && img.height >= 256 && !args['full-specular']) spec = halve(spec.data, spec.w, spec.h);
+    const sPng = pngEncode(spec.w, spec.h, spec.data, { alpha: true });
     if (bytes + nPng.length + sPng.length > budget) { skipped.budget++; continue; }
     for (const [suffix, buf] of [['_n', nPng], ['_s', sPng]]) {
       const f = path.join(packDir, `${c.texture}${suffix}.png`);
@@ -171,11 +187,24 @@ export async function run(args) {
     } catch (e) { pending.push(`${name} (${e.message.split('\n')[0]})`); }
     finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   }
+  // the upscale shortlist: the most used small textures. Approving one (adding its name to
+  // data/texture-approvals.json) is a person's call; nothing here is upscaled by itself.
+  const short = [];
+  for (const c of cands) {
+    if (short.length >= 40) break;
+    try {
+      const info = imageInfo(cs.read(c.file), c.file);
+      if (info.width <= 256 && info.height <= 256 && c.maps >= 4) short.push({ texture: c.texture, width: info.width, height: info.height, maps: c.maps, pack: c.pack });
+    } catch { /* unreadable: not a candidate */ }
+  }
+  fs.writeFileSync(path.join(out, 'upscale-candidates.json'), JSON.stringify(short, null, 1) + '\n');
   fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
   const lines = [
     `textures: ${cands.length} candidate diffuse textures used by lightmapped surfaces of the stock maps`,
     `  generated ${done} normal + ${done} specular maps (${(bytes / 1048576).toFixed(1)} MB of PNG, budget ${(budget / 1048576).toFixed(0)} MB); ${upscaled} upscaled`,
     `  skipped: ${skipped.exists} already have a normal map, ${skipped.tooSmall} too small or too large, ${skipped.unreadable} unreadable, ${skipped.budget} over the size budget, ${skipped.limit} over --limit`,
+    `  coverage by use: ${(100 * manifest.filter((m) => m.kind === 'normal').reduce((a, m) => a + m.maps, 0) / Math.max(1, cands.reduce((a, c) => a + c.maps, 0))).toFixed(1)}% of (texture, map) uses have companions`,
+    `  upscale shortlist: ${short.length} small, widely used textures in upscale-candidates.json (approve by name in data/texture-approvals.json)`,
     `  upscale approvals pending: ${pending.length}${pending.length ? ' (' + pending.slice(0, 5).join('; ') + ')' : ''}`,
     `  most used: ${cands.slice(0, 6).map((c) => `${c.texture} (${c.maps} maps)`).join(', ')}`,
   ];

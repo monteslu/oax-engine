@@ -199,3 +199,21 @@ test('sky: keys by exposure class', () => {
   for (const k of ['oax_sundisc', 'oax_atmosphere', 'oax_clouds', 'oax_grade']) assert.ok(k in out, k);
   assert.ok(!('oax_clouds' in skyKeys({ exposed: 0.9, sun: null }, 0)));
 });
+
+import { halve } from '../tools/textures.mjs';
+test('textures: halve averages 2x2 blocks', () => {
+  const d = new Uint8Array(4 * 4 * 4);
+  for (let i = 0; i < 16; i++) { d[i * 4] = (i % 4 < 2) ? 100 : 200; d[i * 4 + 1] = 0; d[i * 4 + 2] = 0; d[i * 4 + 3] = 255; }
+  const h = halve(d, 4, 4);
+  assert.equal(h.w, 2); assert.equal(h.h, 2);
+  assert.deepEqual([h.data[0], h.data[4], h.data[8], h.data[12]], [100, 200, 100, 200]);
+});
+
+test('pack: companions under models/ and gfx/ are allowed, other files there are not', { skip: !haveOA }, () => {
+  const cs = new ContentSet([DEFAULT_BASEOA]);
+  const f = (name) => ({ name, data: Buffer.from('x') });
+  const bad = validate([f('models/mapobjects/torch/torch_n.png'), f('gfx/fx/detail/d_stone_s.png'), f('models/players/x.md3'), f('gfx/evil.png')], cs);
+  assert.ok(!bad.some((b) => /torch_n|d_stone_s/.test(b) && /outside/.test(b)), bad.join(' | '));
+  assert.ok(bad.some((b) => /x\.md3.*outside/.test(b)));
+  assert.ok(bad.some((b) => /evil\.png.*outside/.test(b)));
+});

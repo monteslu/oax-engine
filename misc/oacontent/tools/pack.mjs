@@ -18,7 +18,8 @@
 // one worldspawn block; its map exists in the install; every shader file has
 // balanced braces and its overlaid names exist in the stock shader set;
 // every _n/_s file has a diffuse next to it in the stock content; no file
-// outside maps/, scripts/, textures/ or the licence file; total size.
+// outside maps/, scripts/, textures/ or the licence file (texture companions
+// next to a model's or an effect's diffuse, models/ and gfx/ _n/_s, are allowed); total size.
 // --check validates an existing pk3 without building.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,7 +63,7 @@ export function validate(files, content) {
   for (const f of files) {
     const n = f.name;
     if (n === 'LICENSES-oax-enhanced.txt') continue;
-    if (!/^(maps|scripts|textures)\//.test(n)) { bad.push(`${n}: outside maps/, scripts/, textures/`); continue; }
+    if (!/^(maps|scripts|textures)\//.test(n) && !/^(models|gfx)\/.+_(n|nh|s)\.(png|tga|jpg)$/.test(n)) { bad.push(`${n}: outside maps/, scripts/, textures/`); continue; }
     if (/^maps\/.+\.oaxmap$/.test(n)) {
       const map = n.slice(5, -7);
       if (!stockMaps.has(`maps/${map}.bsp`.toLowerCase())) bad.push(`${n}: no stock map ${map}`);

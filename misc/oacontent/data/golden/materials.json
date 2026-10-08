@@ -1,0 +1,134 @@
+[
+ {
+  "map": "am_galmevish",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 56.68,
+  "p5": 15.125,
+  "p95": 129.125,
+  "draws": 80.5,
+  "lightsVisible": 0
+ },
+ {
+  "map": "czest2ctf",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 56.759,
+  "p5": 3.5,
+  "p95": 187,
+  "draws": 57,
+  "lightsVisible": 0
+ },
+ {
+  "map": "islanddm",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 85.877,
+  "p5": 32.25,
+  "p95": 149.125,
+  "draws": 64.25,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_bases3",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 79.794,
+  "p5": 33.5,
+  "p95": 132.125,
+  "draws": 153.75,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_ctf2",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 23.451,
+  "p5": 0.875,
+  "p95": 61.375,
+  "draws": 127,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_dm3",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 30.427,
+  "p5": 4.875,
+  "p95": 76.125,
+  "draws": 35.125,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_dm5",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 37.294,
+  "p5": 5.375,
+  "p95": 102.875,
+  "draws": 60.125,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_dm7",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 66.457,
+  "p5": 9.25,
+  "p95": 155.5,
+  "draws": 112.5,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oa_koth1",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 46.896,
+  "p5": 15.375,
+  "p95": 89,
+  "draws": 76.125,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oacmpdm6",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 94.37,
+  "p5": 36,
+  "p95": 150.75,
+  "draws": 120.375,
+  "lightsVisible": 0
+ },
+ {
+  "map": "oasago2",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 49.31,
+  "p5": 15.875,
+  "p95": 91.75,
+  "draws": 156.75,
+  "lightsVisible": 0
+ },
+ {
+  "map": "ps37ctf",
+  "eyes": 8,
+  "frames": 8,
+  "exit": 0,
+  "mean": 31.126,
+  "p5": 6.875,
+  "p95": 72.75,
+  "draws": 105.25,
+  "lightsVisible": 0
+ }
+]

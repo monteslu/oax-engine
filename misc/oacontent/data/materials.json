@@ -1,4 +1,141 @@
 {
-  "_about": "Per-shader overrides for the material classifier (tools/materials.mjs). A key is a shader name; the value is { \"class\": \"metal\"|\"water\"|\"noshadow\"|\"sunsky\"|\"none\", \"args\": [...] , \"why\": \"...\" }. \"none\" keeps a shader exactly as it is. An override wins over every rule.",
-  "overrides": {}
+ "_about": "Per-shader overrides for the material classifier (tools/materials.mjs). A key is a shader name; the value is { \"class\": \"metal\"|\"water\"|\"noshadow\"|\"sunsky\"|\"none\", \"args\": [...] , \"why\": \"...\" }. \"none\" keeps a shader exactly as it is. An override wins over every rule.",
+ "overrides": {
+  "textures/akom_liquids/slime9": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/akom_liquids/slime_fall": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/cosmo_liquids/plasma_red": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/cosmo_liquids/greenliqu1": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/cosmo_liquids/icewater": {
+   "class": "water",
+   "why": "reviewed 2026-10-07: clear ice water, takes the water material with its tint"
+  },
+  "lavalol": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (water shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (water shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_750": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (water shader (no oax material for it yet))"
+  },
+  "textures/liquids/softlava": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (water shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_simple": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (surfaceparm water but \"lava\" in the name: not clear water)"
+  },
+  "textures/liquids/flatlavahell_1500": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell2": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahellflat_400": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahelldark": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_1000": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_xdm1": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_2000": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_2500": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/liquids/lavahell_2500_subd": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/savdm6ish/#teleport": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (surfaceparm water but \"#\" in the name: not clear water)"
+  },
+  "textures/liquids/tele": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (surfaceparm water but \"tele\" in the name: not clear water)"
+  },
+  "textures/liquids/acid": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (surfaceparm water but \"acid\" in the name: not clear water)"
+  },
+  "textures/liquids/oldacid": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (surfaceparm water but \"acid\" in the name: not clear water)"
+  },
+  "textures/liquids/slime1": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/liquids/slime1_2000": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/liquids/proto_poolpass": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/liquids/slime2": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/liquids/slime3": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (slime shader (no oax material for it yet))"
+  },
+  "textures/nki_shaders/lavared_1k5": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/nki_shaders/lavabright_1k5": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (lava shader (no oax material for it yet))"
+  },
+  "textures/skies/moonsky": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (sky shared with indoor maps (am_thornish): a sun would cost shadow passes there)"
+  },
+  "textures/skies/hellsky": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (sky shared with indoor maps (aggressor): a sun would cost shadow passes there)"
+  },
+  "textures/skies/nitesky": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (sky shared with indoor maps (blitzkrieg3): a sun would cost shadow passes there)"
+  },
+  "textures/skies/skybox": {
+   "class": "none",
+   "why": "reviewed 2026-10-07: left as stock (sky shared with indoor maps (oa_dm6): a sun would cost shadow passes there)"
+  }
+ }
 }
