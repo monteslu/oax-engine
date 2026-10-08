@@ -64,8 +64,10 @@ export function renderEyes({ map, eyes, home, baseoa = DEFAULT_BASEOA, size = [6
     '+set', 'fixedtime', '16', '+set', 'com_maxfps', '0', '+set', 'sv_cheats', '1', '+set', 'r_picmip', '0',
     ...Object.entries(cvars).flatMap(([k, v]) => ['+set', k, String(v)]),
     '+devmap', map, '+exec', 'tour.cfg'];
-  const env = { ...process.env, SDL_VIDEODRIVER: 'offscreen', SDL_AUDIODRIVER: 'dummy' };
-  delete env.DISPLAY; delete env.WAYLAND_DISPLAY;
+  const env = { ...process.env, SDL_AUDIODRIVER: 'dummy' };
+  // OACONTENT_WINDOWED=<DRI_PRIME value> renders in a real window on the given GPU (timing on the discrete card)
+  if (process.env.OACONTENT_WINDOWED) env.DRI_PRIME = process.env.OACONTENT_WINDOWED;
+  else { env.SDL_VIDEODRIVER = 'offscreen'; delete env.DISPLAY; delete env.WAYLAND_DISPLAY; }
   if (!gpu) env.LIBGL_ALWAYS_SOFTWARE = '1';
   return new Promise((resolve) => {
     const out = fs.openSync(path.join(home, log), 'w');
