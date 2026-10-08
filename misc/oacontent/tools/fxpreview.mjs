@@ -20,6 +20,8 @@ export const VIEW = { eye: [320, -300, 90], angles: [4, 90, 0] };
 export const SPAWN = [320, -100, 24];
 // where the spawn lands on screen; the map's own emitters move between the
 // control frame and the effect's frames, so only this box is compared
+// falling effects (weather) start high and fall through the preview
+const HIGH = /(^|\/)(rain|snow)$/;
 export const SPAWN_BOX = { x0: 0.3, y0: 0.35, x1: 0.7, y1: 0.95 };
 
 export function declNames(text) {
@@ -52,7 +54,7 @@ export async function run(args = {}) {
   for (const d of decls) {
     let prev = 0;
     frames.forEach((fr, i) => {
-      eyes.push({ ...VIEW, cmd: i === 0 ? `oaxfx ${d.name} ${SPAWN.join(' ')} 0 0 1` : '', settle: fr - prev, decl: d.name, frame: fr });
+      eyes.push({ ...VIEW, cmd: i === 0 ? `oaxfx ${d.name} ${SPAWN[0]} ${SPAWN[1]} ${SPAWN[2] + (HIGH.test(d.name) ? 450 : 0)} 0 0 1` : '', settle: fr - prev, decl: d.name, frame: fr });
       prev = fr;
     });
   }

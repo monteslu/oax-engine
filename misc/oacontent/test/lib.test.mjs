@@ -217,3 +217,16 @@ test('pack: companions under models/ and gfx/ are allowed, other files there are
   assert.ok(bad.some((b) => /x\.md3.*outside/.test(b)));
   assert.ok(bad.some((b) => /evil\.png.*outside/.test(b)));
 });
+
+import { weatherSites } from '../tools/weather.mjs';
+test('weather: emitters over exposed ground only, biggest cells first, capped', () => {
+  const pts = [];
+  for (let i = 0; i < 20; i++) pts.push({ p: [100 + i, 100, 10] });          // one busy exposed cell
+  for (let i = 0; i < 6; i++) pts.push({ p: [3000 + i, 100, 40] });          // a small exposed cell
+  for (let i = 0; i < 30; i++) pts.push({ p: [6000 + i, 100, 0] });          // covered: never
+  const sites = weatherSites(pts, (p) => p[0] < 5000, { cell: 900, max: 14, height: 450 });
+  assert.equal(sites.length, 2);
+  assert.equal(sites[0].samples, 20);
+  assert.equal(sites[0].origin[2], 460);
+  assert.equal(weatherSites(pts, (p) => p[0] < 5000, { cell: 900, max: 1 }).length, 1);
+});

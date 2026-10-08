@@ -24,8 +24,12 @@ more details.
 //                (1 fade alpha, 2 fade rgba, 3 fade toward white for
 //                modulating blends)
 //   u_InvTexRes  1 / scene depth size
+// Heat haze (mode 4, u_ViewInfo.z = strength as a fraction of the screen): the
+// particle shows the scene colour behind it (u_ScreenImageMap, a copy) shifted
+// outward from the particle's centre by strength * alpha.
 uniform sampler2D u_DiffuseMap;
 uniform sampler2D u_ScreenDepthMap;
+uniform sampler2D u_ScreenImageMap;
 
 uniform vec4   u_ViewInfo;
 uniform vec2   u_InvTexRes;
@@ -37,6 +41,15 @@ varying float  var_EyeZ;
 void main()
 {
 	vec4 color = texture2D(u_DiffuseMap, var_TexCoords) * var_Color;
+
+	if (u_ViewInfo.w == 4.0)
+	{
+		vec2 uv = gl_FragCoord.xy * u_InvTexRes;
+		vec2 d = var_TexCoords * 2.0 - 1.0;
+		vec2 shift = d * color.a * u_ViewInfo.z * vec2(u_InvTexRes.x / u_InvTexRes.y, 1.0);
+		gl_FragColor = vec4(texture2D(u_ScreenImageMap, uv + shift).rgb, color.a);
+		return;
+	}
 
 	if (u_ViewInfo.z > 0.0)
 	{

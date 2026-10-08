@@ -219,6 +219,7 @@ void R_OAXFxInitGLSL( void ) {
 		GLSL_InitUniforms( &tr.oaxParticleShader );
 		GLSL_SetUniformInt( &tr.oaxParticleShader, UNIFORM_DIFFUSEMAP, TB_COLORMAP );
 		GLSL_SetUniformInt( &tr.oaxParticleShader, UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP );
+		GLSL_SetUniformInt( &tr.oaxParticleShader, UNIFORM_SCREENIMAGEMAP, TB_LIGHTMAP );
 		GLSL_FinishGPUShader( &tr.oaxParticleShader );
 	} else {
 		ri.Printf( PRINT_WARNING, "WARNING: oaxparticle shader failed; particles are off\n" );

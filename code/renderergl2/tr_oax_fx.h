@@ -106,6 +106,8 @@ typedef struct {
 	float	boundsExpansion;
 
 	// oax additions
+	qboolean	lit;			// the stage's colour is scaled by the world's light grid at the system's origin (smoke in a dark room is dark)
+	float	distort;			// heat haze: the scene behind is sampled shifted by this fraction of the screen, weighted by the particle's alpha (0 = off)
 	float	softDistance;		// soft particles: fade over this many units in front of the scene, < 0 = off, 0 = r_oaxSoftParticles default
 
 	float	radius;				// derived: bounding radius around the system origin

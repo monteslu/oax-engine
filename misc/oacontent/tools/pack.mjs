@@ -2,7 +2,7 @@
 // and validates it.
 //
 //   oacontent pack [--out dir] [--name zzz-oax-enhanced.pk3] [--maps a,b]
-//                  [--skip lights,smooth,materials,textures] [--baseoa dir] [--check file.pk3]
+//                  [--skip lights,smooth,materials,textures] [--parts weather] [--baseoa dir] [--check file.pk3]
 // Inputs (under <out>): lights/<map>.oaxmap, smooth/<map>.oaxmap,
 // materials/00_oax_enhanced_materials.shader, textures/pack/** and
 // textures/manifest.json, plus hand-written data/sidecars/<map>.oaxmap.
@@ -105,7 +105,7 @@ export async function run(args = {}) {
 
   // sidecars: per map, the parts merged
   const parts = new Map();
-  for (const part of PARTS) {
+  for (const part of [...PARTS, ...String(args.parts || '').split(',').filter(Boolean)]) {
     if (skip.has(part)) continue;
     const dir = path.join(out, part);
     for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {

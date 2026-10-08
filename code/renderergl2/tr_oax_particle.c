@@ -41,7 +41,9 @@ supported (from/to only); the per-particle math runs in the vertex shader
 vertices on the CPU, with an integer hash per (seed, cycle, index) in
 place of idRandom; "aimed" particles are one quad from where the particle
 was trailTime ago instead of a chain of trail quads; animation frames do
-not cross fade; added the oax keyword softDistance and per-system tint,
+not cross fade; added the oax keywords softDistance, distort (heat haze: the
+scene behind the particle, shifted) and lit (the light grid's colour at the system's
+origin) and per-system tint,
 scale, stop time and seed (oaxFx_t).
 
 A particle system is a pure function of (decl, oaxFx_t, particle index,
@@ -367,6 +369,17 @@ static void ParseParticleStage( char **text, oaxPrtStage_t *stage, const char *d
 				*text = save;
 			}
 			stage->gravity = ParseFloat( text );
+			continue;
+		}
+		// oax: lit, the stage's colour follows the light grid at the system's origin
+		if ( !Q_stricmp( token, "lit" ) ) {
+			stage->lit = ParseFloat( text ) != 0;
+			continue;
+		}
+		// oax: heat haze, the particle shows the scene behind it shifted outward by
+		// this fraction of the screen times its alpha (0.01 is a shimmer)
+		if ( !Q_stricmp( token, "distort" ) ) {
+			stage->distort = ParseFloat( text );
 			continue;
 		}
 		// oax: soft particles, fade over this many units in front of the scene (-1 off)
@@ -865,6 +878,19 @@ void RB_SurfaceOAXParticles( srfOaxParticles_t *surf ) {
 		VectorSet4( tint, 1, 1, 1, 1 );
 	}
 
+	if ( stage->lit && tr.world ) {
+		vec3_t amb, dir, dirLight;
+
+		// the light grid's ambient plus part of its directed light, 200 = a lit room
+		if ( R_LightForPoint( sfx->fx.origin, amb, dirLight, dir ) ) {
+			int k;
+
+			for ( k = 0; k < 3; k++ ) {
+				tint[k] *= Com_Clamp( 0.12f, 1.0f, ( amb[k] + 0.6f * dirLight[k] ) / 200.0f );
+			}
+		}
+	}
+
 	memset( p, 0, sizeof( p ) );
 	p[0] = stage->totalParticles;
 	p[1] = lifeMs;
@@ -938,6 +964,17 @@ void RB_SurfaceOAXParticles( srfOaxParticles_t *surf ) {
 	GLSL_SetUniformVec3( sp, UNIFORM_VIEWFORWARD, backEnd.viewParms.or.axis[0] );
 	GLSL_SetUniformVec3( sp, UNIFORM_VIEWLEFT, backEnd.viewParms.or.axis[1] );
 	GLSL_SetUniformVec3( sp, UNIFORM_VIEWUP, backEnd.viewParms.or.axis[2] );
+	// heat haze needs the scene colour copy; without it (reflection views, portals, no
+	// copy) the stage draws as an ordinary blend of its texture
+	if ( stage->distort > 0 && !backEnd.viewParms.oaxReflection && !backEnd.viewParms.isPortal && RB_OAXSceneCopy() ) {
+		image_t *col = RB_OAXSceneColor();
+
+		VectorSet4( viewInfo, r_znear->value, backEnd.viewParms.zFar, stage->distort, 4 );
+		GLSL_SetUniformVec4( sp, UNIFORM_VIEWINFO, viewInfo );
+		invRes[0] = 1.0f / col->width;
+		invRes[1] = 1.0f / col->height;
+		GL_BindToTMU( col, TB_LIGHTMAP );
+	} else {
 	VectorSet4( viewInfo, r_znear->value, backEnd.viewParms.zFar, soft, soft > 0 ? SoftMode( pStage ) : 0 );
 	GLSL_SetUniformVec4( sp, UNIFORM_VIEWINFO, viewInfo );
 	if ( soft > 0 ) {
@@ -948,6 +985,7 @@ void RB_SurfaceOAXParticles( srfOaxParticles_t *surf ) {
 		GL_BindToTMU( depth, TB_SHADOWMAP );
 	} else {
 		invRes[0] = invRes[1] = 0;
+	}
 	}
 	GLSL_SetUniformVec2( sp, UNIFORM_INVTEXRES, invRes );
 
