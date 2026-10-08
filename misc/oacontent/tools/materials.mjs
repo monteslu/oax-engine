@@ -2,7 +2,7 @@
 // stages) that decide which stock shaders get an oax material keyword, written
 // as an overlay shader file that wins over the stock definitions.
 //
-//   oacontent materials [--baseoa dir] [--out dir] [--aggressive] [--sunsky]
+//   oacontent materials [--baseoa dir] [--out dir] [--aggressive] [--no-sunsky]
 // Output: <out>/materials/00_oax_enhanced_materials.shader (the overlay: the
 // stock shader text with the keywords inserted, under the same names; the
 // engine reads shader files in name order and the first definition of a name
@@ -10,9 +10,8 @@
 // install accounted for as classified, skipped (and why) or needing review.
 //
 // The rules (each reversible by leaving the file out):
-//   sunsky   (only with --sunsky: measured 2026-10-07 to change the sky's colour and
-//            brightness on czest2ctf, meanDiff 13.8 against 0.55 without, so it is
-//            off until that is understood) a sky shader with q3map_sun and no q3gl2_sun gets q3gl2_sun with
+//   sunsky   (--no-sunsky turns it off; re-measured 2026-10-07 with player-placed tour
+//            eyes: no visible change on czest2ctf, oa_dm6, islandctf) a sky shader with q3map_sun and no q3gl2_sun gets q3gl2_sun with
 //            the same numbers (sun shadows), when every map that uses it is
 //            outdoors or mixed (T10 exposure); a sky shared with indoor maps is
 //            reported, not changed (the sun costs shadow passes indoors too);
@@ -148,7 +147,7 @@ export async function run(args) {
   for (const def of shaders.byName.values()) {
     const cls = classify(def, ctx);
     const aggressive = !!args.aggressive;
-    const apply = ['sunsky', 'water', 'metal', 'noshadow'].includes(cls.class) && (cls.class !== 'metal' || cls.confidence !== 'low' || aggressive) && (cls.class !== 'sunsky' || args.sunsky);
+    const apply = ['sunsky', 'water', 'metal', 'noshadow'].includes(cls.class) && (cls.class !== 'metal' || cls.confidence !== 'low' || aggressive) && (cls.class !== 'sunsky' || !args['no-sunsky']);
     const kws = apply ? keywordsFor(cls, def, ctx) : null;
     rows.push({ name: def.name, file: def.file, class: cls.class, applied: !!kws, confidence: cls.confidence || null, why: cls.why, maps: (ctx.usage.get(def.name.toLowerCase()) || []).length });
     if (kws) blocks.push(insertKeywords(def.text, kws));
@@ -161,7 +160,7 @@ export async function run(args) {
   const lines = [
     `materials: ${rows.length} shaders in ${new Set(rows.map((r) => r.file)).size} files; ${blocks.length} get keywords`,
     `  classified and applied: ${count((r) => r.applied)} (sunsky ${count((r) => r.applied && r.class === 'sunsky')}, water ${count((r) => r.applied && r.class === 'water')}, metal ${count((r) => r.applied && r.class === 'metal')}, noshadow ${count((r) => r.applied && r.class === 'noshadow')})`,
-    `  classified, not applied (sunsky without --sunsky, low confidence metal without --aggressive): ${count((r) => (r.class === 'metal' || r.class === 'sunsky') && !r.applied)}`,
+    `  classified, not applied (sunsky with --no-sunsky, low confidence metal without --aggressive): ${count((r) => (r.class === 'metal' || r.class === 'sunsky') && !r.applied)}`,
     `  needs review: ${count((r) => r.class === 'review')}`,
     `  skipped with a reason: ${count((r) => r.class === 'none')}`,
     '', 'skip reasons:',

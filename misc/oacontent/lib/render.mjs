@@ -50,6 +50,10 @@ export function renderEyes({ map, eyes, home, baseoa = DEFAULT_BASEOA, size = [6
   eyes.forEach((e, i) => {
     const n = String(i).padStart(3, '0');
     if (e.cmd) lines.push(e.cmd);
+    // the world is culled by the PLAYER's area (the snapshot's areamask), not the camera's: put the
+    // player at the eye (exact placement, origin one eye height down) or a camera in another area
+    // sees an empty, black world
+    if (!e.keepPlayer) lines.push(`setviewpos ${e.eye[0].toFixed(2)} ${e.eye[1].toFixed(2)} ${(e.eye[2] - 26).toFixed(2)} ${e.angles[1].toFixed(2)} ${e.angles[0].toFixed(2)} 0`, 'wait 3');
     lines.push(`cl_overrideView "${e.eye.map((v) => +v.toFixed(2)).join(' ')} ${e.angles.map((v) => +v.toFixed(2)).join(' ')}"`, `wait ${e.settle ?? settle}`, `screenshot tour_${n}`, 'wait 2', `debugvalues tourv_${n}.txt`, 'wait 1');
   });
   lines.push('quit');

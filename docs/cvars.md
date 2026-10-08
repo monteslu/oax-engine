@@ -33,6 +33,7 @@ All are opengl2-renderer cvars except `r_guiSize` (client).
 | `r_oaxReflect` | 1 | archive, latch | `oaxMetal` materials reflect the map's `misc_cubemap` probes, captured when the map loads; 0: no probes (the metal draws without its reflection). |
 | `r_oaxEnv` | 1 | archive | The outdoor environment a map's worldspawn asks for (wind, foliage alpha to coverage, atmosphere, cloud shadows, colour grading; [materials.md](materials.md#outdoor-environment-worldspawn)); 0 turns all of it off. |
 | `r_oaxBloom` | 2 | archive | Bloom in the HDR post-process chain, before tone mapping: 0 off, 1 every map, 2 maps that ask (`oax_bloom`; the enhanced content does). |
+| `r_drawSunRays` | 0 | archive, latch | Sun shafts: a radial blur of the sun flare added over the frame when the sun is in view (needs a sky with a `q3map_sun`; restart the renderer after changing it). fx-sunrays guards it. |
 | `r_oaxBloomQuality` | 1 | archive | 1 the full pyramid (`r_oaxBloomLevels`), 0 at most three levels (less fill and memory). |
 | `r_oaxBloomThreshold` | 1.0 | archive | Bloom: scene light above this blooms. |
 | `r_oaxBloomKnee` | 0.5 | archive | Bloom: soft knee below the threshold, as a fraction of it. |

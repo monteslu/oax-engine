@@ -34,7 +34,7 @@ Node ESM (ImageMagick for pixel work). Run everything through the driver:
   only names added to `data/texture-approvals.json` are ever upscaled.
 - The material classifier's review items are decided in `data/materials.json` (every
   shader is applied, skipped with a reason, or an override with its why). The sunsky rule
-  (q3gl2_sun for outdoor skies) is off by default: it changed the sky of czest2ctf.
+  (q3gl2_sun for outdoor skies, so sun shadows work when `r_sunlightMode` is on) is on; `--no-sunsky` skips it.
 
 ## Typical run
 

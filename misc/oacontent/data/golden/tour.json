@@ -4,54 +4,54 @@
   "eyes": 16,
   "frames": 16,
   "exit": 0,
-  "mean": 86.933,
-  "p5": 35.938,
-  "p95": 162.313,
-  "draws": 59.25,
-  "lightsVisible": 2.813
+  "mean": 85.323,
+  "p5": 27.375,
+  "p95": 151.688,
+  "draws": 123.125,
+  "lightsVisible": 4.75
  },
  {
   "map": "oa_bases3",
   "eyes": 16,
   "frames": 16,
   "exit": 0,
-  "mean": 63.816,
-  "p5": 23.125,
-  "p95": 109.75,
-  "draws": 522.25,
-  "lightsVisible": 21.875
+  "mean": 63.913,
+  "p5": 29.5,
+  "p95": 115.75,
+  "draws": 722.813,
+  "lightsVisible": 27.75
  },
  {
   "map": "oa_dm1",
   "eyes": 16,
   "frames": 16,
   "exit": 0,
-  "mean": 31.064,
-  "p5": 6.938,
-  "p95": 73.188,
-  "draws": 324.313,
-  "lightsVisible": 20.188
+  "mean": 31.432,
+  "p5": 7.5,
+  "p95": 73.313,
+  "draws": 415,
+  "lightsVisible": 25.063
  },
  {
   "map": "oa_dm6",
   "eyes": 16,
   "frames": 16,
   "exit": 0,
-  "mean": 52.627,
-  "p5": 14.5,
-  "p95": 106.813,
-  "draws": 243.188,
-  "lightsVisible": 19.313
+  "mean": 53.105,
+  "p5": 14.563,
+  "p95": 107.563,
+  "draws": 465.063,
+  "lightsVisible": 22.188
  },
  {
   "map": "oacmpctf3",
   "eyes": 16,
   "frames": 16,
   "exit": 0,
-  "mean": 40.269,
-  "p5": 5.688,
-  "p95": 85.5,
-  "draws": 768.938,
-  "lightsVisible": 35.438
+  "mean": 48.744,
+  "p5": 8.313,
+  "p95": 106.875,
+  "draws": 1007.063,
+  "lightsVisible": 60.125
  }
 ]
