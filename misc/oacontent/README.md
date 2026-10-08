@@ -17,7 +17,24 @@ Node ESM (ImageMagick for pixel work). Run everything through the driver:
 | `pack` | T8 | builds and validates the overlay pk3, load tests, licence manifest |
 | `safety` | T9 | gameplay identity, bot smoke and performance checks |
 | `fxpreview` | T6 | every particle decl rendered on the oax_fx map at fixed frames, with an empty-room control and a contact sheet |
+| `fires` | T11 | flame sprites in the maps get a looping flame emitter and a flickering light (sidecar entities) |
+| `sky` | T12 | per-map environment keys from the exposure table: bloom, sun disc, and for outdoor maps haze, cloud shadows, grade |
 | `pilot` | | every tool in order on three maps, then pack, safety, and a before/after tour |
+
+## Quality gates
+
+- `tour bless --tag t` saves a tour's metrics as a golden (`data/golden/tour.json` is the
+  Phase 1 five-map set, `materials.json` the Phase 3 twelve-map set); `tour check --tag t
+  --golden file` fails on brightness drift over 12%, draw calls over 1.5x + 50, or a lost frame.
+- Lights are calibrated closed-loop against the engine (`lights --calibrate`): a map's
+  relit brightness matches its stock brightness, and a shortfall is reported, not hidden.
+- The textures tool writes normal and specular companions for the most used textures
+  first, within `--budget-mb` (100 MB covers 89% of the (texture, map) uses); the shortlist
+  of small, widely used textures for upscaling is `textures/upscale-candidates.json`, and
+  only names added to `data/texture-approvals.json` are ever upscaled.
+- The material classifier's review items are decided in `data/materials.json` (every
+  shader is applied, skipped with a reason, or an override with its why). The sunsky rule
+  (q3gl2_sun for outdoor skies) is off by default: it changed the sky of czest2ctf.
 
 ## Typical run
 
