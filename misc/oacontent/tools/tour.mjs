@@ -10,6 +10,8 @@
 //       per-eye differences between two tags: diff.json and a sheet of
 //       [A | B | difference x4] per map.
 //   oacontent tour cameras --maps a,b       prints the eyes without rendering
+//   oacontent tour bless --tag t [--golden file]   saves a tour's metrics as the golden
+//   oacontent tour check --tag t [--golden file]   fails when a tour drifts from the golden
 //
 // --pack: adds an overlay pk3 (oacontent pack) to every run.
 // --sidecars <dir>: copies <dir>/<map>.oaxmap into the run (lights tool output).
@@ -224,8 +226,38 @@ async function runCompare(args) {
   return 0;
 }
 
+// golden tours: the per-map metrics of a blessed tour, and the check of a
+// later tour against them (brightness within 12%, draw calls within 1.5x + 50,
+// every golden map present and rendered all its frames without an error exit)
+export function checkAgainstGolden(golden, rows) {
+  const bad = [];
+  for (const g of golden) {
+    const r = rows.find((x) => x.map === g.map);
+    if (!r) { bad.push(`${g.map}: not in the tour`); continue; }
+    if (r.exit !== 0 || r.frames < g.frames) bad.push(`${g.map}: ${r.frames}/${g.frames} frames, exit ${r.exit}`);
+    if (Math.abs(r.mean - g.mean) > 0.12 * g.mean) bad.push(`${g.map}: mean brightness ${r.mean} against golden ${g.mean}`);
+    if (r.draws > g.draws * 1.5 + 50) bad.push(`${g.map}: ${r.draws} draws against golden ${g.draws}`);
+  }
+  return bad;
+}
+const GOLDEN_KEYS = ['map', 'eyes', 'frames', 'exit', 'mean', 'p5', 'p95', 'draws', 'lightsVisible'];
+
 export async function run(args) {
   const sub = args._[0];
+  if (sub === 'bless' || sub === 'check') {
+    const tagDir = path.join(OUT, 'tour', String(args.tag || 'enhanced'));
+    const rows = JSON.parse(fs.readFileSync(path.join(tagDir, 'summary.json'), 'utf8'));
+    const file = path.resolve(String(args.golden || path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'data', 'golden', 'tour.json')));
+    if (sub === 'bless') {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(rows.map((r) => Object.fromEntries(GOLDEN_KEYS.map((k) => [k, r[k]]))), null, 1) + '\n');
+      console.log(`blessed ${rows.length} maps -> ${file}`);
+      return 0;
+    }
+    const bad = checkAgainstGolden(JSON.parse(fs.readFileSync(file, 'utf8')), rows);
+    console.log(bad.length ? bad.map((b) => 'FAIL ' + b).join('\n') : `tour ${args.tag || 'enhanced'} matches ${file}`);
+    return bad.length ? 1 : 0;
+  }
   if (sub === 'compare') return runCompare(args);
   if (sub === 'cameras') {
     const cs = new ContentSet([args.baseoa || DEFAULT_BASEOA]);

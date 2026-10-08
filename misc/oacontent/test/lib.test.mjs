@@ -165,3 +165,14 @@ test('safety: identity comparison reports a differing key and ignores the others
   assert.equal(d.length, 1);
   assert.match(d[0], /sv_nav_hash/);
 });
+
+import { checkAgainstGolden } from '../tools/tour.mjs';
+test('tour: the golden check passes a match and fails drift (control)', () => {
+  const g = [{ map: 'a', frames: 16, mean: 50, draws: 100 }];
+  const ok = { map: 'a', frames: 16, exit: 0, mean: 52, draws: 120 };
+  assert.deepEqual(checkAgainstGolden(g, [ok]), []);
+  assert.equal(checkAgainstGolden(g, [{ ...ok, mean: 30 }]).length, 1);
+  assert.equal(checkAgainstGolden(g, [{ ...ok, draws: 500 }]).length, 1);
+  assert.equal(checkAgainstGolden(g, [{ ...ok, frames: 3 }]).length, 1);
+  assert.equal(checkAgainstGolden(g, []).length, 1);
+});

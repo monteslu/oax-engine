@@ -1,0 +1,57 @@
+[
+ {
+  "map": "islandctf",
+  "eyes": 16,
+  "frames": 16,
+  "exit": 0,
+  "mean": 86.933,
+  "p5": 35.938,
+  "p95": 162.313,
+  "draws": 59.25,
+  "lightsVisible": 2.813
+ },
+ {
+  "map": "oa_bases3",
+  "eyes": 16,
+  "frames": 16,
+  "exit": 0,
+  "mean": 63.816,
+  "p5": 23.125,
+  "p95": 109.75,
+  "draws": 522.25,
+  "lightsVisible": 21.875
+ },
+ {
+  "map": "oa_dm1",
+  "eyes": 16,
+  "frames": 16,
+  "exit": 0,
+  "mean": 31.064,
+  "p5": 6.938,
+  "p95": 73.188,
+  "draws": 324.313,
+  "lightsVisible": 20.188
+ },
+ {
+  "map": "oa_dm6",
+  "eyes": 16,
+  "frames": 16,
+  "exit": 0,
+  "mean": 52.627,
+  "p5": 14.5,
+  "p95": 106.813,
+  "draws": 243.188,
+  "lightsVisible": 19.313
+ },
+ {
+  "map": "oacmpctf3",
+  "eyes": 16,
+  "frames": 16,
+  "exit": 0,
+  "mean": 40.269,
+  "p5": 5.688,
+  "p95": 85.5,
+  "draws": 768.938,
+  "lightsVisible": 35.438
+ }
+]

@@ -16,7 +16,7 @@
 //      of the original map, as far as the lightmap shows them;
 //   d. hand edits: data/lights/<map>.json (add / remove / scale), applied last.
 //
-//   oacontent lights [--maps a,b] [--baseoa dir] [--out dir] [--lmscale 0.5]
+//   oacontent lights [--maps a,b] [--baseoa dir] [--out dir] [--lmscale 0.85]
 //                    [--shadows 6] [--radius 512] [--gain 1] [--calibrate] [--mapsource dir] [--hotspots 24|--no-hotspots] [--max 64] [--texels 3000]
 // --calibrate: closed loop on the engine, scales all intensities of a map until
 // its mean brightness over a few views matches the stock map's (needs the
@@ -346,7 +346,7 @@ export function recoverMap(cs, shaders, mapPath, opts = {}) {
   const bsp = new Bsp(cs.read(mapPath), mapPath);
   bsp.skyNames = new Set([...shaders.byName.values()].filter((d) => d.sky).map((d) => d.name.toLowerCase()));
   const name = path.basename(mapPath, '.bsp');
-  const lmScale = Number(opts.lmscale ?? 0.5);
+  const lmScale = Number(opts.lmscale ?? 0.85);
   const report = { name, source: null, lmScale };
   let ambient = 0;
   let lights = [];
@@ -408,7 +408,7 @@ async function meanLuminance(cs, shaders, mapPath, name, text, eyes, dir) {
   return ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : NaN;
 }
 
-export async function calibrateGain(cs, shaders, mapPath, r, workDir, { eyes = 8, tol = 0.04, maxIter = 5 } = {}) {
+export async function calibrateGain(cs, shaders, mapPath, r, workDir, { eyes = 8, tol = 0.04, maxIter = 6 } = {}) {
   const name = path.basename(mapPath, '.bsp');
   const bsp = new Bsp(cs.read(mapPath));
   const eyeList = cameras(bsp, shaders, { count: eyes * 4 }).slice(0, eyes);
@@ -420,11 +420,11 @@ export async function calibrateGain(cs, shaders, mapPath, r, workDir, { eyes = 8
     const m = await meanLuminance(cs, shaders, mapPath, name, make(g), eyeList, path.join(workDir, `${name}-g`));
     tried.push({ gain: +g.toFixed(3), mean: +m.toFixed(2) });
     if (!(m > 0) || Math.abs(m - target) / target < tol) break;
-    if (g >= 60 && tried.length > 1 && tried[tried.length - 2].gain >= 60) break;
+    if (g >= 200 && tried.length > 1 && tried[tried.length - 2].gain >= 200) break;
     const p = tried.length > 1 ? tried[tried.length - 2] : null;
     // log-log secant on (gain, mean); with one point assume mean ~ gain^0.3
     const slope = p && p.gain !== tried[tried.length - 1].gain && p.mean !== m ? Math.log(m / p.mean) / Math.log(g / p.gain) : 0.3;
-    g = Math.min(60, Math.max(0.25, g * Math.pow(target / m, 1 / Math.max(0.05, slope))));
+    g = Math.min(200, Math.max(0.25, g * Math.pow(target / m, 1 / Math.max(0.05, slope))));
   }
   const best = tried.reduce((a, b) => (Math.abs(a.mean - target) < Math.abs(b.mean - target) ? a : b));
   return { gain: best.gain, target: +target.toFixed(2), reached: best.mean, tried, text: make(best.gain) };
@@ -445,7 +445,7 @@ export async function run(args) {
       if (r.text && args.calibrate) {
         const c = await calibrateGain(cs, shaders, m.path, r, path.join(OUTROOT, 'lights-calibrate'));
         r.text = c.text; r.report.calibration = { gain: c.gain, targetMean: c.target, reachedMean: c.reached, tried: c.tried };
-        if (c.reached < c.target * 0.9) { r.report.note = `calibration short: ${c.reached} of ${c.target} mean (radius cap ${r.radius}); raise --radius or add lights`; console.log(`${m.name}: ${r.report.note}`); }
+        if (c.reached < c.target * 0.85) { r.report.note = `calibration short: ${c.reached} of ${c.target} mean (radius cap ${r.radius}); raise --radius or add lights`; console.log(`${m.name}: ${r.report.note}`); }
       }
       if (r.text) fs.writeFileSync(path.join(out, `${m.name}.oaxmap`), r.text);
       rows.push(r.report);
