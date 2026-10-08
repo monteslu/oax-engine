@@ -4,7 +4,7 @@
 //
 //   oacontent fxpreview [--decls a,b] [--prt file.prt,...] [--frames 4,14,40]
 //                       [--size 480x270] [--out dir] [--gpu]
-// Fails (exit 1) when a decl draws no particles at its first frame.
+// Fails (exit 1) when none of a decl's frames differs from the empty room.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -18,6 +18,9 @@ import { parseDebugValues } from '../../../tests/romdev/lib/values.mjs';
 export const MAP = 'oax_fx';
 export const VIEW = { eye: [320, -300, 90], angles: [4, 90, 0] };
 export const SPAWN = [320, -100, 24];
+// where the spawn lands on screen; the map's own emitters move between the
+// control frame and the effect's frames, so only this box is compared
+export const SPAWN_BOX = { x0: 0.3, y0: 0.35, x1: 0.7, y1: 0.95 };
 
 export function declNames(text) {
   return [...text.matchAll(/^\s*particle\s+(\S+)\s*\{/gm)].map((m) => m[1]);
@@ -70,13 +73,17 @@ export async function run(args = {}) {
     const v = fs.existsSync(vf) ? parseDebugValues(fs.readFileSync(vf, 'utf8')) : {};
     const drawn = Number(v.r_particles_drawn ?? NaN);
     rows.push({ decl: e.decl, frame: e.frame, drawn, png });
-    if (e.decl !== '(none)' && e.frame === frames[0]) {
+    if (e.decl !== '(none)') {
       const base = imgs[`(none)@${frames[0]}`];
-      const d = base ? diffFraction(base, img, 8) : 0;
-      rows[rows.length - 1].changed = d;
-      if (d < 0.0005) bad.push(`${e.decl}: frame ${e.frame} is the empty-room frame (${(d * 100).toFixed(3)}% differ), nothing visible spawned`);
+      rows[rows.length - 1].changed = base ? diffFraction(base, img, 8, SPAWN_BOX) : 0;
     }
   });
+  // an effect must show in at least one of its frames (a soft fade-in is faint at the first)
+  for (const d of decls) {
+    const mine = rows.filter((r) => r.decl === d.name);
+    const best = Math.max(0, ...mine.map((r) => r.changed ?? 0));
+    if (mine.length && best < 0.002) bad.push(`${d.name}: every frame is the empty-room frame (best ${(best * 100).toFixed(3)}% differ), nothing visible spawned`);
+  }
   fs.writeFileSync(path.join(outDir, 'fxpreview.json'), JSON.stringify({ frames, rows, bad, exit: r.code }, null, 1));
   if (rows.length) {
     try {

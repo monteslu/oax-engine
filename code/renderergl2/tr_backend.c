@@ -1234,6 +1234,11 @@ const void	*RB_DrawSurfs( const void *data ) {
 		{
 			RB_DrawSun(0.1f, tr.sunShader);
 		}
+		else if (tr.oaxEnv.sunDisc > 0.0f && R_OAXEnvOn())
+		{
+			// oax_sundisc: the map asks for the sun to be drawn
+			RB_DrawSun(tr.oaxEnv.sunDisc, tr.sunShader);
+		}
 
 		if (glRefConfig.framebufferObject && r_drawSunRays->integer)
 		{
@@ -1689,7 +1694,7 @@ const void *RB_PostProcess(const void *data)
 			&& backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
 
 		backEnd.oaxToneMapMS = directLikely && tr.oaxMsSamples && tr.tonemapMSShader.program && tr.msaaResolveFbo
-			&& backEnd.refdef.oaxViewFog[3] <= 0.0f && !r_oaxBloom->integer && !r_ssao->integer
+			&& backEnd.refdef.oaxViewFog[3] <= 0.0f && !R_OAXBloomOn() && !r_ssao->integer
 			&& !( ( r_autoExposure->integer || r_forceAutoExposure->integer ) && RB_ToneMapLevelsDue() );
 	}
 
@@ -1718,7 +1723,7 @@ const void *RB_PostProcess(const void *data)
 		&& dstBox[0] == 0 && dstBox[1] == 0 && dstBox[2] == glConfig.vidWidth && dstBox[3] == glConfig.vidHeight;
 	// on it, the tone map applies the atmosphere too, when nothing between
 	// them (bloom, SSAO) needs the fogged image first
-	backEnd.oaxFuseAtmos = direct && !r_oaxBloom->integer && !r_ssao->integer && R_OAXAtmosActive();
+	backEnd.oaxFuseAtmos = direct && !R_OAXBloomOn() && !r_ssao->integer && R_OAXAtmosActive();
 	if (!direct && backEnd.oaxToneMapMS)
 	{
 		// not the direct path after all: resolve as usual

@@ -30,7 +30,7 @@ import { parseEntities, serializeEntities } from '../lib/entities.mjs';
 import { OUT } from '../lib/common.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-const PARTS = ['lights', 'smooth'];
+const PARTS = ['lights', 'smooth', 'fires', 'sky'];
 
 // merge the parts' entity lists into one sidecar text
 export function mergeSidecars(texts) {

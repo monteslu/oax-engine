@@ -35,6 +35,14 @@ without any of them renders exactly as before.
                     cloud shadows: scrolling noise (scale units per cell)
                     over the sun-lit areas; coverage 0..1 how much sky is
                     cloud, darkness 0..1 how much a cloud takes from the sun
+  "oax_bloom"       "1"
+                    bloom on this map when r_oaxBloom is 2 (the default); 1 blooms
+                    every map, 0 none
+  "oax_sundisc"     "<size>"
+                    draws the sun (the `sun` shader) at the direction of the
+                    sky's q3map_sun, size as a fraction of the sky distance
+                    (0.1 is the stock r_drawSun's); maps without a sky sun
+                    draw nothing
   "oax_grade"       "<saturation> <contrast> <r> <g> <b> <vignette>"
                     colour grading after tonemapping: saturation and
                     contrast 1 = unchanged, r g b a multiplier, vignette
@@ -106,6 +114,10 @@ void R_OAXEnvLoadWorld( void ) {
 		} else if ( !Q_stricmp( key, "oax_clouds" ) ) {
 			EnvVec( tok, e->clouds, 5 );
 			e->hasClouds = e->clouds[0] > 0.0f && e->clouds[4] > 0.0f;
+		} else if ( !Q_stricmp( key, "oax_bloom" ) ) {
+			e->hasBloom = atoi( tok ) != 0;
+		} else if ( !Q_stricmp( key, "oax_sundisc" ) ) {
+			e->sunDisc = Com_Clamp( 0.0f, 0.5f, atof( tok ) );
 		} else if ( !Q_stricmp( key, "oax_grade" ) ) {
 			e->grade[0] = e->grade[1] = 1.0f;
 			e->grade[2] = e->grade[3] = e->grade[4] = 1.0f;
@@ -113,10 +125,21 @@ void R_OAXEnvLoadWorld( void ) {
 			e->hasGrade = qtrue;
 		}
 	}
-	if ( e->hasWind || e->hasAtmos || e->hasClouds || e->hasGrade || e->foliageA2C ) {
-		ri.Printf( PRINT_ALL, "oax env:%s%s%s%s%s\n", e->hasWind ? " wind" : "", e->foliageA2C ? " foliageaa" : "",
-			e->hasAtmos ? " atmosphere" : "", e->hasClouds ? " clouds" : "", e->hasGrade ? " grade" : "" );
+	if ( e->hasWind || e->hasAtmos || e->hasClouds || e->hasGrade || e->foliageA2C || e->sunDisc > 0.0f || e->hasBloom ) {
+		ri.Printf( PRINT_ALL, "oax env:%s%s%s%s%s%s\n", e->hasWind ? " wind" : "", e->foliageA2C ? " foliageaa" : "",
+			e->hasAtmos ? " atmosphere" : "", e->hasClouds ? " clouds" : "", e->hasGrade ? " grade" : "", e->sunDisc > 0.0f ? " sundisc" : "" );
+		if ( e->hasBloom ) {
+			ri.Printf( PRINT_ALL, "oax env: bloom requested\n" );
+		}
 	}
+}
+
+// bloom: r_oaxBloom 1 always, 2 where the map asks (oax_bloom), 0 never
+qboolean R_OAXBloomOn( void ) {
+	if ( !r_oaxBloom || r_oaxBloom->integer <= 0 ) {
+		return qfalse;
+	}
+	return r_oaxBloom->integer == 1 || ( tr.oaxEnv.hasBloom && R_OAXEnvOn() );
 }
 
 qboolean R_OAXEnvOn( void ) {

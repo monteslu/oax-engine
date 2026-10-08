@@ -1580,6 +1580,8 @@ typedef struct {
 	float		atmos[7];		// r g b, density, falloff, baseZ, sunScatter
 	float		clouds[5];		// scale, speedX, speedY, coverage, darkness
 	float		grade[6];		// saturation, contrast, r g b, vignette
+	qboolean	hasBloom;		// oax_bloom: the map asks for bloom (r_oaxBloom 2)
+	float		sunDisc;		// oax_sundisc: the sun's size as a fraction of the sky distance, 0 = not drawn
 } oaxEnv_t;
 
 typedef struct {
@@ -2680,6 +2682,7 @@ extern cvar_t	*r_oaxEnv;
 void R_OAXEnvRegisterCvars( void );
 void R_OAXEnvLoadWorld( void );
 qboolean R_OAXEnvOn( void );
+qboolean R_OAXBloomOn( void );
 void R_OAXEnvInitGLSL( void );
 void R_OAXEnvShutdownGLSL( void );
 void RB_OAXAtmosphere( FBO_t *srcFbo, ivec4_t box );

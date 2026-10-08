@@ -171,6 +171,8 @@ turns them all off (`code/renderergl2/tr_oax_env.c`).
 | `oax_foliageaa` | `1` | Foliage alpha to coverage: cut-out edges antialias under MSAA (`r_ext_framebuffer_multisample`). |
 | `oax_atmosphere` | `<r> <g> <b> <density> <falloff> <baseZ> <sunScatter>` | Height fog thicker low down, integrated along each view ray, brighter toward the sun; distant terrain and sky take its colour (aerial perspective). |
 | `oax_clouds` | `<scale> <speedX> <speedY> <coverage> <darkness>` | Cloud shadows: scrolling noise (`scale` units per cell) darkens the sun-lit areas; needs sun shadows (`r_sunShadows 1`). |
+| `oax_sundisc` | `<size>` | Draws the sun (the `sun` shader) in the direction of the sky's `q3map_sun`, size as a fraction of the sky distance (0.1 is the stock `r_drawSun` size). A sky without a sun draws nothing. |
+| `oax_bloom` | `1` | Bloom on this map while `r_oaxBloom` is 2 (the default). |
 | `oax_grade` | `<saturation> <contrast> <r> <g> <b> <vignette>` | Colour grading after tone mapping, and darkening toward the corners. |
 | `oax_underwaterfog` | `<r> <g> <b> <density>` or `1` | With the eye in water, the view fogs to the water colour (`1`: a green-grey pond); `cg_oaxUnderwaterFog` overrides it. |
 | `oax_groundfx` | `1` | The cgame's ground effects (`cg_oaxGroundFx`): rings on the water where players wade, vehicle dust and splashes, tyre tracks. |

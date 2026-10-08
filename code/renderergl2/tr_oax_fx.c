@@ -33,7 +33,7 @@ tr_oax_fx.c: renderergl2 effects, phase 6: the shared parts.
 
 Every effect is opt-in: particles, decals and trails only exist when the
 cgame adds them, water only on shaders with the oaxWater keyword, and
-bloom only with r_oaxBloom 1. A stock map renders exactly as before.
+bloom only with r_oaxBloom 1, or 2 on a map that asks for it (oax_bloom). A stock map renders exactly as before.
 ===========================================================================
 */
 
@@ -82,8 +82,8 @@ void R_OAXFxRegisterCvars( void ) {
 	ri.Cvar_SetDescription( r_oaxWater, "oaxWater shaders: 1 reflection and refraction, 2 refraction only, 0 the shader's own stages." );
 	r_oaxReflect = ri.Cvar_Get( "r_oaxReflect", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_oaxReflect, "oaxMetal materials reflect the map's misc_cubemap probes, captured when the map loads (0: no probes, the metal draws without its reflection)." );
-	r_oaxBloom = ri.Cvar_Get( "r_oaxBloom", "0", CVAR_ARCHIVE );
-	ri.Cvar_SetDescription( r_oaxBloom, "Bloom in the HDR post-process chain (r_oaxBloomThreshold, r_oaxBloomKnee, r_oaxBloomIntensity, r_oaxBloomLevels)." );
+	r_oaxBloom = ri.Cvar_Get( "r_oaxBloom", "2", CVAR_ARCHIVE );
+	ri.Cvar_SetDescription( r_oaxBloom, "Bloom in the HDR post-process chain: 0 off, 1 every map, 2 maps that ask with oax_bloom (default; the enhanced content does). See r_oaxBloomQuality, r_oaxBloomThreshold, r_oaxBloomKnee, r_oaxBloomIntensity, r_oaxBloomLevels)." );
 }
 
 /*

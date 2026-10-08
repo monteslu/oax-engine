@@ -176,3 +176,26 @@ test('tour: the golden check passes a match and fails drift (control)', () => {
   assert.equal(checkAgainstGolden(g, [{ ...ok, frames: 3 }]).length, 1);
   assert.equal(checkAgainstGolden(g, []).length, 1);
 });
+
+import { FLAME, fireEntities } from '../tools/fires.mjs';
+test('fires: shader names, clustering output, light cap', () => {
+  for (const n of ['textures/sfx/flame2', 'textures/amph-dm01/bigflame_4', 'textures/sfx/r_flame-oasago', 'textures/sfx/xflame2']) assert.ok(FLAME.test(n), n);
+  for (const n of ['textures/base/wall', 'textures/sfx/firewall', 'models/mapobjects/torch/torch']) assert.ok(!FLAME.test(n) || /torch/.test(n), n);
+  const cl = Array.from({ length: 40 }, (_, i) => ({ lo: [i * 100, 0, 0], hi: [i * 100, 0, 50], c: [i * 100, 0, 25], size: 50, names: new Set(['textures/sfx/flame2']) }));
+  const ents = fireEntities(cl, { maxLights: 12, shadows: 3 });
+  assert.equal(ents.filter((e) => e.classname === 'func_oax_emitter').length, 40);
+  const lights = ents.filter((e) => e.classname === 'rtlight');
+  assert.equal(lights.length, 12);
+  assert.equal(lights.filter((l) => !l.get('noshadows')).length, 3);
+});
+
+import { skyKeys } from '../tools/sky.mjs';
+test('sky: keys by exposure class', () => {
+  const indoor = skyKeys({ exposed: 0.02, sun: null }, 0);
+  assert.deepEqual(Object.keys(indoor), ['oax_bloom']);
+  const mixed = skyKeys({ exposed: 0.3, sun: { rgb: [1, 1, 1] } }, 0);
+  assert.deepEqual(Object.keys(mixed), ['oax_bloom', 'oax_sundisc']);
+  const out = skyKeys({ exposed: 0.9, sun: { rgb: [1, 1, 1] } }, -64);
+  for (const k of ['oax_sundisc', 'oax_atmosphere', 'oax_clouds', 'oax_grade']) assert.ok(k in out, k);
+  assert.ok(!('oax_clouds' in skyKeys({ exposed: 0.9, sun: null }, 0)));
+});

@@ -43,6 +43,7 @@ static cvar_t	*r_oaxBloomThreshold;
 static cvar_t	*r_oaxBloomKnee;
 static cvar_t	*r_oaxBloomIntensity;
 static cvar_t	*r_oaxBloomLevels;
+static cvar_t	*r_oaxBloomQuality;
 
 static FBO_t	*bloomFbo[MAX_BLOOM_LEVELS];
 static image_t	*bloomImage[MAX_BLOOM_LEVELS];
@@ -58,6 +59,8 @@ void R_OAXBloomRegisterCvars( void ) {
 	ri.Cvar_SetDescription( r_oaxBloomIntensity, "Bloom: how much of the blurred light is added back." );
 	r_oaxBloomLevels = ri.Cvar_Get( "r_oaxBloomLevels", "5", CVAR_ARCHIVE );
 	ri.Cvar_SetDescription( r_oaxBloomLevels, "Bloom: pyramid levels (1-6); more is wider." );
+	r_oaxBloomQuality = ri.Cvar_Get( "r_oaxBloomQuality", "1", CVAR_ARCHIVE );
+	ri.Cvar_SetDescription( r_oaxBloomQuality, "Bloom quality tier: 1 the full pyramid (r_oaxBloomLevels), 0 at most three levels (less fill and memory, for handhelds and four-player splitscreen)." );
 	memset( bloomFbo, 0, sizeof( bloomFbo ) );
 	memset( bloomImage, 0, sizeof( bloomImage ) );
 	compositeFbo = NULL;
@@ -105,7 +108,7 @@ void RB_OAXBloom( FBO_t *srcFbo, ivec4_t box ) {
 	int		i, levels;
 	float	w, h;
 
-	if ( !r_oaxBloom->integer || !srcFbo || !tr.renderImage ) {
+	if ( !R_OAXBloomOn() || !srcFbo || !tr.renderImage ) {
 		return;
 	}
 	for ( i = 0; i < 4; i++ ) {
@@ -122,6 +125,9 @@ void RB_OAXBloom( FBO_t *srcFbo, ivec4_t box ) {
 	}
 	if ( levels > MAX_BLOOM_LEVELS ) {
 		levels = MAX_BLOOM_LEVELS;
+	}
+	if ( !r_oaxBloomQuality->integer && levels > 3 ) {
+		levels = 3;
 	}
 
 	// 1. prefilter the view into level 0
