@@ -3664,6 +3664,19 @@ shader_t *R_FindShaderEx( const char *name, int lightmapIndex, qboolean mipRawIm
 		if ( oaxVariant && !shader.defaultShader ) {
 			R_OAXSurfVariantApply( oaxVariant, &shader, stages );
 		}
+		// oax: a scripted 2D shader never depth tests. After a direct
+		// post-process (r_oaxDirectPost) 2D draws on the window, whose depth
+		// buffer nothing clears: stale depth culled random pixels of a
+		// full-screen overlay (the hurt vignette showed a run-to-run stipple)
+		if ( shader.lightmapIndex == LIGHTMAP_2D && !shader.defaultShader ) {
+			int i;
+
+			for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
+				if ( stages[i].active ) {
+					stages[i].stateBits |= GLS_DEPTHTEST_DISABLE;
+				}
+			}
+		}
 		sh = FinishShader();
 		return sh;
 	}

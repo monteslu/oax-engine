@@ -11,7 +11,7 @@
 //   override) but the real path is off: with the test value 0 and the
 //   switch 0 the frame equals the plain one;
 // - native and cart agree on the corner colour (control: the plain frame);
-//   no pixel golden, the blend is stippled at the corners.
+//   no pixel golden.
 
 import { cartShots } from '../lib/cartshot.mjs';
 import { nativeShots } from '../lib/nativeshot.mjs';
@@ -57,15 +57,15 @@ export async function run({ goldens, out, update }) {
   check('cart', cart, ctx);
   const native = nativeShots('fx-damage', MAP, shotList(), { setup: SETUP });
   check('native', native, ctx);
-  // No pixel golden: the vignette's blend is stippled at the corners (frames of the same
-  // run differ there by a few percent of pixels), so the regression guard is the corner
-  // colour. Cart and native agree on the corner red share within 0.2, at every strength (windowed native on a GPU varies run to run by 0.03 to 0.16 at the same alpha; the cause is not found, the logged alpha is constant),
-  // and the control (the plain frame) is far from it.
+  // No pixel golden: the regression guard is the corner colour. Cart and native agree on the
+  // corner red share within 0.02 at every strength, and the control (the plain frame) is far from it.
+  // (Until 2026-10-08 this allowed 0.2: scripted 2D shaders depth tested against the unclearable
+  // window depth buffer after a direct post-process, which stippled the overlay at random.)
   for (const k of ['mid', 'full']) {
     const dr = Math.abs(cornerRed(native.images[k]) - cornerRed(cart.images[k]));
     const plain = Math.abs(cornerRed(cart.images.off) - cornerRed(cart.images[k]));
     ctx.rows.push(`native vs cart corner red share at ${k}: differ by ${dr.toFixed(3)} (control, plain frame: ${plain.toFixed(3)})`);
-    if (dr > 0.2) ctx.failures.push(`native and cart disagree on the vignette at ${k} (${dr.toFixed(3)})`);
+    if (dr > 0.02) ctx.failures.push(`native and cart disagree on the vignette at ${k} (${dr.toFixed(3)})`);
     if (plain < 0.1) ctx.failures.push(`control did not fail: the plain frame is as red as the ${k} frame`);
   }
   if (!(cornerRed(cart.images.mid) > 0.5 && cornerRed(cart.images.mid) < 0.65)) ctx.failures.push(`the cart's mid vignette is off its recorded colour (${cornerRed(cart.images.mid).toFixed(3)}, expected 0.5 to 0.65)`);
