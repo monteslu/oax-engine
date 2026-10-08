@@ -175,10 +175,35 @@ export async function run(args) {
     if (!args.upscaler) { pending.push(`${name} (no --upscaler given)`); continue; }
     const tmp = fs.mkdtempSync(path.join(out, 'up-'));
     try {
-      const src = path.join(tmp, `in.${file.split('.').pop()}`), dst = path.join(tmp, `out.${file.split('.').pop()}`);
-      fs.writeFileSync(src, cs.read(file));
-      const cmd = String(args.upscaler).replace('{in}', src).replace('{out}', dst);
+      const ext = file.split('.').pop().toLowerCase();
+      // upscalers read jpg/png/webp: a tga goes through png (alpha kept) and comes back as tga, because
+      // the overlay must keep the stock name and format (the engine tries tga before png)
+      const mid = ext === 'tga' ? 'png' : ext;
+      const src = path.join(tmp, `in.${mid}`), dstMid = path.join(tmp, `out.${mid}`), dst = path.join(tmp, `out.${ext}`);
+      if (ext === 'tga') {
+        fs.writeFileSync(path.join(tmp, 'in.tga'), cs.read(file));
+        execFileSync('magick', [path.join(tmp, 'in.tga'), src]);
+      } else fs.writeFileSync(src, cs.read(file));
+      const cmd = String(args.upscaler).replace('{in}', src).replace('{out}', dstMid);
       execFileSync('sh', ['-c', cmd], { stdio: 'inherit' });
+      if (ext === 'tga') execFileSync('magick', [dstMid, '-depth', '8', '-compress', 'None', dst]);
+      // tone match: the upscaler shifts tone (8 to 21% on these textures, a 15% darker map in the
+      // tour). Scale each channel of the result so its mean equals the original's, then refuse
+      // what still differs (clipping) or needed an implausible correction.
+      {
+        const mean = (p) => execFileSync('magick', [p, '-alpha', 'off', '-colorspace', 'sRGB', '-format', '%[fx:mean.r] %[fx:mean.g] %[fx:mean.b]', 'info:']).toString().trim().split(' ').map(Number);
+        const orig = path.join(tmp, `orig.${ext}`);
+        fs.writeFileSync(orig, cs.read(file));
+        const a = mean(orig), b = mean(dst);
+        const gain = a.map((v, i) => v / Math.max(b[i], 0.005));
+        if (Math.max(...gain) > 1.6 || Math.min(...gain) < 0.55) throw new Error(`rejected: needs a ${gain.map((g) => g.toFixed(2)).join('/')} tone correction`);
+        const fixed = path.join(tmp, `fixed.${ext}`);
+        execFileSync('magick', [dst, '-channel', 'R', '-evaluate', 'Multiply', String(gain[0]), '-channel', 'G', '-evaluate', 'Multiply', String(gain[1]), '-channel', 'B', '-evaluate', 'Multiply', String(gain[2]), '+channel', ...(ext === 'tga' ? ['-depth', '8', '-compress', 'None'] : ['-quality', '95']), fixed]);
+        const c = mean(fixed);
+        const left = Math.max(...a.map((v, i) => Math.abs(c[i] - v) / Math.max(v, 0.02)));
+        if (left > 0.03) throw new Error(`rejected: mean colour still ${(left * 100).toFixed(1)}% off after correction`);
+        fs.copyFileSync(fixed, dst);
+      }
       const dest = path.join(packDir, file);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.copyFileSync(dst, dest);

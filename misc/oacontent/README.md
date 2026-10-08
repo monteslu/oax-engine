@@ -31,7 +31,7 @@ Node ESM (ImageMagick for pixel work). Run everything through the driver:
 - The textures tool writes normal and specular companions for the most used textures
   first, within `--budget-mb` (100 MB covers 89% of the (texture, map) uses); the shortlist
   of small, widely used textures for upscaling is `textures/upscale-candidates.json`, and
-  only names added to `data/texture-approvals.json` are ever upscaled.
+  only names added to `data/texture-approvals.json` are ever upscaled. The shortlist was approved by monteslu on 2026-10-08 (open-source tooling only): `--upscaler "realesrgan-ncnn-vulkan -i {in} -o {out} -n realesrgan-x4plus -s 2 -m /usr/local/share/realesrgan-models"` (Real-ESRGAN, BSD-3 code and weights), 2x. TGAs go through PNG and back, each result's channel means are matched to the original (the model shifts tone 8 to 21%), and an upscale that still differs or needs an implausible correction is refused (33 of 40 pass).
 - The material classifier's review items are decided in `data/materials.json` (every
   shader is applied, skipped with a reason, or an override with its why). The sunsky rule
   (q3gl2_sun for outdoor skies, so sun shadows work when `r_sunlightMode` is on) is on; `--no-sunsky` skips it.
