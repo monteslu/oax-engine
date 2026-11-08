@@ -5,6 +5,12 @@
 //   node misc/wasmcart/pack-cart.mjs --wasm build-cart/Release/ioquake3.wasm \
 //     --baseoa /usr/share/games/openarena/baseoa --qvm <dir containing vm/> \
 //     --out build-cart/cart [--maps oa_dm1,oa_dm4] [--pk3 extra.pk3 ...]
+//     [--version 1.2.3]
+//
+// The manifest carries no version unless --version gives one (semver):
+// `wasmcart pack --source <out>` (wasmcart-pack 0.39.0 or later) then takes it
+// from this checkout's git tags, the tag at a clean v<semver> tag, else
+// <last tag>-dev.g<commit>.
 //
 // The cart reads loose files (the engine treats a game directory and its
 // pk3s identically), so every pk3 is extracted in the engine's own load
@@ -31,6 +37,7 @@ function parseArgs(argv) {
     else if (a === '--pk3') out.pk3.push(next());
     else if (a === '--overlay') out.overlay.push(next());
     else if (a === '--name') out.name = next();
+    else if (a === '--version') out.version = next();
     else throw new Error(`unknown argument ${a}`);
   }
   return out;
@@ -139,7 +146,7 @@ function main() {
   fs.copyFileSync(args.wasm, path.join(out, 'cart.wasm'));
   const manifest = {
     name: args.name || 'OpenArena',
-    version: '0.1.0',
+    ...(args.version ? { version: args.version } : {}),
     abi: 4,
     entry: 'cart.wasm',
     players: 1,
